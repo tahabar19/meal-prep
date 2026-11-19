@@ -1,0 +1,2 @@
+// Adresse publique du projet Supabase et sa clé « anon » (publique, comme pour Rafiq : les règles RLS protègent les données).
+const MP = { url: "https://ycvmwdipuxbkcuwdhqds.supabase.co", anon: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljdm13ZGlwdXhia2N1d2RocWRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUwNzYzNDUsImV4cCI6MjExMDY1MjM0NX0.751KVMM_ksDZEc3Q6nHA9UE6G9Z2ww6y6zyz7uNJ3uI" };
