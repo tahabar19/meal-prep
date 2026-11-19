@@ -183,7 +183,7 @@ function rendreNavigation(actif) {
     document.querySelector(".entete-in").appendChild(profil);
   }
   profil.hidden = !(E && enSuivi());
-  profil.innerHTML = `${icone(actif === "profil" ? "user-circle" : "user-circle")}<span class="sr">Profil</span>`;
+  profil.innerHTML = `${icone("user-circle")}<span>Profil</span>`;
   profil.setAttribute("aria-label", E ? `Profil de ${E.profil.nom}` : "Profil");
   if (actif === "profil") profil.setAttribute("aria-current", "page"); else profil.removeAttribute("aria-current");
   $("navHaut").innerHTML = E ? onglets.map(o => lien(o, false)).join("") : "";
@@ -362,7 +362,7 @@ function repasDuJour(s, k, n, compact = false, sansCollation = false, avecCuire 
       const cuit = courante && !!fait(s, n, id);
       return `<div class="exo repas-ligne${cuit ? " cuisine-fait" : ""}"><a class="repas" href="#/plat/${id}" data-semaine="${k}" data-jour="${n}" data-moment="${moment}">
         ${photo(r, 480)}
-        <div class="exo-texte"><div class="quand">${quand}${cuit ? " · cuisiné" : estFixe(id, moment) ? " · fixe" : detail ? `, ${detail}` : ""}</div><h3>${esc(r.nom)}</h3>
+        <div class="exo-texte"><div class="quand">${quand}${cuit ? (enSuivi() ? " · mangé" : " · cuisiné") : estFixe(id, moment) ? " · fixe" : detail ? `, ${detail}` : ""}</div><h3>${esc(r.nom)}</h3>
         <div class="chiffres">${nombre(compte ? compte.kcal : v.kcal * t)} kcal, ${nombre(compte ? compte.prot : v.prot * t)} g de protéines${v.ajusteeCeJour ? " · quantités ajustées ce jour" : ""}</div></div></a>
       ${sansIcones ? "" : `${libre(id, moment) ? `<button class="changer" data-action="changer" data-semaine="${k}" data-jour="${n}" data-moment="${moment}" aria-label="Changer le ${nomMoment(moment)} de ${j.jour.toLowerCase()}" title="Changer">${icone("swap")}</button>` : ""}
       ${avecCuire ? `<a class="changer cuire${reglable(s, k, n, id, moment) ? "" : " haut"}" href="${courante ? `#/cuisine/${id}?jour=${n}` : `#/plat/${id}`}" aria-label="Cuisiner ${esc(r.nom)}" title="Cuisiner">${icone("cooking-pot")}</a>` : ""}
@@ -1208,7 +1208,8 @@ function ficheRapide(id, ctx, depuis, vu = null) {
   const place = ctx && ctx.moment.startsWith("col") ? ((j.au_repas || {})[id] || "col") : ctx && ctx.moment;
   const quand = ctx ? [(MOMENTS_REPAS.find(([m]) => m === place) || [, ""])[1], j.jour].filter(Boolean).join(" · ") : "";
   const courante = ctx && (!E.mois || ctx.k === E.mois.rang);
-  const libre = ctx && !(courante && fait(s, ctx.n, id)) && !(ctx.moment === "dej" && j.dej_reste);
+  const mange = !!(ctx && courante && fait(s, ctx.n, id));
+  const libre = ctx && (enSuivi() || !mange) && !(ctx.moment === "dej" && j.dej_reste);
   const reg = ctx && reglable(s, ctx.k, ctx.n, id, ctx.moment);
   fermerCarte(true);
   const fond = document.createElement("div");
@@ -1234,7 +1235,10 @@ function ficheRapide(id, ctx, depuis, vu = null) {
           <button type="button" data-action="quantite" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}" data-fois="${fois + 0.5}" ${fois >= 5 ? "disabled" : ""} aria-label="Plus">+</button></div>`; })() : ""}
       <p class="petit discret cp-info">${[vu ? "Ce que tu as mangé ce jour-là" : ctx ? (t !== 1 ? `Assiette à ${nombre(Math.round(t * 100))} % de la recette` : "Recette telle quelle") : "Une portion",
         r0.temps ? `${r0.temps} min` : "", r.ajusteeCeJour ? "ajustée ce jour" : ""].filter(Boolean).join(" · ")}</p>
-      <a class="bouton cp-cuisiner" href="${courante ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Cuisiner</a>
+      ${ctx && enSuivi() ? `<div class="cp-mange">${courante && ctx.n <= rangDuJour(s)
+          ? `<button class="bouton${mange ? " second" : ""}" data-action="manger" data-jour="${ctx.n}" data-plat="${id}" data-annuler="${mange ? 1 : 0}">${icone("check")}${mange ? "Pas encore mangé" : "J'ai mangé"}</button>` : ""}
+        <a class="bouton sobre" href="${courante ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Voir la recette</a></div>`
+      : `<a class="bouton cp-cuisiner" href="${courante && ctx ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Cuisiner</a>`}
       ${ctx && (libre || reg) ? `<div class="cp-choix">
         ${libre ? `<button type="button" data-action="changer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}">${icone("swap")}
           <span><b>Remplacer par un autre plat</b><small>Un plat du catalogue, un des tiens, ou retirer ce repas</small></span>${icone("caret-right")}</button>` : ""}
@@ -1680,7 +1684,18 @@ function vueAvancement({ params }) {
   const totalJour = s ? s.jours[aujourdhui()].cuisine.length : 0;
   const court = iso => new Intl.DateTimeFormat("fr-FR", p === "semaine" ? { weekday: "short" } : { day: "numeric" }).format(new Date(iso + "T12:00"));
   const basses = Object.keys(E.vitamines.noms).filter(v => x.vitamines[v] / E.vitamines.besoins[v] < 0.8);
-  if (p !== "jour") apresRendu.push(() => Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, aujourdhui: enSuivi() ? null : a.aujourdhui,
+  if (p !== "jour" && enSuivi()) apresRendu.push(() => {
+    // Une barre par jour : verte près de l'objectif (±5 %), orange au-dessus, grise en dessous ; rien pour un jour non compté.
+    const jours = x.detail.filter(d => d.date < a.aujourdhui && (!E.reglages.date_debut || d.date >= E.reglages.date_debut));
+    const fmt = new Intl.DateTimeFormat("fr-FR", p === "semaine" ? { weekday: "short" } : { day: "numeric" });
+    Graph.barres($("gMange"), { unite: "kcal", hauteur: 220, cible: a.objectif.kcal, nomCible: "objectif",
+      videTexte: "Les barres apparaissent dès la première journée finie.",
+      donnees: jours.some(d => d.kcal != null) ? jours.map(d => ({ etiquette: fmt.format(new Date(d.date + "T12:00")).replace(".", ""),
+        detail: dateLongueCourte(d.date), valeur: d.kcal || 0,
+        couleur: d.kcal == null ? "var(--surface-fort)" : Math.abs(d.kcal - a.objectif.kcal) <= a.objectif.kcal * 0.05 ? "var(--accent)"
+          : d.kcal > a.objectif.kcal ? "#f0a24b" : "#8c918e" })) : [] });
+  });
+  if (p !== "jour" && !enSuivi()) apresRendu.push(() => Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, aujourdhui: enSuivi() ? null : a.aujourdhui,
     videTexte: "Tes calories apparaîtront ici dès le premier plat déclaré cuisiné.", titre: "Calories mangées chaque jour, comparées à l'objectif",
     series: x.detail.some(d => d.kcal != null) ? [
       { nom: "Mangé", couleur: "var(--s1)", marques: true, points: x.detail.filter(d => d.kcal != null).map(d => ({ x: d.date, y: d.kcal })) },
@@ -1707,7 +1722,8 @@ function vueAvancement({ params }) {
     ${argent}
   </dl>
   ${p !== "jour" ? `<section class="bloc" aria-labelledby="tJours"><h2 id="tJours">Calories : ce que tu as mangé et ton objectif</h2>
-    <div class="legende"><span><i style="background:var(--s1)"></i>Mangé</span><span><i style="background:var(--s2)"></i>Objectif</span></div>
+    ${enSuivi() ? `<div class="legende"><span><i style="background:var(--accent)"></i>Dans l'objectif (±5 %)</span><span><i style="background:#f0a24b"></i>Au-dessus</span><span><i style="background:#8c918e"></i>En dessous</span></div>`
+      : `<div class="legende"><span><i style="background:var(--s1)"></i>Mangé</span><span><i style="background:var(--s2)"></i>Objectif</span></div>`}
     <div id="gMange"></div>
     <p class="petit discret" style="margin-top:8px">Un jour sans point est un jour non déclaré.</p></section>` : ""}
   ${enSuivi() ? "" : `<section class="bloc" aria-labelledby="tVitA"><h2 id="tVitA">Vitamines${p === "jour" ? " du jour" : ", moyenne par jour"}</h2>
@@ -1716,7 +1732,35 @@ function vueAvancement({ params }) {
     <p style="margin-top:12px"><a class="bouton sobre" href="#/vitamines">Voir les détails${icone("caret-right")}</a></p></section>`}`}
   ${enSuivi() ? "" : `<p class="bloc"><a class="bouton sobre" href="#/budget">Voir le détail du budget</a></p>`}`;
 }
-function vueVitamines() {
+function vueVitaminesMangees(params) {
+  // Ce que tu as mangé (plats marqués mangés), comparé à tes besoins (Taha, 19/11/2026).
+  const a = E.avancement, V = E.vitamines;
+  const p = ["jour", "semaine", "mois"].includes(params.get("p")) ? params.get("p") : "jour", x = a[p];
+  const NOMS = { jour: "Aujourd'hui", semaine: "Cette semaine", mois: "Ce mois-ci" };
+  const codes = Object.keys(V.noms);
+  const pct = c => V.besoins[c] ? Math.round(100 * (x.vitamines[c] || 0) / V.besoins[c]) : 0;
+  const couvertes = codes.filter(c => pct(c) >= 100).length, basses = codes.filter(c => pct(c) < 80);
+  return `<div class="titre"><h1 tabindex="-1">Vitamines</h1>
+    <p>Ce que tu as mangé${p === "jour" ? " aujourd'hui" : ", en moyenne par jour, journées terminées"}, comparé à tes besoins.</p></div>
+  <nav class="jours" aria-label="Période">${Object.keys(NOMS).map(k => `<a href="#/vitamines?p=${k}"${k === p ? ' aria-current="true"' : ""}>${NOMS[k]}</a>`).join("")}</nav>
+  ${!x.jours_suivis ? vide(p === "jour" ? "Rien de mangé pour l'instant" : `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}`,
+      "Les vitamines se remplissent avec les plats que tu marques « mangé ».", "#/semaine", "Aller au jour")
+    : `<dl class="kpis">
+      <div><dt>Besoins couverts</dt><dd>${couvertes} sur ${codes.length}</dd><p>Vitamines à 100 % ou plus de ton besoin.</p></div>
+      <div><dt>À surveiller</dt><dd>${basses.length ? basses.join(", ") : "Aucune"}</dd><p>Vitamines sous 80 % du besoin.</p></div>
+    </dl>
+    <section class="bloc" aria-labelledby="tApportsM"><h2 id="tApportsM">${p === "jour" ? "Apport du jour" : "Apport moyen par jour"}</h2>
+      ${barresVitamines(x.vitamines, true)}
+      ${p !== "jour" ? `<p class="petit discret" style="margin-top:8px">${x.jours_suivis} jour${x.jours_suivis > 1 ? "s" : ""} compté${x.jours_suivis > 1 ? "s" : ""}.</p>` : ""}</section>`}
+  <section class="bloc" aria-labelledby="tLireV2"><details class="nu"><summary><h2 id="tLireV2">Comment lire ces chiffres</h2>${icone("caret-right")}</summary>
+    <ul class="definitions" style="margin-top:10px">
+      <li><strong>Tes besoins.</strong> Les références de l'ANSES pour un adulte, selon ton sexe. B1 et B2 suivent tes calories du moment.</li>
+      <li><strong>Les apports.</strong> Calculés sur les aliments crus : lis-les comme des ordres de grandeur. La cuisson fait perdre une partie de la vitamine C et des folates.</li>
+      <li><strong>La vitamine D.</strong> L'alimentation seule y arrive rarement : elle vient surtout du soleil et des poissons gras.</li>
+    </ul></details></section>`;
+}
+function vueVitamines({ params } = {}) {
+  if (enSuivi()) { barre(""); return vueVitaminesMangees(params || new URLSearchParams()); }
   barre("");
   const s = E.semaine, v = s && s.vitamines, V = E.vitamines;
   const tete = `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}
@@ -1772,7 +1816,7 @@ function vueProfilFlemmard() {
   const l = (a, b) => `<li><span>${a}</span><span class="q">${b}</span></li>`;
   const lien = (href, nomIcone, titre, sous) => `<li><a href="${href}">${icone(nomIcone)}<span>${titre}${sous ? `<small>${sous}</small>` : ""}</span>${icone("caret-right")}</a></li>`;
   return `<div class="m-tete"><div><h1 tabindex="-1">${esc(p.nom)}${i.nom_famille ? ` ${esc(i.nom_famille)}` : ""}</h1>
-      <p class="petit discret">${esc(p.id)}${p.programme ? ` · ${esc(p.programme)}` : ""}</p></div></div>
+      <p class="petit discret">Identifiant : ${esc(p.id)}</p></div></div>
   <div class="suivi-chiffres">
     <div class="fait"><b>${nombre(kcal)}</b><span>kcal par jour</span></div>
     <div class="fait"><b>${ph.prot}<small> g</small></b><span>protéines</span></div>
@@ -2082,7 +2126,7 @@ function vueJourSuivi(params) {
     ${jaugesDuJour(j, o)}
     <p class="reste-jour">${reste}</p>
     ${E.eau && dec === 0 ? (() => { const bu = (E.eau.bu || {})[date] || 0, pct = Math.min(100, Math.round(100 * bu / E.eau.litres));
-      const maxi = Math.max(4, Math.ceil(E.eau.litres * 1.5));
+      const maxi = Math.ceil(E.eau.litres * 2) / 2 + 0.5;                 // un peu au-delà de l'objectif (2,7 L → 3,5 L)
       return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <b class="chiffres" id="eauBu">${virgule(bu)}</b><small class="chiffres"> / ${virgule(E.eau.litres)} L</small></span>
         <input type="range" class="eau-barre" id="eauBarre" min="0" max="${maxi}" step="0.25" value="${bu}" data-date="${date}" aria-label="Eau bue aujourd'hui, en litres"
           style="--rempli:${Math.min(100, 100 * bu / maxi)}%;--but:${100 * E.eau.litres / maxi}%"></div>`; })() : ""}
@@ -2412,6 +2456,76 @@ function vueJournal() {
       + ((journalSuite === null ? E.journal_suite : journalSuite) ? `<p class="actions" style="margin-top:18px"><button class="bouton second" data-action="journalSuite">Voir la suite</button></p>` : "")
     : vide("Rien pour l'instant", "Le journal se remplit dès que Jarvis choisit une semaine ou remplit un panier.", "#/semaine", "Aller à la semaine")}`;
 }
+// Mes objectifs par période : chacun règle les siens, Claude peut en proposer (Taha, 19/11/2026).
+const finDuMois = ym => { const [y, m] = String(ym).split("-").map(Number); const d = new Date(y, m, 0);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const lendemain = iso => { const d = new Date(iso + "T12:00"); d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+function periodesActuelles() {
+  if (E.phases_perso) return E.phases.map(p => ({ ...p }));
+  // Le programme du profil (par mois) devient des périodes datées, à partir d'aujourd'hui.
+  const out = [];
+  for (const p of E.phases || []) {
+    const au = p.au || finDuMois(p.jusqu_a || "2099-12");
+    if (au < isoDuJour()) continue;
+    out.push({ nom: p.nom, du: out.length ? lendemain(out[out.length - 1].au) : isoDuJour(), au, kcal: p.kcal, prot: p.prot, glucides: p.glucides, lipides: p.lipides });
+  }
+  return out;
+}
+function lignePeriode(x = {}) {
+  const v = c => x[c] == null ? "" : esc(x[c]);
+  return `<div class="periode">
+    <div class="periode-tete"><input class="p-nom" type="text" maxlength="40" placeholder="Nom (ex. Sèche)" value="${v("nom")}" aria-label="Nom de la période">
+      <button type="button" class="effacer" data-retirer-periode aria-label="Retirer cette période">${icone("x")}</button></div>
+    <div class="periode-dates"><label>Du<input class="p-du" type="date" value="${v("du")}"></label><label>Au<input class="p-au" type="date" value="${v("au")}"></label></div>
+    <div class="periode-chiffres">
+      <label>kcal<input class="p-kcal" type="text" inputmode="numeric" value="${v("kcal")}"></label>
+      <label>Protéines (g)<input class="p-prot" type="text" inputmode="numeric" value="${v("prot")}"></label>
+      <label>Glucides (g)<input class="p-glucides" type="text" inputmode="numeric" value="${v("glucides")}" placeholder="—"></label>
+      <label>Lipides (g)<input class="p-lipides" type="text" inputmode="numeric" value="${v("lipides")}" placeholder="—"></label></div></div>`;
+}
+function blocObjectifs() {
+  return `<section class="bloc" aria-labelledby="tPeriodes"><h2 id="tPeriodes">Mes objectifs</h2>
+    <p class="doux petit sous-titre">${E.phases_perso ? "Tes périodes : l'appli prend celle du jour." : "Ton programme actuel, en périodes : change ce que tu veux, puis enregistre."} Les vitamines suivent tes calories.</p>
+    <div id="periodes">${periodesActuelles().map(lignePeriode).join("")}</div>
+    <p style="margin:8px 0 14px"><button type="button" class="lien" id="ajoutPeriode">+ Ajouter une période</button></p>
+    <details class="claude-objectifs"><summary>Demander à Claude${icone("caret-right")}</summary>
+      <div class="champ" style="margin-top:10px"><label for="oDemande">Ce que tu veux</label>
+        <textarea id="oDemande" rows="2" placeholder="Ex. : perdre 4 kg d'ici mars, puis prendre du muscle jusqu'à l'été"></textarea></div>
+      <button type="button" class="bouton second" id="oProposer">Proposer des périodes</button>
+      <p class="petit discret" id="oExplication" style="margin-top:8px">Il faut avoir branché ton compte Claude (plus bas). Tu vérifies sa proposition avant d'enregistrer.</p>
+    </details>
+    <small id="ePeriodes" class="erreur" role="alert" style="display:block;margin-top:10px;color:var(--critique)"></small>
+    <p class="actions" style="margin-top:12px"><button type="button" class="bouton" id="oEnregistrer">Enregistrer mes objectifs</button>
+      ${E.phases_perso ? `<button type="button" class="bouton sobre" id="oAutomatique">Revenir à mon programme de départ</button>` : ""}</p>
+  </section>`;
+}
+document.addEventListener("click", async ev => {
+  const t = ev.target.closest("#ajoutPeriode, [data-retirer-periode], #oEnregistrer, #oAutomatique, #oProposer");
+  if (!t) return;
+  if (t.id === "ajoutPeriode") {
+    const tous = [...document.querySelectorAll(".periode .p-au")].map(i => i.value).filter(Boolean).sort();
+    $("periodes").insertAdjacentHTML("beforeend", lignePeriode({ du: tous.length ? lendemain(tous[tous.length - 1]) : isoDuJour() }));
+    return;
+  }
+  if (t.dataset.retirerPeriode !== undefined) { t.closest(".periode").remove(); return; }
+  if (t.id === "oProposer") {
+    t.disabled = true; t.textContent = "Claude réfléchit…"; $("ePeriodes").textContent = "";
+    try {
+      const r = await fetch("/api/objectifs/proposer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ demande: $("oDemande").value }) });
+      const rep = await r.json();
+      if (!r.ok) $("ePeriodes").textContent = rep.erreur || "Claude n'a pas pu proposer.";
+      else { $("periodes").innerHTML = rep.proposition.phases.map(lignePeriode).join(""); $("oExplication").textContent = rep.proposition.explication || "Vérifie, puis enregistre."; }
+    } catch (e) { $("ePeriodes").textContent = "Pas de réponse."; }
+    t.disabled = false; t.textContent = "Proposer des périodes";
+    return;
+  }
+  const phases = t.id === "oAutomatique" ? [] : [...document.querySelectorAll(".periode")].map(d => Object.fromEntries(
+    ["nom", "du", "au", "kcal", "prot", "glucides", "lipides"].map(c => [c, d.querySelector(".p-" + c).value.trim()])));
+  const rep = await appel("/api/objectifs", { phases });
+  if (rep === true) { rendre(); dire(phases.length ? "Objectifs enregistrés." : "Retour à ton programme de départ."); }
+  else if (rep && rep.erreur) $("ePeriodes").textContent = rep.erreur;
+});
 function vueReglagesFlemmard() {
   // Réglages du mode flemmard, en blocs les uns sous les autres (Taha, 19/11/2026 : « en désordre, ça se chevauche »).
   barre("");
@@ -2428,12 +2542,13 @@ function vueReglagesFlemmard() {
   <section class="bloc" aria-labelledby="tObj"><h2 id="tObj">Mon objectif</h2>
     <div class="faits"><div class="fait"><b>${nombre(kcal)}</b><span>kcal par jour</span></div><div class="fait"><b>${choisie.prot} g</b><span>de protéines par jour</span></div></div>
     <form class="formulaire" id="fObjectif" novalidate>
-      ${(E.phases || []).length > 1 ? champ("rPhase", "Phase du programme", choix("rPhase", "phase", r.phase || "", [["", "Automatique, selon la date"], ...E.phases.map(p => [p.n, `${p.n}. ${esc(p.nom)}, ${nombre(p.kcal)} kcal`])])) : ""}
+      ${(E.phases || []).length > 1 && !E.phases_perso ? champ("rPhase", "Phase du programme", choix("rPhase", "phase", r.phase || "", [["", "Automatique, selon la date"], ...E.phases.map(p => [p.n, `${p.n}. ${esc(p.nom)}, ${nombre(p.kcal)} kcal`])])) : ""}
       ${champ("rAdj", "Ajustement des calories", choix("rAdj", "ajustement", r.ajustement || 0, [-300, -150, 0, 150, 300].map(v => [v, `${v > 0 ? "+" : ""}${v} kcal`])), "Par paliers de 150 kcal, si ton poids s'écarte de ce que tu vises.")}
       ${champ("rDebut", "Début de mon suivi", saisie("rDebut", "date_debut", r.date_debut, "date", `max="${isoDuJour()}"`), "Le suivi compte ton poids et tes mesures à partir de ce jour.")}
       <small id="eObjectif" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
       <button class="bouton second" type="submit">Enregistrer</button>
     </form></section>
+  ${blocObjectifs()}
   <section class="bloc" aria-labelledby="tRepas"><h2 id="tRepas">Mon alimentation</h2>
     <div class="options">
       <label class="option"><input type="checkbox" id="rFodmap"${fodmap ? " checked" : ""}><span><b>Pauvre en FODMAP</b><small>Seulement des plats pauvres en FODMAP dans les semaines composées.</small></span></label>
@@ -2491,7 +2606,10 @@ document.addEventListener("input", ev => {
   if ($("eauBu")) $("eauBu").textContent = virgule(Number(b.value));
 });
 document.addEventListener("change", ev => {
-  if (ev.target.id === "eauBarre") agir("/api/eau", { date: ev.target.dataset.date, litres: Number(ev.target.value) });
+  if (ev.target.id === "eauBarre") {                // enregistré sans redessiner la page : la barre ne saute pas
+    const b = ev.target;
+    appel("/api/eau", { date: b.dataset.date, litres: Number(b.value) }).then(ok => { if (ok !== true) { dire("L'eau n'a pas pu être enregistrée."); rendre(); } });
+  }
   if (ev.target.id === "rFodmap") agir("/api/profil/modifier", { fodmap: ev.target.checked }, ev.target.checked ? "Pauvre en FODMAP : pour les semaines composées." : "FODMAP retiré.");
 });
 function vueReglages() {
@@ -2714,13 +2832,13 @@ const ACTIONS = {
     const c = E.semaine.jours[jour].cuisine.find(x => x.id === r.id);
     if (await confirmer({ titre: "C'est cuisiné ?", oui: "Oui, c'est cuisiné", non: "Pas encore",
       texte: `Les ingrédients de « ${r.nom} » (${pourCombien(c, E.semaine.jours[Number(b.dataset.jour)]) || "ta part"}) sortent de ton stock.` }))
-      agir("/api/prepare", { jour, plat: r.id }, enSuivi() ? `Noté : « ${r.nom} » est fait.` : estRepas(r) ? "Stock mis à jour. Tu peux noter le plat." : "Stock mis à jour.");
+      agir("/api/prepare", { jour, plat: r.id }, enSuivi() ? `« ${r.nom} » : mangé.` : estRepas(r) ? "Stock mis à jour. Tu peux noter le plat." : "Stock mis à jour.");
   },
   async journee(b) {
     const jour = Number(b.dataset.jour), j = E.semaine.jours[jour];
     if (await confirmer({ titre: `${j.jour} : tout mangé comme prévu ?`, oui: "Oui, tout", non: "Pas encore",
       texte: "Tous les repas de ce jour sont cochés, et ce qui restait sort de ton stock. Si tu as mangé autre chose, change d'abord le repas." }))
-      agir("/api/prepare", { jour }, enSuivi() ? "Noté : toute la journée est faite." : "Stock mis à jour.");
+      agir("/api/prepare", { jour }, enSuivi() ? "Toute la journée : mangée." : "Stock mis à jour.");
   },
   voir: b => agir("/api/profil/voir", { profil: b.dataset.profil }, "Profil affiché.").then(ok => { if (ok) location.hash = "#/semaine"; }),
   enseignes: () => agir("/api/profil/enseignes", {}, "Chrome s'ouvre sur le PC."),
@@ -2782,6 +2900,9 @@ const ACTIONS = {
     agir("/api/semaine/modifier", { operation: { type: "ajuster", jour: Number(b.dataset.jour), plat: r.id, quantites }, semaine: Number(b.dataset.semaine), confirme: true },
       `« ${r.nom} » : ×${virgule(fois)}.`);
   },
+  manger: b => { const r = recette(b.dataset.plat), annuler = b.dataset.annuler === "1";
+    fermerCarte(true);
+    agir("/api/prepare", { jour: Number(b.dataset.jour), plat: r.id, ...(annuler ? { annuler: true } : {}) }, annuler ? `« ${r.nom} » : pas encore mangé.` : `« ${r.nom} » : mangé.`); },
   fixer: b => agir("/api/repas/fixer", { plat: b.dataset.plat, moment: b.dataset.moment, fixe: b.dataset.fixe === "1" },
     b.dataset.fixe === "1" ? "Fixé : il revient chaque jour." : "Ce plat n'est plus fixe."),
   reessayer: demarrer,
