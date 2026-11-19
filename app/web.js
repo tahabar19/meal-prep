@@ -3,7 +3,7 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-19-203609";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-19-204201";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const email = (ident) => `${ident}@meal-prep.invalid`;
@@ -114,7 +114,7 @@ async function taches() {
   enFond = true;
   try {
     let photo = false;
-    for (let k = 0; k < 6; k++) {
+    for (let k = 0; k < 60; k++) {                    // photos, fiches à compléter : une tâche à la fois
       const r = await (M.file = M.file.then(() => envoyer({ type: "apres" })));
       await sauver(r.ch);
       photo = photo || (r.ch || []).some((c) => c.photo);
