@@ -31,11 +31,28 @@ Abandonné (mode flemmard) : paniers automatiques, relevés de prix, courses, bu
 
 ## Étapes
 1. ~~Dépôt GitHub et projet Supabase~~ (19/11 : `tahabar19/meal-prep`, projet `ycvmwdipuxbkcuwdhqds`, eu-west-3).
-2. Schéma SQL + RLS, comptes taha et awatif, table `cles_claude`, fonction edge `claude` (connexion de la clé).
-3. Export du catalogue en fichiers statiques + page qui s'ouvre, se connecte, affiche le catalogue.
-4. Port de la logique du jour (étapes 1 à 6 ci-dessus), avec les mêmes tests que l'appli Python (rejoués en JS).
-5. Fonctions Claude (analyse, ingrédient, photo).
-6. Recopie des données actuelles de taha et awatif dans Supabase ; essai à deux ; bascule.
+2. ~~Schéma SQL + RLS, fonction `claude`~~ (`supabase/schema.sql`, `supabase/functions/claude/index.ts`).
+3. ~~Le moteur~~ : au lieu de traduire la logique en JavaScript, le serveur Python du PC tourne tel quel dans le
+   navigateur (Pyodide, dans un Worker : `app/moteur.js` + `app/py/web.py`). La page (`app.js` du PC, retouchée par
+   `outils/construire.py`) croit parler au serveur : `app/web.js` lui répond.
+4. ~~Catalogue et photos~~ en fichiers statiques (`app/catalogue.json`, `app/photos/`), adresse retirée des fiches.
+5. ~~Comptes taha et awatif~~, profils recopiés (`outils/migrer.py`), mots de passe provisoires dans
+   `~/.config/meal-prep/comptes.txt`. Compte d'essai `zz-essai` (copie du profil de taha), mot de passe `essai-mdp`.
+6. ~~En ligne~~ : https://tahabar19.github.io/meal-prep/ (19/11/2026).
+
+## Mettre à jour l'appli en ligne
+Après un changement dans `~/jarvis/jarvis-assistant-vocal/repas/` (moteur ou page) :
+`~/jarvis/jarvis-assistant-vocal/.venv/bin/python outils/construire.py` (`--sans-photos` si le catalogue n'a pas changé),
+puis commit, push de `main` et `H=$(git subtree split --prefix=app main) && git push -f origin $H:refs/heads/gh-pages`.
+Fonction : `python3 outils/deployer_fonction.py claude`. Schéma : rejouer `supabase/schema.sql` (API de gestion).
+Essais : `outils/essai_moteur.py` (Python, sans navigateur) ; Chrome sans fenêtre sur `python3 -m http.server` dans `app/`.
+
+## Ce qui reste à voir
+- Brancher un compte Claude dans Plus → Réglages (chacun le sien) : « Calculer », photo d'assiette, choix des photos.
+- Durées mesurées (Chrome du PC) : première connexion ~7 s, réouverture 0,4 s (dernière journée gardée sur le téléphone),
+  moteur prêt ~5 s plus tard ; actions 0,2 à 2 s ; nouvel ingrédient (étiquettes en ligne) ~7 s. À mesurer sur iPhone.
+- Open Food Facts refuse les serveurs Supabase : le moteur l'appelle directement depuis le téléphone.
+- L'appli du PC tourne encore ; ses données ne remontent plus en ligne (la copie en ligne date du 19/11 après-midi).
 
 ## Secrets (jamais dans le dépôt)
 - `~/.config/meal-prep/db-password` : mot de passe de la base.
