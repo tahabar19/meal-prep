@@ -115,7 +115,7 @@ def page():
     manifeste = json.loads((SITE / "manifest.webmanifest").read_text(encoding="utf-8"))
     manifeste.update(start_url="./#/semaine", scope="./", description="Ce que tu manges, jour après jour : tes plats, tes calories, tes protéines.")
     for i in manifeste["icons"]:
-        i["src"] = i["src"].lstrip("/")
+        i["src"] = i["src"].lstrip("/") + "?v=bol"         # le logo bol (19/11/2026) : l'iPhone reprend la nouvelle icône
     (APP / "manifest.webmanifest").write_text(json.dumps(manifeste, ensure_ascii=False, indent=1), encoding="utf-8")
 
 

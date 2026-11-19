@@ -10,18 +10,18 @@
  "description": "Ce que tu manges, jour après jour : tes plats, tes calories, tes protéines.",
  "icons": [
   {
-   "src": "icone-192.png",
+   "src": "icone-192.png?v=bol",
    "sizes": "192x192",
    "type": "image/png"
   },
   {
-   "src": "icone-512.png",
+   "src": "icone-512.png?v=bol",
    "sizes": "512x512",
    "type": "image/png",
    "purpose": "any maskable"
   },
   {
-   "src": "icone.svg",
+   "src": "icone.svg?v=bol",
    "sizes": "any",
    "type": "image/svg+xml"
   }
