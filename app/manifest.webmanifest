@@ -1,0 +1,29 @@
+{
+ "name": "Mon Meal Prep",
+ "short_name": "Meal Prep",
+ "lang": "fr",
+ "start_url": "./#/semaine",
+ "scope": "./",
+ "display": "standalone",
+ "background_color": "#111312",
+ "theme_color": "#111312",
+ "description": "Ce que tu manges, jour après jour : tes plats, tes calories, tes protéines.",
+ "icons": [
+  {
+   "src": "icone-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icone-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  },
+  {
+   "src": "icone.svg",
+   "sizes": "any",
+   "type": "image/svg+xml"
+  }
+ ]
+}

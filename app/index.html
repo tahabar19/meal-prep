@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#111312">
+<title>Mon Meal Prep</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Meal Prep">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preload" href="fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="app.css">
+<style>.demarrage{margin-top:28px;color:var(--discret);font-size:.92rem}</style>
+</head>
+<body>
+<a class="saut" href="#contenu">Aller au contenu</a>
+
+<header class="entete">
+  <div class="cadre entete-in">
+    <a class="marque" href="#/semaine" translate="no">Mon Meal Prep</a>
+    <div id="fil" aria-hidden="true"></div>
+    <nav class="nav-haut" id="navHaut" aria-label="Rubriques"></nav>
+    <span class="puce" id="pucePhase" hidden></span>
+  </div>
+</header>
+
+<main id="contenu" class="cadre">
+  <div class="os" aria-busy="true" aria-label="Chargement…"><i class="t"></i><i></i><i class="l"></i><i class="l"></i><i class="l"></i></div>
+  <p class="demarrage" id="demarrage" hidden>Préparation de l'appli… (la première fois, quelques secondes)</p>
+</main>
+
+<div class="barre" id="barre" hidden></div>
+<nav class="nav-bas" id="navBas" aria-label="Rubriques"></nav>
+<dialog class="dialogue" id="dialogue" aria-labelledby="dialogueTitre"></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
+<script src="icones.js"></script>
+<script src="graphiques.js"></script>
+<script src="web.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
