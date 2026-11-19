@@ -60,27 +60,14 @@ Essais : `outils/essai_moteur.py` (Python, sans navigateur) ; Chrome sans fenêt
 - `~/.config/supabase-token` : jeton de gestion Supabase (partagé avec Rafiq).
 - Les clés Claude : saisies par chacun dans l'appli, gardées dans Supabase.
 
-## Demandes du 19/11 soir — EN COURS (reprendre ici)
-Fait dans l'appli source (`~/jarvis/jarvis-assistant-vocal/repas/`, 165 tests OK), PAS encore construit ni publié en ligne :
-- serveur : `_fixes()` + `fixer_plat()` + route `/api/repas/fixer` (repas fixes choisis par chacun, jours à venir mis à jour),
-  fruits secs plus fixes par défaut (`profil.preferences.fruits_secs` faux sauf demande ; `/api/reglages {fruits_secs}` les ajoute/retire
-  des jours à venir), `/api/reglages {date_debut}`, mesures `torse_avant/_apres`, `etat().fixes`.
-- profil.py : création avec prénom, nom (`nom_famille`), date de naissance, téléphone (+ sexe, taille, poids) ; `modifier()` permet
-  de changer ces infos pour tous (besoins recalculés seulement pour un profil calculé) ; l'identifiant ne change pas.
-- app.js : bouton « Fixer ce plat / Ne plus fixer » (carte du plat, matin et collations), « · fixe » dans la grille, avis dans la carte
-  du catalogue, verrou du défilement quand une fenêtre est ouverte, Plus sans Historique/Cuisine/Budget/Stock/Journal (flemmard),
-  Mon profil sans Mes courses + nouvelles infos, formulaire de création avec les nouveaux champs, Avancement avec vitamines
-  + « Voir les détails », Suivi (biceps/hanches/torse quand on veut, après la séance en option, date de début).
-- app.css : catalogue en 3 par ligne sur téléphone. Cache sw `meal-prep-55`.
-RESTE À FAIRE :
-1. Réglages réorganisés (Mon objectif + date de début, Mes repas : fruits secs, FODMAP, liste des repas fixes ; Mes informations
-   (form `fMesInfos` → `/api/profil/modifier`) ; Compte Claude (`typeof blocClaude === "function"`) ; Mon compte). Retirer alors
-   la retouche « ${modeSuivi} » de outils/construire.py.
-2. Connexion : remettre « Créer mon profil » en ligne (retirer la retouche de construire.py) ; fonction Supabase `inscription`
-   (code d'invitation en secret), web.js `/api/profil/creer` → inscription → connexion → `web.creer_profil()` (mod_profil.creer +
-   generer_mois).
-3. Journal centralisé : table `journal` (insert seulement, RLS sans lecture), web.py remplace `serveur.journal`/`consigner`,
-   web.js envoie les lignes ; `outils/journaux.py` pour l'admin ; supprimer les journal.json en ligne.
-4. Limites Claude dans la fonction `claude` : tâches permises + consigne système (refuser « change l'appli », « cherche
-   les données de X »), réponse JSON exigée, tailles max, quota par personne (table `usage_claude`), liste blanche pour « web ».
-5. Construire, essais Chrome, publier (gh-pages) ; retirer les fruits secs des semaines en ligne de taha et awatif.
+## Demandes du 19/11 soir — FAITES et en ligne (version 2026-11-19-170703)
+Repas fixes au choix (bouton Fixer), fruits secs en option (retirés des jours à venir de taha et awatif), verrou du
+défilement, Plus/Mon profil allégés, création de compte (fonction `inscription`, code dans `~/.config/meal-prep/code-invitation`,
+prénom/nom/naissance/sexe/téléphone/taille/poids), Réglages en blocs (objectif + date de début, repas, informations
+modifiables sauf l'identifiant, compte Claude, compte), Avancement avec vitamines + détail, semaine/mois sans la journée
+en cours, eau (35 ml/kg), Suivi (biceps/hanches/torse quand on veut, après la séance en option, date de début),
+catalogue en 3 colonnes, journal centralisé (table `journal`, `outils/journaux.py`), limites Claude (consigne imposée,
+JSON exigé, quotas, sites permis). Outil admin : `outils/appliquer.py <identifiant> POST <chemin> '<json>'`.
+
+## Prochaine idée (à décider avec Taha)
+Régler les objectifs de chacun par période (phases : du/au, kcal, protéines, lipides, glucides), voir la réponse du 19/11.
