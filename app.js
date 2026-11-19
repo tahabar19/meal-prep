@@ -1772,7 +1772,9 @@ function vueVitaminesMangees(params) {
           <small class="erreur" id="eCv${i}" style="display:block;color:var(--critique)"></small>
           <button class="bouton second" type="submit">Enregistrer</button></form></details>`).join("")}</section>` : ""}
   <div class="titre"><h1 tabindex="-1">Vitamines</h1>
-    <p>Ce que tu as mangé${p === "jour" ? " aujourd'hui" : ", en moyenne par jour, journées terminées"}, comparé à tes besoins.</p></div>
+    <p>${p === "jour" ? "Le total de ce que tu as marqué mangé aujourd'hui (la journée n'est pas finie), comparé à tes besoins d'une journée."
+      : (() => { const jours = x.detail.filter(d => d.kcal != null && d.date < a.aujourdhui).map(d => new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric" }).format(new Date(d.date + "T12:00")).replace(".", ""));
+          return `La moyenne par jour de ${jours.length ? jours.join(", ") : "tes journées finies"}, comparée à tes besoins d'une journée. Aujourd'hui y entre demain.`; })()}</p></div>
   <nav class="jours" aria-label="Période">${Object.keys(NOMS).map(k => `<a href="#/vitamines?p=${k}"${k === p ? ' aria-current="true"' : ""}>${NOMS[k]}</a>`).join("")}</nav>
   ${!x.jours_suivis ? vide(p === "jour" ? "Rien de mangé pour l'instant" : `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}`,
       "Les vitamines se remplissent avec les plats que tu marques « mangé ».", "#/semaine", "Aller au jour")
