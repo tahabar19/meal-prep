@@ -1656,12 +1656,12 @@ function vueAvancement({ params }) {
       { nom: "Mangé", couleur: "var(--s1)", marques: true, points: x.detail.filter(d => d.kcal != null).map(d => ({ x: d.date, y: d.kcal })) },
       { nom: "Objectif", couleur: "var(--s2)", pointille: true, points: x.detail.map(d => ({ x: d.date, y: a.objectif.kcal })) }] : [] }));
   return `<div class="titre"><h1 tabindex="-1">Avancement</h1>
-    <p>Ce que tu as vraiment cuisiné et mangé, comparé à ton objectif de ${nombre(a.objectif.kcal)} kcal et ${a.objectif.prot} g de protéines par jour.</p></div>
+    <p>Ce que tu as vraiment cuisiné et mangé, comparé à ton objectif de ${nombre(a.objectif.kcal)} kcal et ${a.objectif.prot} g de protéines par jour.${p !== "jour" ? " Journées terminées seulement : aujourd'hui compte dès demain." : ""}</p></div>
   <nav class="jours" aria-label="Période">
     ${Object.keys(NOMS).map(k => `<a href="#/avancement?p=${k}"${k === p ? ' aria-current="true"' : ""}>${NOMS[k]}</a>`).join("")}
   </nav>
-  ${!suivi ? `<div class="vide"><h2>Rien de cuisiné ${p === "jour" ? "aujourd'hui" : p === "semaine" ? "cette semaine" : "ce mois-ci"}</h2>
-    ${enSuivi() ? `<p>L'avancement se remplit avec les repas que tu notes.</p>
+  ${!suivi ? `<div class="vide"><h2>${enSuivi() && p !== "jour" ? `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}` : `Rien de cuisiné ${p === "jour" ? "aujourd'hui" : p === "semaine" ? "cette semaine" : "ce mois-ci"}`}</h2>
+    ${enSuivi() ? `<p>${p === "jour" ? "L'avancement se remplit avec les repas que tu notes." : "La semaine et le mois comptent les journées terminées : la moyenne commence demain."}</p>
     <a class="bouton second" href="#/semaine">Noter ce que je mange</a></div>` : `<p>L'avancement se remplit quand tu touches « C'est cuisiné » ou « Journée faite » dans l'onglet Cuisine.</p>
     <a class="bouton second" href="#/cuisine">Aller à la cuisine</a></div>
     <dl class="kpis bloc">${argent}</dl>`}` : `
@@ -1729,7 +1729,7 @@ function vueProfil() {
       ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul>
     <p class="petit discret" style="margin-top:8px"><a href="#/reglages">Modifier mes informations</a> (l'identifiant ne change pas).</p></section>
   <section class="bloc" aria-labelledby="tBesoins"><h2 id="tBesoins" style="margin-bottom:8px">Mes besoins par jour</h2>
-    <ul class="lignes">${l("Calories", `${nombre(ph.kcal + (E.reglages.ajustement || 0))} kcal`)}${l("Protéines", `${ph.prot} g`)}
+    <ul class="lignes">${l("Calories", `${nombre(ph.kcal + (E.reglages.ajustement || 0))} kcal`)}${l("Protéines", `${ph.prot} g`)}${E.eau ? l("Eau", `${virgule(E.eau.litres)} L`) : ""}
       ${Object.keys(V.noms).map(c => l(esc(V.noms[c].nom), `${dose(V.besoins[c])} ${V.noms[c].unite}`)).join("")}</ul>
     <p class="petit discret" style="margin-top:8px">Phase ${ph.n}, ${esc(ph.nom).toLowerCase()}. Ces repères ne remplacent pas un avis médical.</p></section>
   ${enSuivi() ? "" : `<section class="bloc" aria-labelledby="tCourses"><h2 id="tCourses" style="margin-bottom:8px">Mes courses</h2>
@@ -2028,6 +2028,7 @@ function vueJourSuivi(params) {
       ${dec < dmax ? `<a class="fleche" href="#/semaine?d=${Math.max(2, dec + 1)}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}</nav>
     ${jaugesDuJour(j, o)}
     <p class="reste-jour">${reste}</p>
+    ${E.eau ? `<p class="petit discret eau-jour">${icone("orange")}Eau : <b>${virgule(E.eau.litres)} L</b> à boire dans la journée <span class="discret">(${esc(E.eau.selon)})</span></p>` : ""}
     ${o.gluc || o.lip ? `<p class="petit discret chiffres" style="margin:-4px 0 12px">Glucides ${nombre(Math.round(j.gluc || 0))}${o.gluc ? ` / ${nombre(o.gluc)}` : ""} g · Lipides ${nombre(Math.round(j.lip || 0))}${o.lip ? ` / ${nombre(o.lip)}` : ""} g</p>` : ""}
     ${ici ? `<section class="m-repas grille-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true)}</section>`
       : `<div class="dujour"><strong>Pas de menu prévu ce jour-là.</strong> Note ce que tu manges, ou compose la suite.
