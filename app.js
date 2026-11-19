@@ -145,6 +145,8 @@ function ongletDe(vue) {
 
 /* ------------------------------------------------------------ navigation */
 const enSuivi = () => !!(E && E.journal_repas && E.journal_repas.actif);   // mode flemmard : on note ce qu'on mange
+// Un plat fixé par la personne (bouton « Fixer ce plat ») : il revient chaque jour, toujours une portion (Taha, 19/11/2026).
+const estFixe = (id, moment) => !!(E && E.fixes && (moment === "pdj" ? E.fixes.petit_dej === id : String(moment).startsWith("col") && (E.fixes.collations || []).includes(id)));
 function comptesNav() {
   // Produits a acheter et repas a cuisiner aujourd'hui : les pastilles de Courses et Cuisine.
   const s = E && E.semaine;
@@ -338,7 +340,7 @@ function repasDuJour(s, k, n, compact = false, sansCollation = false, avecCuire 
       const v = platDuJour(s, n, id, moment), compte = repasCompte(j, moment, id), t = tailleDe(j, id);
       return `<div class="exo repas-ligne"><a class="repas" href="#/plat/${id}" data-semaine="${k}" data-jour="${n}" data-moment="${moment}">
         ${photo(r, 480)}
-        <div class="exo-texte"><div class="quand">${quand}${detail ? `, ${detail}` : ""}</div><h3>${esc(r.nom)}</h3>
+        <div class="exo-texte"><div class="quand">${quand}${estFixe(id, moment) ? " · fixe" : detail ? `, ${detail}` : ""}</div><h3>${esc(r.nom)}</h3>
         <div class="chiffres">${nombre(compte ? compte.kcal : v.kcal * t)} kcal, ${nombre(compte ? compte.prot : v.prot * t)} g de protéines${v.ajusteeCeJour ? " · quantités ajustées ce jour" : ""}</div></div></a>
       ${sansIcones ? "" : `${libre(id, moment) ? `<button class="changer" data-action="changer" data-semaine="${k}" data-jour="${n}" data-moment="${moment}" aria-label="Changer le ${nomMoment(moment)} de ${j.jour.toLowerCase()}" title="Changer">${icone("swap")}</button>` : ""}
       ${avecCuire ? `<a class="changer cuire${reglable(s, k, n, id, moment) ? "" : " haut"}" href="${courante ? `#/cuisine/${id}?jour=${n}` : `#/plat/${id}`}" aria-label="Cuisiner ${esc(r.nom)}" title="Cuisiner">${icone("cooking-pot")}</a>` : ""}
@@ -1210,7 +1212,9 @@ function ficheRapide(id, ctx, depuis, vu = null) {
           <span><b>Ajuster les quantités</b><small>Jarvis règle les grammes de ce plat pour ton objectif du jour</small></span>${icone("caret-right")}</button>` : ""}
         ${libre && !(ctx.moment === "dej" && j.dej_reste) ? `<button type="button" data-action="ajusterJour" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}">${icone("notebook")}
           <span><b>Modifier les ingrédients</b><small>Retirer, ajouter ou changer un ingrédient, pour ce jour</small></span>${icone("caret-right")}</button>` : ""}
-      </div>` : ""}
+        ${ctx.moment === "pdj" || ctx.moment.startsWith("col") ? `<button type="button" data-action="fixer" data-plat="${id}" data-moment="${ctx.moment}" data-fixe="${estFixe(id, ctx.moment) ? 0 : 1}">${icone("lock-simple")}
+          <span><b>${estFixe(id, ctx.moment) ? "Ne plus fixer ce plat" : "Fixer ce plat"}</b><small>${estFixe(id, ctx.moment) ? "Il reste prévu, mais n'est plus imposé chaque jour" : `Il revient chaque ${ctx.moment === "pdj" ? "matin" : "jour, en collation"}, toujours une portion`}</small></span>${icone("caret-right")}</button>` : ""}
+      </div>` : ctx ? "" : `<div class="cp-avis">${boutonsGout(r0)}</div>`}
     </div></article>`;
   document.body.appendChild(fond);
   const carte = fond.querySelector(".carte-plat");
@@ -1614,14 +1618,11 @@ function vuePlus() {
   const comptes = comptesNav();
   const lien = (vue, nomIcone, titre) => `<li><a href="#/${vue}">${icone(nomIcone)}<span>${titre}</span>${comptes[vue] ? `<span class="compte" aria-label="${comptes[vue]} ${vue === "courses" ? "à acheter" : "à cuisiner"}">${comptes[vue]}</span>` : ""}${icone("caret-right")}</a></li>`;
   return `<div class="titre"><h1 tabindex="-1">${esc(E.profil.nom)}</h1>
-    <p>${admin ? "Vue admin. " : ""}Phase ${p.n}, ${esc(p.nom).toLowerCase()}. ${nombre(p.kcal + (E.reglages.ajustement || 0))} kcal par jour, budget de ${euros(E.reglages.budget_mois)} par mois.</p></div>
+    <p>${admin ? "Vue admin. " : ""}Phase ${p.n}, ${esc(p.nom).toLowerCase()}. ${nombre(p.kcal + (E.reglages.ajustement || 0))} kcal par jour${enSuivi() ? "" : `, budget de ${euros(E.reglages.budget_mois)} par mois`}.</p></div>
   <ul class="menu">
-    ${enSuivi() ? lien("historique", "notebook", "Historique des repas") : lien("courses", "shopping-cart-simple", "Courses")}
-    ${lien("cuisine", "cooking-pot", "Cuisine")}
-    ${lien("budget", "receipt", "Budget et coûts")}
+    ${enSuivi() ? "" : lien("courses", "shopping-cart-simple", "Courses") + lien("cuisine", "cooking-pot", "Cuisine") + lien("budget", "receipt", "Budget et coûts")}
     ${lien("vitamines", "orange", "Vitamines")}
-    ${lien("stock", "package", "Stock")}
-    ${lien("journal", "notebook", "Journal de Jarvis")}
+    ${enSuivi() ? "" : lien("stock", "package", "Stock") + lien("journal", "notebook", "Journal de Jarvis")}
     ${lien("profil", "user-circle", "Mon profil")}
     ${admin ? lien("profils", "users", "Profils") : ""}
     ${lien("reglages", "sliders-horizontal", "Réglages")}
@@ -1679,9 +1680,10 @@ function vueAvancement({ params }) {
     <div class="legende"><span><i style="background:var(--s1)"></i>Mangé</span><span><i style="background:var(--s2)"></i>Objectif</span></div>
     <div id="gMange"></div>
     <p class="petit discret" style="margin-top:8px">Un jour sans point est un jour non déclaré.</p></section>` : ""}
-  ${enSuivi() ? "" : `<section class="bloc" aria-labelledby="tVitA"><h2 id="tVitA">Vitamines${p === "jour" ? " du jour" : ", moyenne par jour"}</h2>
+  <section class="bloc" aria-labelledby="tVitA"><h2 id="tVitA">Vitamines${p === "jour" ? " du jour" : ", moyenne par jour"}</h2>
     <p class="discret petit" style="margin:4px 0 14px">${basses.length ? `À surveiller : ${basses.join(", ")}.` : "Tous tes besoins sont couverts à 80 % ou plus."}</p>
-    ${barresVitamines(x.vitamines, true)}</section>`}`}
+    ${barresVitamines(x.vitamines, true)}
+    <p style="margin-top:12px"><a class="bouton sobre" href="#/vitamines">Voir les détails${icone("caret-right")}</a></p></section>`}
   ${enSuivi() ? "" : `<p class="bloc"><a class="bouton sobre" href="#/budget">Voir le détail du budget</a></p>`}`;
 }
 function vueVitamines() {
@@ -1721,15 +1723,18 @@ function vueProfil() {
   return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>
   <div class="titre"><h1 tabindex="-1">Mon profil</h1><p>${esc(p.programme || "")}</p></div>
   <section aria-labelledby="tQui"><h2 id="tQui" style="margin-bottom:8px">${esc(p.nom)}</h2>
-    <ul class="lignes">${i.sexe ? l("Sexe", esc(i.sexe)) : ""}${i.age ? l("Âge", `${i.age} ans`) : ""}${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}
-      ${l("Identifiant de connexion", esc(p.id))}</ul></section>
+    <ul class="lignes">${i.nom_famille ? l("Nom", esc(`${i.nom || p.nom} ${i.nom_famille}`)) : ""}${l("Identifiant de connexion", esc(p.id))}
+      ${i.date_naissance ? l("Date de naissance", `${esc(dateLongueCourte(i.date_naissance).replace(/^[a-zé]+ /i, ""))} (${i.age} ans)`) : i.age ? l("Âge", `${i.age} ans`) : ""}
+      ${i.sexe ? l("Sexe", esc(i.sexe)) : ""}${i.telephone ? l("Téléphone", esc(i.telephone)) : ""}
+      ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul>
+    <p class="petit discret" style="margin-top:8px"><a href="#/reglages">Modifier mes informations</a> (l'identifiant ne change pas).</p></section>
   <section class="bloc" aria-labelledby="tBesoins"><h2 id="tBesoins" style="margin-bottom:8px">Mes besoins par jour</h2>
     <ul class="lignes">${l("Calories", `${nombre(ph.kcal + (E.reglages.ajustement || 0))} kcal`)}${l("Protéines", `${ph.prot} g`)}
       ${Object.keys(V.noms).map(c => l(esc(V.noms[c].nom), `${dose(V.besoins[c])} ${V.noms[c].unite}`)).join("")}</ul>
     <p class="petit discret" style="margin-top:8px">Phase ${ph.n}, ${esc(ph.nom).toLowerCase()}. Ces repères ne remplacent pas un avis médical.</p></section>
-  <section class="bloc" aria-labelledby="tCourses"><h2 id="tCourses" style="margin-bottom:8px">Mes courses</h2>
+  ${enSuivi() ? "" : `<section class="bloc" aria-labelledby="tCourses"><h2 id="tCourses" style="margin-bottom:8px">Mes courses</h2>
     <ul class="lignes">${l("Budget", `${euros(E.reglages.budget_mois)} par mois`)}${l("Enseigne", esc(E.magasin.principale))}${l("Navigateur", p.chrome ? "Mon propre Chrome" : "Le Chrome de Jarvis")}</ul>
-    <p class="petit discret" style="margin-top:8px">Ta fiche complète est dans le fichier PROFIL.md de ton dossier de profil.</p></section>`;
+    <p class="petit discret" style="margin-top:8px">Ta fiche complète est dans le fichier PROFIL.md de ton dossier de profil.</p></section>`}`;
 }
 function vueProfils() {
   barre("");
@@ -1750,25 +1755,27 @@ function formulaireProfil(avecCode) {
   const coche = (id, titre, aide, defaut) => `<label class="option"><input type="checkbox" id="${id}" name="${id}"${defaut ? " checked" : ""}><span><b>${titre}</b><small>${aide}</small></span></label>`;
   return `<form class="formulaire" id="fProfil" novalidate>
     ${avecCode ? champ("pCode", "Code d'invitation", `<input id="pCode" name="code" type="text" autocomplete="off" spellcheck="false" autocapitalize="none" required>`, "Demande-le à la personne qui gère le site.") : ""}
-    ${champ("pNom", "Prénom", `<input id="pNom" name="nom" type="text" autocomplete="given-name" maxlength="40" required>`)}
-    ${champ("pIdent", "Identifiant de connexion", `<input id="pIdent" name="identifiant" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" required>`, "3 à 20 lettres minuscules, chiffres ou tirets.")}
+    <div class="champs2">
+    ${champ("pNom", "Prénom", `<input id="pNom" name="prenom" type="text" autocomplete="given-name" maxlength="40" required>`)}
+    ${champ("pFamille", "Nom", `<input id="pFamille" name="nom_famille" type="text" autocomplete="family-name" maxlength="60" required>`)}
+    </div>
+    ${champ("pIdent", "Identifiant de connexion", `<input id="pIdent" name="identifiant" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" required>`, "3 à 20 lettres minuscules, chiffres ou tirets. Il ne pourra plus changer.")}
     ${champ("pMdp", "Mot de passe", `<input id="pMdp" name="mot_de_passe" type="password" autocomplete="new-password" minlength="8" required>`, "8 caractères au moins.")}
-    ${champ("sexe", "Sexe", choix("sexe", [["femme", "Femme"], ["homme", "Homme"]]), "Sert au calcul des calories et des vitamines.")}
-    ${champ("age", "Âge, en années", nombreChamp("age", 15, 95, 1, "30"))}
+    <div class="champs2">
+    ${champ("date_naissance", "Date de naissance", `<input id="date_naissance" name="date_naissance" type="date" required>`)}
+    ${champ("sexe", "Sexe", choix("sexe", [["femme", "Femme"], ["homme", "Homme"]]))}
+    </div>
+    ${champ("telephone", "Téléphone", `<input id="telephone" name="telephone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" required>`)}
     ${champ("taille_cm", "Taille, en centimètres", nombreChamp("taille_cm", 130, 220, 1, "170"))}
     ${champ("poids_kg", "Poids, en kilos", nombreChamp("poids_kg", 35, 250, 0.1, "70"))}
     ${champ("activite", "Activité", choix("activite", [["sedentaire", "Sédentaire, peu ou pas de sport"], ["leger", "Sport léger, 1 à 3 fois par semaine"], ["modere", "Sport modéré, 3 à 5 fois par semaine"], ["actif", "Sport intense, 6 à 7 fois par semaine"], ["intense", "Sport très intense ou métier physique"]]))}
     ${champ("objectif", "Objectif", choix("objectif", [["perte", "Perdre du poids"], ["maintien", "Garder mon poids"], ["prise", "Prendre du muscle"]]))}
-    ${champ("budget_mois", "Budget nourriture par mois, en euros", `<input id="budget_mois" name="budget_mois" type="number" inputmode="numeric" min="100" max="2000" step="10" autocomplete="off" value="300" required>`)}
-    ${champ("adresse", "Adresse de livraison", `<input id="adresse" name="adresse" type="text" autocomplete="street-address" maxlength="120">`, "Facultatif.")}
-    ${champ("enseigne", "Enseigne pour les courses", choix("enseigne", [["Auchan", "Auchan"], ["Leclerc", "Leclerc"]]))}
     <div class="options" style="margin-bottom:18px">
-      ${coche("boucher", "J'achète ma viande chez le boucher", "La viande ne sera jamais mise au panier du supermarché.", false)}
-      ${coche("fodmap", "Régime pauvre en FODMAP", "Coché par défaut à chaque semaine composée.", false)}
+      ${coche("fodmap", "Régime pauvre en FODMAP", "Seulement des plats pauvres en FODMAP dans tes semaines.", false)}
     </div>
-    <small id="eProfil" class="erreur" role="alert" style="display:block;margin-bottom:12px;color:var(--accent-texte)"></small>
-    <button class="bouton large" type="submit">Créer le profil</button>
-    <p class="petit discret" style="margin-top:14px">Jarvis calcule tes calories, tes protéines et tes besoins en vitamines, puis ouvre sur le PC un Chrome rien qu'à toi : tu t'y connectes à tes enseignes, et c'est là qu'il remplira ton panier.</p>
+    <small id="eProfil" class="erreur" role="alert" style="display:block;margin-bottom:12px;color:var(--critique)"></small>
+    <button class="bouton large" type="submit">Créer mon profil</button>
+    <p class="petit discret" style="margin-top:14px">L'appli calcule tes calories, tes protéines et tes besoins en vitamines, puis compose tes deux premières semaines. Tout se change ensuite dans Réglages, sauf l'identifiant.</p>
   </form>`;
 }
 function vueNouveau() {
@@ -2233,8 +2240,9 @@ function noterRepas({ date, entree = null }) {
 }
 
 /* ------------------------------------------------------------ mon suivi */
-const MESURES = [["poids", "Poids", "kg"], ["biceps_avant", "Biceps avant", "cm"], ["biceps_apres", "Biceps après", "cm"],
-                 ["tour_avant", "Tour de hanches avant", "cm"], ["tour_apres", "Tour de hanches après", "cm"]];
+// Les mesures « _avant » se prennent quand on veut ; « _apres », juste après une séance, en option (Taha, 19/11/2026).
+const MESURES = [["poids", "Poids", "kg"], ["biceps_avant", "Biceps", "cm"], ["tour_avant", "Hanches", "cm"], ["torse_avant", "Torse", "cm"],
+                 ["biceps_apres", "Biceps après la séance", "cm"], ["tour_apres", "Hanches après la séance", "cm"], ["torse_apres", "Torse après la séance", "cm"]];
 const virgule = v => v == null ? "" : String(v).replace(".", ",");
 const isoDuJour = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const dateCourte = iso => new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" }).format(new Date(iso + "T12:00"));
@@ -2243,9 +2251,17 @@ function vueSuivi({ params }) {
   // une carte pour noter, une courbe à la fois, l'historique en bas (Taha, 19/11/2026).
   barre("");
   const m = E.suivi || [], date = /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") || "") ? params.get("date") : isoDuJour();
-  const courbe = ["poids", "biceps", "tour"].includes(params.get("c")) ? params.get("c") : "poids";
+  const courbe = ["poids", "biceps", "tour", "torse"].includes(params.get("c")) ? params.get("c") : "poids";
   const ce = m.find(x => x.date === date) || {};
   const poids = m.filter(x => x.poids != null);                       // les plus récents d'abord
+  // La date de début choisie dans Réglages : « depuis le début » part de la première pesée à partir de ce jour.
+  const debut = E.reglages.date_debut || null;
+  const depuisDebut = () => {
+    const depuis = poids.filter(x => !debut || x.date >= debut);
+    const premier = depuis[depuis.length - 1];
+    return premier && premier !== poids[0] ? Math.round((poids[0].poids - premier.poids) * 10) / 10 : null;
+  };
+  const joursSuivi = debut ? Math.round((new Date(isoDuJour() + "T12:00") - new Date(debut + "T12:00")) / 864e5) : null;
   const ecart = (jours) => {
     if (!poids.length) return null;
     const limite = new Date(poids[0].date + "T12:00") - jours * 864e5;
@@ -2257,36 +2273,39 @@ function vueSuivi({ params }) {
   const points = cle => m.filter(x => x[cle] != null).map(x => ({ x: x.date, y: x[cle] })).reverse();
   const SERIES = {
     poids: { titre: "Ton poids jour après jour", unite: "kg", series: [{ nom: "Poids", couleur: "var(--s1)", marques: true, points: points("poids") }] },
-    biceps: { titre: "Tour de biceps, avant et après la séance", unite: "cm", series: [
-      { nom: "Avant", couleur: "var(--s2)", marques: true, points: points("biceps_avant") }, { nom: "Après", couleur: "var(--s1)", marques: true, points: points("biceps_apres") }] },
-    tour: { titre: "Tour de hanches, avant et après la séance", unite: "cm", series: [
-      { nom: "Avant", couleur: "var(--s2)", marques: true, points: points("tour_avant") }, { nom: "Après", couleur: "var(--s1)", marques: true, points: points("tour_apres") }] } };
+    biceps: { titre: "Tour de biceps", unite: "cm", series: [
+      { nom: "Au repos", couleur: "var(--s2)", marques: true, points: points("biceps_avant") }, { nom: "Après la séance", couleur: "var(--s1)", marques: true, points: points("biceps_apres") }] },
+    tour: { titre: "Tour de hanches", unite: "cm", series: [
+      { nom: "Au repos", couleur: "var(--s2)", marques: true, points: points("tour_avant") }, { nom: "Après la séance", couleur: "var(--s1)", marques: true, points: points("tour_apres") }] },
+    torse: { titre: "Tour de torse", unite: "cm", series: [
+      { nom: "Au repos", couleur: "var(--s2)", marques: true, points: points("torse_avant") }, { nom: "Après la séance", couleur: "var(--s1)", marques: true, points: points("torse_apres") }] } };
   const S = SERIES[courbe];
   apresRendu.push(() => Graph.courbes($("gSuivi"), { unite: S.unite, decimales: 1, hauteur: PETIT.matches ? 190 : 230, titre: S.titre,
     videTexte: "La courbe apparaît dès la deuxième mesure.", series: S.series.every(s => s.points.length < 2) ? [] : S.series }));
   const champ = (cle, libelle, unite) => `<div class="champ" style="margin:0"><label for="su_${cle}">${libelle}</label>
     <div class="avec-unite"><input id="su_${cle}" name="${cle}" type="text" inputmode="decimal" autocomplete="off" value="${virgule(ce[cle])}" placeholder="${unite === "kg" ? "78,5" : "35"}"><span>${unite}</span></div></div>`;
   const cellule = (a, b) => a == null && b == null ? "—" : `${a == null ? "—" : virgule(a)} → ${b == null ? "—" : virgule(b)}`;
-  const bic = derniere("biceps_apres") || derniere("biceps_avant"), tou = derniere("tour_apres") || derniere("tour_avant");
+  const bic = derniere("biceps_avant") || derniere("biceps_apres"), tou = derniere("tour_avant") || derniere("tour_apres"), tor = derniere("torse_avant") || derniere("torse_apres");
   const aujourd = date === isoDuJour();
   return `<div class="m-tete"><div><h1 tabindex="-1">Mon suivi</h1>
-      <p class="petit discret">${poids.length ? `Dernière pesée le ${esc(dateCourte(poids[0].date))}` : "Note ton poids chaque jour, à la même heure"}</p></div></div>
+      <p class="petit discret">${debut ? `Depuis le ${esc(dateLongueCourte(debut).replace(/^[a-zé]+ /i, ""))}${joursSuivi >= 0 ? `, jour ${joursSuivi + 1}` : ""} · ` : ""}${poids.length ? `Dernière pesée le ${esc(dateCourte(poids[0].date))}` : "Note ton poids chaque jour, à la même heure"}</p></div></div>
     <div class="suivi-chiffres">
       <div class="fait"><b>${poids.length ? virgule(poids[0].poids) : "—"}<small> kg</small></b><span>poids</span></div>
       <div class="fait"><b>${signe(ecart(7))}<small>${ecart(7) == null ? "" : " kg"}</small></b><span>en 7 jours</span></div>
-      <div class="fait"><b>${signe(ecart(1e4))}<small>${ecart(1e4) == null ? "" : " kg"}</small></b><span>depuis le début</span></div>
+      <div class="fait"><b>${signe(depuisDebut())}<small>${depuisDebut() == null ? "" : " kg"}</small></b><span>depuis le début</span></div>
     </div>
-    ${bic || tou ? `<p class="petit discret chiffres suivi-mesures">${bic ? `Biceps ${virgule(bic.biceps_apres ?? bic.biceps_avant)} cm` : ""}${bic && tou ? " · " : ""}${tou ? `Hanches ${virgule(tou.tour_apres ?? tou.tour_avant)} cm` : ""}</p>` : ""}
+    ${bic || tou || tor ? `<p class="petit discret chiffres suivi-mesures">${[bic ? `Biceps ${virgule(bic.biceps_avant ?? bic.biceps_apres)} cm` : "", tou ? `Hanches ${virgule(tou.tour_avant ?? tou.tour_apres)} cm` : "",
+      tor ? `Torse ${virgule(tor.torse_avant ?? tor.torse_apres)} cm` : ""].filter(Boolean).join(" · ")}</p>` : ""}
     <section class="bloc suivi-noter" aria-labelledby="tNoter">
       <div class="suivi-noter-tete"><h2 id="tNoter">${aujourd ? "Aujourd'hui" : esc(dateCourte(date))}</h2>
         <label class="date-discrete"><span class="sr">Jour</span><input id="su_date" name="date" type="date" value="${date}" max="${isoDuJour()}" form="formSuivi"></label></div>
       <form id="formSuivi" class="formulaire" novalidate>
         ${champ("poids", "Poids", "kg")}
-        <details class="seance"${["biceps_avant", "biceps_apres", "tour_avant", "tour_apres"].some(k => ce[k] != null) ? " open" : ""}>
-          <summary>Séance de muscu${icone("caret-right")}</summary>
-          <div class="mesures">${champ("biceps_avant", "Biceps avant", "cm")}${champ("biceps_apres", "Biceps après", "cm")}
-            ${champ("tour_avant", "Hanches avant", "cm")}${champ("tour_apres", "Hanches après", "cm")}</div>
-          <p class="petit discret">Toujours au même endroit : le biceps contracté au plus large, le tour au niveau des hanches.</p>
+        <div class="mesures mesures-3">${champ("biceps_avant", "Biceps", "cm")}${champ("tour_avant", "Hanches", "cm")}${champ("torse_avant", "Torse", "cm")}</div>
+        <p class="petit discret" style="margin:-2px 0 10px">Quand tu veux, pas besoin de séance. Toujours au même endroit : le biceps contracté au plus large, les hanches, le torse sous les bras.</p>
+        <details class="seance"${["biceps_apres", "tour_apres", "torse_apres"].some(k => ce[k] != null) ? " open" : ""}>
+          <summary>Après la séance <small class="discret">(facultatif)</small>${icone("caret-right")}</summary>
+          <div class="mesures mesures-3">${champ("biceps_apres", "Biceps", "cm")}${champ("tour_apres", "Hanches", "cm")}${champ("torse_apres", "Torse", "cm")}</div>
         </details>
         <small id="eSuivi" class="erreur" role="alert" style="display:block;margin:6px 0;color:var(--critique)"></small>
         <button class="bouton large" type="submit">${icone("check")}Enregistrer</button>
@@ -2294,14 +2313,15 @@ function vueSuivi({ params }) {
     </section>
     <section class="bloc suivi-courbe" aria-labelledby="tCourbe">
       <h2 id="tCourbe" class="sr">Courbe</h2>
-      <nav class="jours" aria-label="Courbe">${[["poids", "Poids"], ["biceps", "Biceps"], ["tour", "Hanches"]].map(([c, nom]) =>
+      <nav class="jours" aria-label="Courbe">${[["poids", "Poids"], ["biceps", "Biceps"], ["tour", "Hanches"], ["torse", "Torse"]].map(([c, nom]) =>
         `<a href="#/suivi?c=${c}${aujourd ? "" : `&date=${date}`}"${c === courbe ? ' aria-current="true"' : ""}>${nom}</a>`).join("")}</nav>
-      ${courbe !== "poids" ? `<div class="legende"><span><i style="background:var(--s2)"></i>Avant la séance</span><span><i style="background:var(--s1)"></i>Après</span></div>` : ""}
+      ${courbe !== "poids" ? `<div class="legende"><span><i style="background:var(--s2)"></i>Au repos</span><span><i style="background:var(--s1)"></i>Après la séance</span></div>` : ""}
       <div id="gSuivi"></div>
     </section>
     <section class="bloc" aria-labelledby="tHisto"><h2 id="tHisto">Historique</h2>
       ${m.length ? `<ul class="lignes historique">${m.map(x => { const sous = [x.biceps_avant != null || x.biceps_apres != null ? `Biceps ${cellule(x.biceps_avant, x.biceps_apres)} cm` : "",
-            x.tour_avant != null || x.tour_apres != null ? `Hanches ${cellule(x.tour_avant, x.tour_apres)} cm` : ""].filter(Boolean).join(" · ");
+            x.tour_avant != null || x.tour_apres != null ? `Hanches ${cellule(x.tour_avant, x.tour_apres)} cm` : "",
+            x.torse_avant != null || x.torse_apres != null ? `Torse ${cellule(x.torse_avant, x.torse_apres)} cm` : ""].filter(Boolean).join(" · ");
           return `<li><a href="#/suivi?date=${x.date}" aria-label="Modifier les mesures du ${esc(dateCourte(x.date))}"><span><b>${esc(dateCourte(x.date))}</b>${sous ? `<small>${sous}</small>` : ""}</span>
             <span class="q">${x.poids == null ? "—" : virgule(x.poids) + " kg"}</span></a>
             <button type="button" class="effacer" data-action="oublierSuivi" data-date="${x.date}" aria-label="Supprimer les mesures du ${esc(dateCourte(x.date))}">${icone("x")}</button></li>`; }).join("")}</ul>
@@ -2333,7 +2353,89 @@ function vueJournal() {
       + ((journalSuite === null ? E.journal_suite : journalSuite) ? `<p class="actions" style="margin-top:18px"><button class="bouton second" data-action="journalSuite">Voir la suite</button></p>` : "")
     : vide("Rien pour l'instant", "Le journal se remplit dès que Jarvis choisit une semaine ou remplit un panier.", "#/semaine", "Aller à la semaine")}`;
 }
+function vueReglagesFlemmard() {
+  // Réglages du mode flemmard, en blocs les uns sous les autres (Taha, 19/11/2026 : « en désordre, ça se chevauche »).
+  barre("");
+  const r = E.reglages, phase = E.phase, i = E.profil.identite || {}, fodmap = E.profil.preferences.modes.includes("fodmap");
+  const choisie = r.phase ? (E.phases.find(p => p.n === r.phase) || phase) : phase;
+  const kcal = choisie.kcal + (r.ajustement || 0), f = E.fixes || {};
+  const fixes = [...(f.petit_dej ? [[f.petit_dej, "pdj"]] : []), ...(f.collations || []).map(c => [c, "col0"])].filter(([id]) => recette(id));
+  const champ = (id, libelle, corps, aide = "") => `<div class="champ"><label for="${id}">${libelle}</label>${corps}${aide ? `<small>${aide}</small>` : ""}</div>`;
+  const saisie = (id, nom, v, type = "text", plus = "") => `<input id="${id}" name="${nom}" type="${type}" value="${esc(v ?? "")}" autocomplete="off" ${plus}>`;
+  const choix = (id, nom, v, options) => `<select id="${id}" name="${nom}">${options.map(([k, t]) => `<option value="${k}"${String(k) === String(v) ? " selected" : ""}>${t}</option>`).join("")}</select>`;
+  const obj = { "Perte de poids": "perte", "Maintien": "maintien", "Prise de muscle": "prise" }[E.profil.programme] || "maintien";
+  return `<div class="titre"><h1 tabindex="-1">Réglages</h1><p>Mode flemmard : l'écran Jour suit ta journée. Les autres modes arrivent bientôt.</p></div>
+  <div class="reglages">
+  <section class="bloc" aria-labelledby="tObj"><h2 id="tObj">Mon objectif</h2>
+    <div class="faits"><div class="fait"><b>${nombre(kcal)}</b><span>kcal par jour</span></div><div class="fait"><b>${choisie.prot} g</b><span>de protéines par jour</span></div></div>
+    <form class="formulaire" id="fObjectif" novalidate>
+      ${(E.phases || []).length > 1 ? champ("rPhase", "Phase du programme", choix("rPhase", "phase", r.phase || "", [["", "Automatique, selon la date"], ...E.phases.map(p => [p.n, `${p.n}. ${esc(p.nom)}, ${nombre(p.kcal)} kcal`])])) : ""}
+      ${champ("rAdj", "Ajustement des calories", choix("rAdj", "ajustement", r.ajustement || 0, [-300, -150, 0, 150, 300].map(v => [v, `${v > 0 ? "+" : ""}${v} kcal`])), "Par paliers de 150 kcal, si ton poids s'écarte de ce que tu vises.")}
+      ${champ("rDebut", "Début de mon suivi", saisie("rDebut", "date_debut", r.date_debut, "date", `max="${isoDuJour()}"`), "Le suivi compte ton poids et tes mesures à partir de ce jour.")}
+      <small id="eObjectif" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
+      <button class="bouton second" type="submit">Enregistrer</button>
+    </form></section>
+  <section class="bloc" aria-labelledby="tRepas"><h2 id="tRepas">Mes repas</h2>
+    <div class="options">
+      <label class="option"><input type="checkbox" id="rSecs"${r.fruits_secs ? " checked" : ""}><span><b>Une poignée de fruits secs par jour</b><small>30 g, ajoutés aux jours qui viennent.</small></span></label>
+      <label class="option"><input type="checkbox" id="rFodmap"${fodmap ? " checked" : ""}><span><b>Pauvre en FODMAP</b><small>Seulement des plats pauvres en FODMAP dans les semaines composées.</small></span></label>
+    </div>
+    <h3>Mes repas fixes</h3>
+    ${fixes.length ? `<ul class="lignes">${fixes.map(([id, m]) => `<li><span>${esc(recette(id).nom)}<small>${m === "pdj" ? "Chaque matin" : "Chaque jour, en collation"}</small></span>
+        <button class="bouton sobre" type="button" data-action="fixer" data-plat="${id}" data-moment="${m}" data-fixe="0">Ne plus fixer</button></li>`).join("")}</ul>`
+      : `<p class="petit discret">Aucun. Touche un plat du matin ou une collation sur l'écran Jour, puis « Fixer ce plat ».</p>`}
+  </section>
+  <section class="bloc" aria-labelledby="tInfos"><h2 id="tInfos">Mes informations</h2>
+    <p class="doux petit sous-titre">${E.profil.calcule ? "Change une valeur : tes calories, tes protéines et tes vitamines sont recalculées." : "Ton programme vient de ton fichier de profil : ces informations ne changent pas tes besoins."}</p>
+    <form class="formulaire" id="fMesInfos" novalidate>
+      <div class="champs2">${champ("iPrenom", "Prénom", saisie("iPrenom", "prenom", i.nom || E.profil.nom, "text", 'maxlength="40" autocomplete="given-name"'))}
+        ${champ("iNom", "Nom", saisie("iNom", "nom_famille", i.nom_famille, "text", 'maxlength="60" autocomplete="family-name"'))}</div>
+      <div class="champs2">${champ("iNaissance", "Date de naissance", saisie("iNaissance", "date_naissance", i.date_naissance, "date"))}
+        ${champ("iSexe", "Sexe", choix("iSexe", "sexe", i.sexe || "homme", [["femme", "Femme"], ["homme", "Homme"]]))}</div>
+      ${champ("iTel", "Téléphone", saisie("iTel", "telephone", i.telephone, "tel", 'inputmode="tel" maxlength="20" autocomplete="tel"'))}
+      <div class="champs2">${champ("iTaille", "Taille, en cm", saisie("iTaille", "taille_cm", i.taille_cm, "text", 'inputmode="numeric"'))}
+        ${champ("iPoids", "Poids, en kg", saisie("iPoids", "poids_kg", virgule(i.poids_kg), "text", 'inputmode="decimal"'))}</div>
+      ${E.profil.calcule ? `<div class="champs2">${champ("iActivite", "Activité", choix("iActivite", "activite", i.activite, [["sedentaire", "Sédentaire"], ["leger", "Sport léger, 1 à 3 fois par semaine"], ["modere", "Sport modéré, 3 à 5 fois par semaine"], ["actif", "Sport intense, 6 à 7 fois par semaine"], ["intense", "Sport très intense ou métier physique"]]))}
+        ${champ("iObjectif", "Objectif", choix("iObjectif", "objectif", obj, [["perte", "Perdre du poids"], ["maintien", "Garder mon poids"], ["prise", "Prendre du muscle"]]))}</div>` : ""}
+      <p class="petit discret">Identifiant de connexion : <b>${esc(E.profil.id)}</b> (il ne change pas).</p>
+      <small id="eMesInfos" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
+      <button class="bouton second" type="submit">Enregistrer mes informations</button>
+    </form></section>
+  ${typeof blocClaude === "function" ? blocClaude() : ""}
+  <section class="bloc" aria-labelledby="tCompte"><h2 id="tCompte">Mon compte</h2>
+    <form class="formulaire" id="fMdp" novalidate>
+      <input type="text" name="username" autocomplete="username" value="${esc(E.profil.id)}" hidden>
+      ${E.utilisateur.admin ? "" : `<div class="champ"><label for="mAncien">Mot de passe actuel</label>
+        <input id="mAncien" name="ancien" type="password" autocomplete="current-password" required></div>`}
+      <div class="champ"><label for="mNouveau">Nouveau mot de passe</label>
+        <input id="mNouveau" name="nouveau" type="password" autocomplete="new-password" minlength="8" required aria-describedby="eMdpN">
+        <small id="eMdpN">8 caractères au moins.</small></div>
+      <button class="bouton second" type="submit">Changer le mot de passe</button></form>
+    <p style="margin-top:16px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>
+  </section>
+  </div>`;
+}
+document.addEventListener("submit", async ev => {
+  const f = ev.target;
+  if (f.id === "fObjectif") {
+    ev.preventDefault();
+    const rep = await appel("/api/reglages", { ...(f.phase ? { phase: f.phase.value ? Number(f.phase.value) : null } : {}),
+      ajustement: Number(f.ajustement.value), date_debut: f.date_debut.value || null });
+    if (rep === true) { rendre(); dire("Réglages enregistrés."); } else if (rep && rep.erreur) $("eObjectif").textContent = rep.erreur;
+  }
+  if (f.id === "fMesInfos") {
+    ev.preventDefault();
+    const corps = Object.fromEntries(new FormData(f).entries());
+    const rep = await appel("/api/profil/modifier", corps);
+    if (rep === true) { rendre(); dire("Informations enregistrées."); } else if (rep && rep.erreur) $("eMesInfos").textContent = rep.erreur;
+  }
+});
+document.addEventListener("change", ev => {
+  if (ev.target.id === "rSecs") agir("/api/reglages", { fruits_secs: ev.target.checked }, ev.target.checked ? "Fruits secs ajoutés aux jours qui viennent." : "Plus de fruits secs.");
+  if (ev.target.id === "rFodmap") agir("/api/profil/modifier", { fodmap: ev.target.checked }, ev.target.checked ? "Pauvre en FODMAP : pour les semaines composées." : "FODMAP retiré.");
+});
 function vueReglages() {
+  if (enSuivi()) return vueReglagesFlemmard();
   barre("");
   const r = E.reglages, phase = E.phase, pref = E.profil.preferences, fodmap = pref.modes.includes("fodmap");
   const choisie = r.phase ? (E.phases.find(p => p.n === r.phase) || phase) : phase;
@@ -2348,7 +2450,6 @@ function vueReglages() {
     <div class="ligne"><span class="puce">Phase ${choisie.n}${r.phase ? ", choisie à la main" : ", automatique"}</span><a class="bouton sobre" href="#/plus">${icone("caret-left")}Plus</a></div>
   </div>
   ${modeSuivi}
-  ${blocClaude()}
   <div class="grille accueil">
     <section class="bloc" aria-labelledby="tProg"><h2 id="tProg">Programme et budget</h2>
       <div class="faits">
@@ -2448,7 +2549,8 @@ function vueConnexion(erreur = "") {
         <input id="mdp" name="password" type="password" autocomplete="current-password" spellcheck="false" required aria-describedby="eMdp">
         <small id="eMdp" class="erreur" role="alert">${esc(erreur)}</small></div>
       <button class="bouton large" type="submit">Entrer</button>
-    </form>`;
+    </form>
+    <p style="margin-top:22px"><button class="bouton sobre" data-action="versCreation">Créer mon profil</button></p>`;
 }
 
 /* ------------------------------------------------------------ rendu */
@@ -2613,10 +2715,24 @@ const ACTIONS = {
   },
   ingredient: b => demanderIngredient({ nom: b.dataset.nom }),
   noter: b => agir("/api/note", { plat: b.dataset.plat, note: Number(b.dataset.note) }, "Note enregistrée."),
+  fixer: b => agir("/api/repas/fixer", { plat: b.dataset.plat, moment: b.dataset.moment, fixe: b.dataset.fixe === "1" },
+    b.dataset.fixe === "1" ? "Fixé : il revient chaque jour." : "Ce plat n'est plus fixe."),
   reessayer: demarrer,
 };
 
 PETIT.addEventListener("change", () => rendre());
+// Une feuille ou la carte d'un plat est ouverte : la page derrière ne bouge plus quand on fait défiler (Taha, 19/11/2026).
+const verrou = { y: 0, actif: false };
+function verrouiller(oui) {
+  if (oui === verrou.actif) return;
+  verrou.actif = oui;
+  const b = document.body.style;
+  if (oui) { verrou.y = scrollY; Object.assign(b, { position: "fixed", top: `-${verrou.y}px`, left: "0", right: "0", overflow: "hidden" }); }
+  else { Object.assign(b, { position: "", top: "", left: "", right: "", overflow: "" }); scrollTo(0, verrou.y); }
+}
+const surveillerFenetres = () => verrouiller(!!($("dialogue").open || document.querySelector(".carte-fond")));
+new MutationObserver(surveillerFenetres).observe(document.body, { childList: true });
+new MutationObserver(surveillerFenetres).observe($("dialogue"), { attributes: true, attributeFilter: ["open"] });
 document.addEventListener("click", ev => {
   // Sur le telephone, toucher un plat ouvre sa fiche en fenetre, pas une nouvelle page (Taha, 19/11/2026).
   const plat = ev.target.closest('a.repas[href^="#/plat/"]');
@@ -2650,6 +2766,7 @@ document.addEventListener("submit", async ev => {
     bouton.textContent = "Création…"; bouton.disabled = true;
     const rep = await appel("/api/profil/creer", corps);
     bouton.textContent = libelle; bouton.disabled = false;
+    if (rep === true && enSuivi()) { location.hash = "#/semaine"; rendre(); return dire("Profil créé : tes deux premières semaines sont prêtes."); }
     if (rep === true) { location.hash = "#/profil"; rendre(); return dire("Profil créé. Connecte-toi à tes enseignes dans le Chrome ouvert sur le PC."); }
     $("eProfil").textContent = (rep && rep.erreur) || "Création impossible.";
     $("eProfil").scrollIntoView({ block: "center" });

@@ -3,7 +3,7 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-19-134040";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-19-170312";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const email = (ident) => `${ident}@meal-prep.invalid`;
@@ -87,7 +87,10 @@ sb.auth.onAuthStateChange((ev, session) => {
 
 // Ce que le moteur a écrit ou effacé : renvoyé à Supabase avant de répondre à la page.
 async function sauver(ch) {
+  const lignes = (ch || []).filter((c) => c.journal).map((c) => ({ user_id: M.uid, ...c.journal }));
+  if (lignes.length) sb.from("journal").insert(lignes).then(({ error }) => error && console.warn("journal", error.message));
   for (const c of ch || []) {
+    if (c.journal) continue;
     if (c.photo) {
       const nom = `${M.uid}/${c.nom.replace(/^photos\//, "")}`;
       const { error } = await sb.storage.from("photos").upload(nom, new Blob([c.octets], { type: "image/jpeg" }), { upsert: true, contentType: "image/jpeg" });
@@ -148,6 +151,20 @@ window.fetch = async (entree, options = {}) => {
       if (error) return reponse(401, { erreur: /invalid/i.test(error.message) ? "Identifiant ou mot de passe faux." : error.message });
       await moteurPret();
       return versMoteur("GET", "/api/etat", "");
+    }
+    if (url === "/api/profil/creer") {               // créer son compte avec le code d'invitation, puis son profil
+      const { code, mot_de_passe, ...infos } = champs;
+      const ident = String(infos.identifiant || "").trim().toLowerCase();
+      const v = await envoyer({ type: "valider", version: VERSION, champs: { ...infos, identifiant: ident } });
+      if (v.message) return reponse(400, { erreur: v.message });
+      const { data, error } = await sb.functions.invoke("inscription", { body: { code, identifiant: ident, mot_de_passe } });
+      let erreur = data && data.erreur;
+      if (error && !erreur) { try { erreur = (await error.context.json()).erreur; } catch { erreur = error.message; } }
+      if (erreur) return reponse(400, { erreur });
+      const { error: e2 } = await sb.auth.signInWithPassword({ email: email(ident), password: String(mot_de_passe || "") });
+      if (e2) return reponse(400, { erreur: e2.message });
+      await moteurPret();
+      return versMoteur("POST", "/api/web/creer_profil", JSON.stringify({ ...infos, identifiant: ident }));
     }
     if (url === "/api/deconnexion") {
       await sb.auth.signOut();

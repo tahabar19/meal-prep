@@ -895,3 +895,22 @@ section.suivi-courbe{margin-top:22px}
 .choix-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
 .choix-2 .bouton{min-height:44px;padding:0 8px;font-size:.88rem}
 .choix-2 .bouton:only-child{grid-column:1/-1}
+/* catalogue en grille de 3 sur le téléphone ; mesures du suivi par 3 (Taha, 19/11/2026) */
+@media (max-width:899px){
+  .catalogue.exos{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .catalogue .exo{border-radius:var(--r-carte);overflow:hidden}
+  .catalogue .repas{display:block}
+  .catalogue .repas .photo{width:100%;height:auto;aspect-ratio:1;margin:0;border-radius:0}
+  .catalogue .exo-texte{padding:8px 8px 10px}
+  .catalogue .exo-texte h3{font-size:.8rem;line-height:1.2;-webkit-line-clamp:3}
+  .catalogue .exo-texte .chiffres{font-size:.7rem}
+  .catalogue .exo-texte .chiffres + .chiffres{display:none}
+  .catalogue .gouts{display:none}
+}
+.mesures.mesures-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0}
+.carte-plat{overscroll-behavior:contain}
+/* Réglages du mode flemmard : des blocs les uns sous les autres (Taha, 19/11/2026) */
+.reglages{display:grid;gap:16px;max-width:720px}
+.reglages > .bloc{margin:0}
+.reglages h3{margin:18px 0 8px}
+.reglages .faits{margin-bottom:14px}

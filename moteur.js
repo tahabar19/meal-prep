@@ -84,6 +84,7 @@ async function init(m) {
 
 function changements(avant) {
   const ch = JSON.parse(web.changements(avant));
+  for (const l of JSON.parse(web.journaux())) ch.push({ journal: l });
   const transferts = [];
   for (const c of ch) if (c.photo) { c.octets = py.FS.readFile(`${dossier}/${c.nom}`); transferts.push(c.octets.buffer); }
   return [ch, transferts];
@@ -97,6 +98,7 @@ async function suite() {
   const m = file.shift();
   try {
     if (m.type === "prechauffer") await prechauffer(m.version);
+    else if (m.type === "valider") { await prechauffer(m.version); postMessage({ id: m.id, message: web.valider_profil(JSON.stringify(m.champs)) }); }
     else if (m.type === "init") { await init(m); postMessage({ id: m.id, ok: true, temps }); }
     else if (m.type === "jeton") cfg.jeton = m.jeton;
     else if (m.type === "requete") {
