@@ -1082,6 +1082,7 @@ async function demanderIngredient(o) {
 }
 
 /* ------------------------------------------------------------ ajuster les quantites d'une recette */
+const AVANT_POUBELLE = new Map();          // « plat|ingrédient » → sa quantité avant la poubelle (pour ↺)
 async function demanderAjustement(id, quantites = null, jour = null) {
   // jour = { k, n, retour } : pour ce jour-la seulement ; sinon la recette du profil, tous les jours.
   // Chaque changement est recalcule par le site ; rien n'est enregistre avant le bouton du bas.
@@ -1160,13 +1161,14 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   d.querySelectorAll("[data-retirer-ing]").forEach(b => b.addEventListener("click", ev => {
     ev.preventDefault();
     const i = a.ingredients[Number(b.dataset.retirerIng)], q = { ...actuel };
+    AVANT_POUBELLE.set(`${id}|${i.n}`, i.q);
     if (i.ajoute) delete q[i.n]; else q[i.n] = 0;
     refaire(q);
   }));
   d.querySelectorAll("[data-remettre-ing]").forEach(b => b.addEventListener("click", ev => {
     ev.preventDefault();
-    const q = { ...actuel };
-    delete q[a.ingredients[Number(b.dataset.remettreIng)].n];
+    const q = { ...actuel }, nom = a.ingredients[Number(b.dataset.remettreIng)].n, avant = AVANT_POUBELLE.get(`${id}|${nom}`);
+    if (typeof avant === "number" && avant > 0) q[nom] = avant; else delete q[nom];       // sinon : comme dans la recette
     refaire(q);
   }));
   d.querySelectorAll("[data-changer]").forEach(b => b.addEventListener("click", ev => {
@@ -1266,12 +1268,13 @@ function ficheRapide(id, ctx, depuis, vu = null) {
       </div>
       ${ctx && enSuivi() && !(ctx.moment === "dej" && j.dej_reste) ? (() => {
         // Combien de fois l'assiette prévue (2 bananes, une demi-part…) : toutes les quantités du plat ce jour-là.
-        const base = (r0.ing || []).find(x => x.u !== "qs"), ajuste = base && ((j.ajustes || {})[id] || {})[base.n];
-        const fois = base && typeof ajuste === "number" ? Math.round(ajuste / base.q * 2) / 2 : 1;
+        // lu sur un ingrédient encore dans l'assiette : un ingrédient retiré (poubelle, 0) ne dit rien de la quantité
+        const aj = (j.ajustes || {})[id] || {}, base = (r0.ing || []).find(x => x.u !== "qs" && x.q > 0 && aj[x.n] !== 0), ajuste = base && aj[base.n];
+        const fois = base && typeof ajuste === "number" ? Math.max(0.5, Math.round(ajuste / base.q * 2) / 2) : 1;
         return `<div class="cp-quantite"><span>Quantité</span>
-          <button type="button" data-action="quantite" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}" data-fois="${fois - 0.5}" ${fois <= 0.5 ? "disabled" : ""} aria-label="Moins">−</button>
+          <button type="button" data-action="quantite" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}" data-fois="${fois - 0.5}" data-avant="${fois}" ${fois <= 0.5 ? "disabled" : ""} aria-label="Moins">−</button>
           <b class="chiffres">×${virgule(fois)}</b>
-          <button type="button" data-action="quantite" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}" data-fois="${fois + 0.5}" ${fois >= 5 ? "disabled" : ""} aria-label="Plus">+</button></div>`; })() : ""}
+          <button type="button" data-action="quantite" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}" data-fois="${fois + 0.5}" data-avant="${fois}" ${fois >= 5 ? "disabled" : ""} aria-label="Plus">+</button></div>`; })() : ""}
       <p class="petit discret cp-info">${[vu ? "Ce que tu as mangé ce jour-là" : ctx ? (t !== 1 ? `Assiette à ${nombre(Math.round(t * 100))} % de la recette` : "Recette telle quelle") : "Une portion",
         r0.temps ? `${r0.temps} min` : "", r.ajusteeCeJour ? "ajustée ce jour" : ""].filter(Boolean).join(" · ")}</p>
       ${ctx && enSuivi() ? `<div class="cp-mange">${courante && ctx.n <= rangDuJour(s)
@@ -2958,8 +2961,10 @@ const ACTIONS = {
   ingredient: b => demanderIngredient({ nom: b.dataset.nom }),
   noter: b => agir("/api/note", { plat: b.dataset.plat, note: Number(b.dataset.note) }, "Note enregistrée."),
   quantite: b => {
-    const r = recette(b.dataset.plat), fois = Number(b.dataset.fois), quantites = {};
-    for (const i of r.ing) if (i.u !== "qs") quantites[i.n] = Math.round(i.q * fois * 100) / 100;
+    const r = recette(b.dataset.plat), fois = Number(b.dataset.fois), facteur = fois / (Number(b.dataset.avant) || 1), quantites = {};
+    const aj = ((planDe(Number(b.dataset.semaine)) || {}).jours || [])[Number(b.dataset.jour)]?.ajustes?.[r.id] || {};
+    for (const i of r.ing) if (i.u !== "qs") quantites[i.n] = Math.round((typeof aj[i.n] === "number" ? aj[i.n] : i.q) * facteur * 100) / 100;
+    for (const [n, q] of Object.entries(aj)) if (!(n in quantites) && typeof q === "number") quantites[n] = Math.round(q * facteur * 100) / 100;
     fermerCarte(true);
     agir("/api/semaine/modifier", { operation: { type: "ajuster", jour: Number(b.dataset.jour), plat: r.id, quantites }, semaine: Number(b.dataset.semaine), confirme: true },
       `« ${r.nom} » : ×${virgule(fois)}.`);
