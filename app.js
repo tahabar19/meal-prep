@@ -2421,7 +2421,7 @@ function vueSuivi({ params }) {
       ${courbe !== "poids" ? `<div class="legende"><span><i style="background:var(--s2)"></i>Au repos</span><span><i style="background:var(--s1)"></i>Après la séance</span></div>` : ""}
       <div id="gSuivi"></div>
     </section>
-    <section class="bloc" aria-labelledby="tHisto"><h2 id="tHisto">Historique</h2>
+    ${enSuivi() ? "" : `<section class="bloc" aria-labelledby="tHisto"><h2 id="tHisto">Historique</h2>
       ${m.length ? `<ul class="lignes historique">${m.map(x => { const sous = [x.biceps_avant != null || x.biceps_apres != null ? `Biceps ${cellule(x.biceps_avant, x.biceps_apres)} cm` : "",
             x.tour_avant != null || x.tour_apres != null ? `Hanches ${cellule(x.tour_avant, x.tour_apres)} cm` : "",
             x.torse_avant != null || x.torse_apres != null ? `Torse ${cellule(x.torse_avant, x.torse_apres)} cm` : ""].filter(Boolean).join(" · ");
@@ -2430,7 +2430,7 @@ function vueSuivi({ params }) {
             <button type="button" class="effacer" data-action="oublierSuivi" data-date="${x.date}" aria-label="Supprimer les mesures du ${esc(dateCourte(x.date))}">${icone("x")}</button></li>`; }).join("")}</ul>
           <p class="petit discret" style="margin-top:8px">Touche un jour pour le modifier.</p>`
         : `<p class="discret">Rien de noté pour l'instant. Commence par ton poids d'aujourd'hui.</p>`}
-    </section>`;
+    </section>`}`;
 }
 document.addEventListener("submit", async ev => {
   if (ev.target.id !== "formSuivi") return;
