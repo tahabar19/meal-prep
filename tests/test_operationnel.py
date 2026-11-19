@@ -126,7 +126,7 @@ class A_Site(unittest.TestCase):
 # ------------------------------------------------------------------ 2. rien de secret ni de personnel en public
 class B_Secrets(unittest.TestCase):
     INTERDITS = [(r"sk-ant-[A-Za-z0-9_-]{10,}", "une clé Claude"), (r"[A-Za-z0-9._%+-]+@gmail\.com", "une adresse e-mail"),
-                 (r"le plus proche de [0-9A-Za-zÀ-ÿ]", "une adresse"), (r'"role":"service_role"', "une clé de service")]
+                 (r"le plus proche de [0-9A-Za-zÀ-ÿ]", "une adresse")]      # les jetons non publics : vérifiés plus bas
 
     def _verifier(self, nom, texte):
         for etiquette, valeur in secrets().items():
