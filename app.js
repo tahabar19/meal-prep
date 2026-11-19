@@ -15,7 +15,7 @@ const DANS_PLUS = ["plus", "courses", "cuisine", "historique", "budget", "vitami
 // Mode flemmard : plus d'onglet « Plus » ; les vitamines ont leur onglet, « Profil » ouvre sa page (Taha, 19/11/2026).
 const ONGLETS_FLEMMARD = [
   { id: "semaine", nom: "Jour", icone: "calendar-blank" },
-  { id: "catalogue", nom: "Catalogue", icone: "star" },
+  { id: "catalogue", nom: "Catalogue", icone: "couverts" },
   { id: "avancement", nom: "Avancement", icone: "chart-bar" },
   { id: "vitamines", nom: "Vitamines", icone: "orange" },
   { id: "suivi", nom: "Suivi", icone: "chart-line" },
@@ -1214,6 +1214,14 @@ function ficheRapide(id, ctx, depuis, vu = null) {
         <div><b>${nombre(val("kcal"))}</b><span>kcal</span></div><div><b>${nombre(val("prot"))} g</b><span>prot.</span></div>
         <div><b>${nombre(val("gluc"))} g</b><span>gluc.</span></div><div><b>${nombre(val("lip"))} g</b><span>lip.</span></div>
       </div>
+      ${ctx && enSuivi() && !(ctx.moment === "dej" && j.dej_reste) ? (() => {
+        // Combien de fois l'assiette prévue (2 bananes, une demi-part…) : toutes les quantités du plat ce jour-là.
+        const base = (r0.ing || []).find(x => x.u !== "qs"), ajuste = base && ((j.ajustes || {})[id] || {})[base.n];
+        const fois = base && typeof ajuste === "number" ? Math.round(ajuste / base.q * 2) / 2 : 1;
+        return `<div class="cp-quantite"><span>Quantité</span>
+          <button type="button" data-action="quantite" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}" data-fois="${fois - 0.5}" ${fois <= 0.5 ? "disabled" : ""} aria-label="Moins">−</button>
+          <b class="chiffres">×${virgule(fois)}</b>
+          <button type="button" data-action="quantite" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}" data-fois="${fois + 0.5}" ${fois >= 5 ? "disabled" : ""} aria-label="Plus">+</button></div>`; })() : ""}
       <p class="petit discret cp-info">${[vu ? "Ce que tu as mangé ce jour-là" : ctx ? (t !== 1 ? `Assiette à ${nombre(Math.round(t * 100))} % de la recette` : "Recette telle quelle") : "Une portion",
         r0.temps ? `${r0.temps} min` : "", r.ajusteeCeJour ? "ajustée ce jour" : ""].filter(Boolean).join(" · ")}</p>
       <a class="bouton cp-cuisiner" href="${courante ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Cuisiner</a>
@@ -1222,7 +1230,7 @@ function ficheRapide(id, ctx, depuis, vu = null) {
           <span><b>Remplacer par un autre plat</b><small>Un plat du catalogue, un des tiens, ou retirer ce repas</small></span>${icone("caret-right")}</button>` : ""}
         ${reg ? `<button type="button" data-action="reequilibrer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}" data-plat="${id}">${icone("sliders-horizontal")}
           <span><b>Ajuster les quantités</b><small>Jarvis règle les grammes de ce plat pour ton objectif du jour</small></span>${icone("caret-right")}</button>` : ""}
-        ${libre && !(ctx.moment === "dej" && j.dej_reste) ? `<button type="button" data-action="ajusterJour" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}">${icone("notebook")}
+        ${(libre || enSuivi()) && !(ctx.moment === "dej" && j.dej_reste) ? `<button type="button" data-action="ajusterJour" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}">${icone("notebook")}
           <span><b>Modifier les ingrédients</b><small>Retirer, ajouter ou changer un ingrédient, pour ce jour</small></span>${icone("caret-right")}</button>` : ""}
         ${ctx.moment === "pdj" || ctx.moment.startsWith("col") ? `<button type="button" data-action="fixer" data-plat="${id}" data-moment="${ctx.moment}" data-fixe="${estFixe(id, ctx.moment) ? 0 : 1}">${icone("lock-simple")}
           <span><b>${estFixe(id, ctx.moment) ? "Ne plus fixer ce plat" : "Fixer ce plat"}</b><small>${estFixe(id, ctx.moment) ? "Il reste prévu, mais n'est plus imposé chaque jour" : `Il revient chaque ${ctx.moment === "pdj" ? "matin" : "jour, en collation"}, toujours une portion`}</small></span>${icone("caret-right")}</button>` : ""}
@@ -1767,7 +1775,6 @@ function vueProfilFlemmard() {
       ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul></section>
   <ul class="menu" style="margin-top:16px">
     ${lien("#/reglages", "sliders-horizontal", "Réglages", "Objectif, date de début, alimentation, informations, compte Claude, mot de passe")}
-    ${lien("#/historique", "notebook", "Historique des repas", "Ce que tu as mangé jour après jour")}
     ${E.utilisateur.admin ? lien("#/profils", "users", "Profils", "") : ""}
   </ul>
   <p style="margin-top:18px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>`;
@@ -2065,10 +2072,10 @@ function vueJourSuivi(params) {
     ${jaugesDuJour(j, o)}
     <p class="reste-jour">${reste}</p>
     ${E.eau && dec === 0 ? (() => { const bu = (E.eau.bu || {})[date] || 0, pct = Math.min(100, Math.round(100 * bu / E.eau.litres));
-      return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <b class="chiffres">${virgule(bu)}</b><small class="chiffres"> / ${virgule(E.eau.litres)} L</small></span>
-        <span class="eau-piste" role="img" aria-label="${pct} % de l'eau à boire"><i style="width:${pct}%"></i></span>
-        ${bu > 0 ? `<button type="button" class="eau-moins" data-action="boire" data-date="${date}" data-ml="-250" aria-label="Retirer un verre">−</button>` : ""}
-        <button type="button" class="eau-plus" data-action="boire" data-date="${date}" data-ml="250">+ 1 verre</button></div>`; })() : ""}
+      const maxi = Math.max(4, Math.ceil(E.eau.litres * 1.5));
+      return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <b class="chiffres" id="eauBu">${virgule(bu)}</b><small class="chiffres"> / ${virgule(E.eau.litres)} L</small></span>
+        <input type="range" class="eau-barre" id="eauBarre" min="0" max="${maxi}" step="0.25" value="${bu}" data-date="${date}" aria-label="Eau bue aujourd'hui, en litres"
+          style="--rempli:${Math.min(100, 100 * bu / maxi)}%;--but:${100 * E.eau.litres / maxi}%"></div>`; })() : ""}
     ${o.gluc || o.lip ? `<p class="petit discret chiffres" style="margin:-4px 0 12px">Glucides ${nombre(Math.round(j.gluc || 0))}${o.gluc ? ` / ${nombre(o.gluc)}` : ""} g · Lipides ${nombre(Math.round(j.lip || 0))}${o.lip ? ` / ${nombre(o.lip)}` : ""} g</p>` : ""}
     ${ici ? `<section class="m-repas grille-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true)}</section>`
       : `<div class="dujour"><strong>Pas de menu prévu ce jour-là.</strong> Note ce que tu manges, ou compose la suite.
@@ -2078,9 +2085,10 @@ function vueJourSuivi(params) {
     <div class="rubrique-fin">
     ${idees && idees.plats.length ? `<section class="bloc idees" aria-labelledby="tIdees"><h2 id="tIdees">Pour finir la journée</h2>
       <p class="petit discret" style="margin:-8px 0 8px">${idees.moment.startsWith("col") ? "En collation" : `Pour le ${nomMoment(idees.moment)}`}, grammes réglés pour tomber sur ton objectif${j.entrees.length ? ", ce que tu as noté compris" : ""}.</p>
+      <details class="idees-liste"><summary>Voir les propositions${icone("caret-right")}</summary>
       <ul class="candidats">${idees.plats.map((x, i) => `<li><button type="button" class="candidat" data-idee="${i}">${photo(recette(x.id), 160, "carre")}
         <span class="texte"><b>${esc(x.nom)}</b><span class="chiffres">${nombre(x.kcal)} kcal, ${nombre(x.prot)} g de protéines</span>
-        <small class="discret chiffres">Journée : ${nombre(x.kcal_jour)} kcal, ${nombre(x.prot_jour)} g</small></span>${icone("caret-right")}</button></li>`).join("")}</ul></section>` : ""}
+        <small class="discret chiffres">Journée : ${nombre(x.kcal_jour)} kcal, ${nombre(x.prot_jour)} g</small></span>${icone("caret-right")}</button></li>`).join("")}</ul></details></section>` : ""}
     ${ici && courante && !jp.retire && ici.n <= rangDuJour(ici.s) && jp.cuisine.some(c => !fait(ici.s, ici.n, c.id)) ? `<div class="m-actions bas">
       <button class="bouton second" data-action="journee" data-jour="${ici.n}">${icone("check")}Tout mangé</button></div>` : ""}</div>`;
 }
@@ -2466,7 +2474,14 @@ document.addEventListener("submit", async ev => {
     if (rep === true) { rendre(); dire("Informations enregistrées."); } else if (rep && rep.erreur) $("eMesInfos").textContent = rep.erreur;
   }
 });
+document.addEventListener("input", ev => {
+  if (ev.target.id !== "eauBarre") return;
+  const b = ev.target;
+  b.style.setProperty("--rempli", `${100 * b.value / b.max}%`);
+  if ($("eauBu")) $("eauBu").textContent = virgule(Number(b.value));
+});
 document.addEventListener("change", ev => {
+  if (ev.target.id === "eauBarre") agir("/api/eau", { date: ev.target.dataset.date, litres: Number(ev.target.value) });
   if (ev.target.id === "rFodmap") agir("/api/profil/modifier", { fodmap: ev.target.checked }, ev.target.checked ? "Pauvre en FODMAP : pour les semaines composées." : "FODMAP retiré.");
 });
 function vueReglages() {
@@ -2750,7 +2765,13 @@ const ACTIONS = {
   },
   ingredient: b => demanderIngredient({ nom: b.dataset.nom }),
   noter: b => agir("/api/note", { plat: b.dataset.plat, note: Number(b.dataset.note) }, "Note enregistrée."),
-  boire: b => agir("/api/eau", { date: b.dataset.date, ml: Number(b.dataset.ml) }),
+  quantite: b => {
+    const r = recette(b.dataset.plat), fois = Number(b.dataset.fois), quantites = {};
+    for (const i of r.ing) if (i.u !== "qs") quantites[i.n] = Math.round(i.q * fois * 100) / 100;
+    fermerCarte(true);
+    agir("/api/semaine/modifier", { operation: { type: "ajuster", jour: Number(b.dataset.jour), plat: r.id, quantites }, semaine: Number(b.dataset.semaine), confirme: true },
+      `« ${r.nom} » : ×${virgule(fois)}.`);
+  },
   fixer: b => agir("/api/repas/fixer", { plat: b.dataset.plat, moment: b.dataset.moment, fixe: b.dataset.fixe === "1" },
     b.dataset.fixe === "1" ? "Fixé : il revient chaque jour." : "Ce plat n'est plus fixe."),
   reessayer: demarrer,
