@@ -963,3 +963,16 @@ section.suivi-courbe{margin-top:22px}
 .eau-txt b{display:inline-block;min-width:2.2em;text-align:right;font-variant-numeric:tabular-nums}
 .entete-profil{width:auto;padding:0 14px 0 10px;gap:6px;grid-auto-flow:column;border-radius:var(--r-pilule);font-size:.9rem;font-weight:500}
 .entete-profil{text-decoration:none}
+/* sans compte Claude : vitamines et photos à la main (Taha, 19/11/2026) */
+.vit-saisie{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.vit-saisie label{display:grid;gap:3px;font-size:.78rem;color:var(--texte)}
+.vit-saisie small{color:var(--discret)}
+.vit-saisie input{width:100%;min-height:38px;padding:4px 8px;border:1px solid var(--filet);border-radius:9px;background:var(--surface);color:var(--encre);font:inherit;font-size:.88rem}
+@media (max-width:899px){.vit-saisie{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.a-completer .completer > summary{display:flex;align-items:center;justify-content:space-between;min-height:44px;cursor:pointer;color:var(--encre);list-style:none;border-top:1px solid var(--filet-doux)}
+.a-completer .completer > summary::-webkit-details-marker{display:none}
+.a-completer .completer[open] > summary .ic{transform:rotate(90deg)}
+.rappel{display:flex;align-items:center;gap:10px;margin:-4px 0 14px;padding:10px 12px;border-radius:12px;background:var(--surface);color:var(--encre);text-decoration:none;font-size:.88rem}
+.rappel .ic:first-child{color:#f0a24b}
+.rappel span{flex:1}
+.cp-ajout-photo{position:absolute;left:12px;bottom:12px;display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:var(--r-pilule);background:rgba(17,19,18,.85);color:var(--encre);font-size:.85rem;cursor:pointer}

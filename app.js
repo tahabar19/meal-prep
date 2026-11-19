@@ -1029,6 +1029,7 @@ async function demanderIngredient(o) {
       ${champ("inPrix", "Prix au kilo (€)", v.prix, "€")}</div>` : ""}
     <h3 style="margin-bottom:8px">Pour 100 ${u}</h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px">${MAC.map(([k, nom, un]) => champ("in_" + k, `${nom} (${un})`, val[k], un)).join("")}</div>
+    ${nouveau && E.claude === false ? champsVitamines("inV_") : ""}
     ${!o.creer && v.corrige && v.site ? `<p class="petit discret" style="margin-top:10px">Valeurs du site : ${v.site.kcal} kcal, ${String(v.site.prot).replace(".", ",")} g de protéines, ${String(v.site.gluc).replace(".", ",")} g de glucides, ${String(v.site.lip).replace(".", ",")} g de lipides.
       <button type="button" class="lien" id="inRetablir">Revenir à ces valeurs</button></p>` : ""}
     ${!o.creer && v.cree ? `<p class="petit" style="margin-top:10px"><button type="button" class="lien" id="inRetablir">Supprimer cet ingrédient</button></p>` : ""}
@@ -1064,6 +1065,11 @@ async function demanderIngredient(o) {
       if (corps[k] == null || Number.isNaN(corps[k])) { $("eIng").textContent = "Remplis les cinq valeurs pour 100 " + u + " (0 si l'étiquette n'en donne pas)."; return $("in_" + k).focus(); }
     }
     if (nouveau) Object.assign(corps, { u: $("inU").value, q: nb("inQ"), a: Number($("inA").value), prix: nb("inPrix") });
+    if (nouveau && E.claude === false) {
+      const vit = lireVitamines("inV_");
+      if (vit.erreur) { $("eIng").textContent = vit.erreur; return; }
+      corps.vitamines = vit;
+    }
     const ok = await appel("/api/ingredient/enregistrer", corps);
     if (ok !== true) { $("eIng").textContent = (ok && ok.erreur) || ""; return; }
     const nom = E.ingredient || corps.nom;
@@ -1173,6 +1179,23 @@ function etoilesLues(r) {
   return r.nb_notes ? `<span class="note-lue">${icone("star-fill")}${nombre(r.note, 1)}<span class="discret petit">(${r.nb_notes} note${r.nb_notes > 1 ? "s" : ""})</span></span>`
                     : `<span class="discret petit">Pas encore noté</span>`;
 }
+// Sans compte Claude, les vitamines se renseignent à la main, pour 100 g (Taha, 19/11/2026 : c'est obligatoire).
+const UNITES_VIT = { A: "µg", B1: "mg", B2: "mg", B6: "mg", B9: "µg", B12: "µg", C: "mg", D: "µg", E: "mg", K: "µg" };
+function champsVitamines(prefixe, valeurs = {}) {
+  return `<h3 style="margin:16px 0 4px">Vitamines pour 100 g</h3>
+    <p class="petit discret" style="margin:0 0 8px">Sans compte Claude, c'est à toi de les donner : sur l'étiquette, ou dans la table CIQUAL (ciqual.anses.fr). 0 si tu ne sais pas.</p>
+    <div class="vit-saisie">${Object.keys(UNITES_VIT).map(v => `<label>${v} <small>${UNITES_VIT[v]}</small><input id="${prefixe}${v}" type="text" inputmode="decimal" value="${valeurs[v] ?? ""}" required></label>`).join("")}</div>`;
+}
+function lireVitamines(prefixe) {
+  const vit = {};
+  for (const v of Object.keys(UNITES_VIT)) {
+    const x = ($(prefixe + v) || {}).value;
+    const n = Number(String(x ?? "").trim().replace(",", "."));
+    if (String(x ?? "").trim() === "" || Number.isNaN(n) || n < 0) return { erreur: `Vitamine ${v} : un nombre (0 si tu ne sais pas).` };
+    vit[v] = n;
+  }
+  return vit;
+}
 function barresVitamines(apports, parJour) {
   const V = E.vitamines;
   return `<ul class="barres">${Object.keys(V.noms).map(c => {
@@ -1217,6 +1240,7 @@ function ficheRapide(id, ctx, depuis, vu = null) {
   fond.className = "carte-fond";
   fond.innerHTML = `<article class="carte-plat" role="dialog" aria-modal="true" aria-labelledby="cpTitre">
     <div class="cp-photo">${photo(r0, 960, "grande", r0.nom)}
+      ${r0.perso && !r0.photo && !r0.photo_de ? `<label class="cp-ajout-photo">${icone("image")}Ajouter une photo<input type="file" accept="image/*" hidden data-photo-plat="${id}"></label>` : ""}
       <button type="button" class="cp-fermer" aria-label="Fermer">${icone("x")}</button></div>
     <div class="cp-corps">
       ${quand || vu ? `<p class="petit discret">${esc(vu ? vu.quand : quand)}</p>` : ""}
@@ -1740,7 +1764,14 @@ function vueVitaminesMangees(params) {
   const codes = Object.keys(V.noms);
   const pct = c => V.besoins[c] ? Math.round(100 * (x.vitamines[c] || 0) / V.besoins[c]) : 0;
   const couvertes = codes.filter(c => pct(c) >= 100).length, basses = codes.filter(c => pct(c) < 80);
-  return `<div class="titre"><h1 tabindex="-1">Vitamines</h1>
+  const manquent = E.vitamines_a_completer || [];
+  return `${manquent.length ? `<section class="bloc a-completer" aria-labelledby="tCompleter"><h2 id="tCompleter">À compléter : ${manquent.length} aliment${manquent.length > 1 ? "s" : ""} sans vitamines</h2>
+      <p class="petit discret">Tant qu'elles manquent, ces aliments comptent zéro vitamine. Branche ton compte Claude (Réglages) pour qu'il les estime, ou renseigne-les ici.</p>
+      ${manquent.map((nom, i) => `<details class="completer"><summary>${esc(nom)}${icone("caret-right")}</summary>
+        <form class="formulaire" data-completer="${esc(nom)}" data-i="${i}" novalidate>${champsVitamines(`cv${i}_`)}
+          <small class="erreur" id="eCv${i}" style="display:block;color:var(--critique)"></small>
+          <button class="bouton second" type="submit">Enregistrer</button></form></details>`).join("")}</section>` : ""}
+  <div class="titre"><h1 tabindex="-1">Vitamines</h1>
     <p>Ce que tu as mangé${p === "jour" ? " aujourd'hui" : ", en moyenne par jour, journées terminées"}, comparé à tes besoins.</p></div>
   <nav class="jours" aria-label="Période">${Object.keys(NOMS).map(k => `<a href="#/vitamines?p=${k}"${k === p ? ' aria-current="true"' : ""}>${NOMS[k]}</a>`).join("")}</nav>
   ${!x.jours_suivis ? vide(p === "jour" ? "Rien de mangé pour l'instant" : `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}`,
@@ -2125,6 +2156,7 @@ function vueJourSuivi(params) {
       ${dec < dmax ? `<a class="fleche" href="#/semaine?d=${Math.max(2, dec + 1)}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}</nav>
     ${jaugesDuJour(j, o)}
     <p class="reste-jour">${reste}</p>
+    ${(E.vitamines_a_completer || []).length && dec === 0 ? `<a class="rappel" href="#/vitamines">${icone("warning-circle")}<span>${E.vitamines_a_completer.length} aliment${E.vitamines_a_completer.length > 1 ? "s" : ""} sans vitamines : complète-les</span>${icone("caret-right")}</a>` : ""}
     ${E.eau && dec === 0 ? (() => { const bu = (E.eau.bu || {})[date] || 0, pct = Math.min(100, Math.round(100 * bu / E.eau.litres));
       const maxi = Math.ceil(E.eau.litres * 2) / 2 + 0.5;                 // un peu au-delà de l'objectif (2,7 L → 3,5 L)
       return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <b class="chiffres" id="eauBu">${virgule(bu)}</b><small class="chiffres"> / ${virgule(E.eau.litres)} L</small></span>
@@ -2586,6 +2618,15 @@ function vueReglagesFlemmard() {
 }
 document.addEventListener("submit", async ev => {
   const f = ev.target;
+  if (f.dataset && f.dataset.completer) {
+    ev.preventDefault();
+    const vit = lireVitamines(`cv${f.dataset.i}_`);
+    if (vit.erreur) { $(`eCv${f.dataset.i}`).textContent = vit.erreur; return; }
+    const rep = await appel("/api/vitamines/renseigner", { nom: f.dataset.completer, vitamines: vit });
+    if (rep === true) { rendre(); dire(`Vitamines de « ${f.dataset.completer} » enregistrées.`); }
+    else if (rep && rep.erreur) $(`eCv${f.dataset.i}`).textContent = rep.erreur;
+    return;
+  }
   if (f.id === "fObjectif") {
     ev.preventDefault();
     const rep = await appel("/api/reglages", { ...(f.phase ? { phase: f.phase.value ? Number(f.phase.value) : null } : {}),
@@ -2605,7 +2646,15 @@ document.addEventListener("input", ev => {
   b.style.setProperty("--rempli", `${100 * b.value / b.max}%`);
   if ($("eauBu")) $("eauBu").textContent = virgule(Number(b.value));
 });
-document.addEventListener("change", ev => {
+document.addEventListener("change", async ev => {
+  if (ev.target.dataset && ev.target.dataset.photoPlat) {        // sans compte Claude, la photo de son plat se met à la main
+    const f = ev.target.files[0]; if (!f) return;
+    let image;
+    try { image = await photoReduite(f); } catch (e) { return dire("Photo illisible."); }
+    fermerCarte(true);
+    agir("/api/plat/photo", { plat: ev.target.dataset.photoPlat, photo: image }, "Photo ajoutée.");
+    return;
+  }
   if (ev.target.id === "eauBarre") {                // enregistré sans redessiner la page : la barre ne saute pas
     const b = ev.target;
     appel("/api/eau", { date: b.dataset.date, litres: Number(b.value) }).then(ok => { if (ok !== true) { dire("L'eau n'a pas pu être enregistrée."); rendre(); } });

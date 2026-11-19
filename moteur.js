@@ -77,7 +77,7 @@ async function init(m) {
   const vide = new Uint8Array(0);
   for (const f of m.fichiers) ecrire(`${dossier}/${f.nom}`, f.contenu);
   for (const p of m.photos) ecrire(`${dossier}/${p.nom}`, vide, p.maj);     // les photos de ses plats sont dans Supabase
-  web.demarrer(m.identifiant, py.toPy({}));
+  web.demarrer(m.identifiant, py.toPy(m.reglages || {}));
   marque("profil", t0);
   setTimeout(avecPillow, 3000);
 }
@@ -101,6 +101,7 @@ async function suite() {
     else if (m.type === "valider") { await prechauffer(m.version); postMessage({ id: m.id, message: web.valider_profil(JSON.stringify(m.champs)) }); }
     else if (m.type === "init") { await init(m); postMessage({ id: m.id, ok: true, temps }); }
     else if (m.type === "jeton") cfg.jeton = m.jeton;
+    else if (m.type === "reglages") web.regler(JSON.stringify(m.reglages));      // compte Claude branché ou non
     else if (m.type === "requete") {
       if (AVEC_PHOTOS.some((c) => m.chemin.startsWith(c))) await avecPillow();
       const avant = web.instantane_json();
