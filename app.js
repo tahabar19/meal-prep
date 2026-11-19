@@ -12,6 +12,15 @@ const ONGLETS = [
   { id: "plus", nom: "Plus", icone: "dots-three-outline" },
 ];
 const DANS_PLUS = ["plus", "courses", "cuisine", "historique", "budget", "vitamines", "profil", "profils", "nouveau", "stock", "journal", "reglages"];
+// Mode flemmard : plus d'onglet « Plus » ; les vitamines ont leur onglet, « Profil » ouvre sa page (Taha, 19/11/2026).
+const ONGLETS_FLEMMARD = [
+  { id: "semaine", nom: "Jour", icone: "calendar-blank" },
+  { id: "catalogue", nom: "Catalogue", icone: "star" },
+  { id: "avancement", nom: "Avancement", icone: "chart-bar" },
+  { id: "vitamines", nom: "Vitamines", icone: "orange" },
+  { id: "suivi", nom: "Suivi", icone: "chart-line" },
+  { id: "profil", nom: "Profil", icone: "user-circle" },
+];
 const JOURS_COURTS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const ORDRE = { plat: 0, petitdej: 1, collation: 2, fruit: 3 };
 const QUAND = { matin: "Matin", midi: "Midi", soir: "Soir", collation: "Collation", fruit: "Fruit" };
@@ -140,6 +149,7 @@ function route() {
 }
 function ongletDe(vue) {
   if (vue === "plat") return "semaine";
+  if (enSuivi()) return vue === "historique" ? "semaine" : ["plus", "profil", "profils", "nouveau", "reglages", "journal"].includes(vue) ? "profil" : vue;
   return DANS_PLUS.includes(vue) ? "plus" : vue;
 }
 
@@ -160,11 +170,11 @@ function rendreNavigation(actif) {
   const comptes = comptesNav();
   const lien = (o, bas) => {
     const ici = o.id === actif, n = comptes[o.id] || 0;
-    return `<a href="#/${o.id}"${ici ? ' aria-current="page"' : ""}>${icone(o.icone + (ici ? "-fill" : ""))}<span>${o.nom}</span>${
+    return `<a href="#/${o.id}"${ici ? ' aria-current="page"' : ""}>${icone(ici && ICONES[o.icone + "-fill"] ? o.icone + "-fill" : o.icone)}<span>${o.nom}</span>${
       n ? `<span class="compte" aria-label="${n} ${o.id === "courses" ? "à acheter" : "à cuisiner"}">${n}</span>` : ""}</a>`;
   };
   if (!E) { $("fil").innerHTML = ""; $("pucePhase").hidden = true; }
-  const onglets = ONGLETS.map(o => o.id === "semaine" && enSuivi() ? { ...o, nom: "Jour" } : o);
+  const onglets = E && enSuivi() ? ONGLETS_FLEMMARD : ONGLETS;
   $("navBas").innerHTML = E ? onglets.map(o => lien(o, true)).join("") : "";
   $("navHaut").innerHTML = E ? onglets.map(o => lien(o, false)).join("") : "";
 }
@@ -1406,7 +1416,7 @@ function vueCoursesDuMois() {
   if (fs && fs.acheter) conseils.push(["", "Fruits secs", `${nombre(fs.acheter)} g à acheter ce mois-ci, environ ${euros(fs.cout)} : jamais dans le panier en ligne.`]);
   barre(action);
   const rang = enCours ? 1 : cm.panier ? 2 : aCommander ? (E.valide ? 1 : 0) : marcheFait ? 4 : 3;
-  return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a><div class="tete">
+  return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}<div class="tete">
     <div><h1 tabindex="-1">Courses</h1>
       <p class="doux">Trois listes : <b>le panier ${magasin}</b>, rempli par Jarvis une fois pour les ${m.nb} semaines (épicerie, frais, surgelés) ; <b>le marché</b>, à faire toi-même chaque semaine (fruits, légumes, viande chez le boucher) ; <b>les fruits secs</b>, une fois par mois.</p></div>
     <div class="ligne"><span class="puce">Semaine ${m.rang + 1} sur ${m.nb}</span>${cm.panier ? `<span class="puce accent">Panier rempli</span>` : ""}${E.profil.chrome ? `<button class="bouton second" data-action="enseignes">Ouvrir mon profil Chrome</button>` : ""}${boutonPdf("courses")}</div>
@@ -1474,7 +1484,7 @@ function vueCoursesDuMois() {
 function vueCourses() {
   if (E.rythme === "mois" && E.courses_mois && E.semaine) return vueCoursesDuMois();
   const c = E.courses, s = E.semaine, t = E.tache;
-  if (!c) { barre(""); return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a><div class="titre"><h1 tabindex="-1">Courses</h1></div>${vide("Pas encore de liste", "Compose d'abord ta semaine : la liste de courses en découle.", "#/semaine", "Aller à la semaine")}`; }
+  if (!c) { barre(""); return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}<div class="titre"><h1 tabindex="-1">Courses</h1></div>${vide("Pas encore de liste", "Compose d'abord ta semaine : la liste de courses en découle.", "#/semaine", "Aller à la semaine")}`; }
   const enCours = t.etat === "en cours", fini = s.etat === "commandee" || s.etat === "terminee", magasin = esc(E.magasin.principale);
   const total = E.couts && E.couts.paye_total, ap = E.couts && E.couts.a_payer, n = c.a_acheter.length;
   let action = "", bouton = "";
@@ -1513,7 +1523,7 @@ function vueCourses() {
   if (c.en_stock.length) conseils.push(["", "Stock", `${c.en_stock.length} produits sont déjà chez toi : Jarvis ne les rachète pas.`]);
   barre(action);
   const rang = fini ? 4 : s.etat === "panier" ? 2 : enCours || E.valide ? 1 : 0;
-  return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a><div class="tete">
+  return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}<div class="tete">
     <div><h1 tabindex="-1">Courses</h1>
       <p class="doux">${fini ? (n ? `Courses faites, mais ${n} articles manquent encore.` : "Tout est acheté.") : `${n} articles à acheter chez ${magasin}. ${c.boucher.length ? "La viande reste chez ton boucher." : ""}`}</p></div>
     <div class="ligne">${s.etat === "panier" ? `<span class="puce accent">Panier rempli</span>` : fini ? `<span class="puce">Commande payée</span>` : ""}${E.profil.chrome ? `<button class="bouton second" data-action="enseignes">Ouvrir mon profil Chrome</button>` : ""}${boutonPdf("courses")}</div>
@@ -1545,7 +1555,7 @@ function vueCourses() {
 /* ------------------------------------------------------------ cuisine, jour par jour */
 function vueCuisine({ params }) {
   const s = E.semaine;
-  if (!s) { barre(""); return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a><div class="titre"><h1 tabindex="-1">Cuisine</h1></div>${vide("Rien à cuisiner", "Compose d'abord ta semaine.", "#/semaine", "Aller à la semaine")}`; }
+  if (!s) { barre(""); return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}<div class="titre"><h1 tabindex="-1">Cuisine</h1></div>${vide("Rien à cuisiner", "Compose d'abord ta semaine.", "#/semaine", "Aller à la semaine")}`; }
   const n = jourDemande(params), j = s.jours[n];
   const seances = j.cuisine.filter(c => c.quand !== "fruit"), fruits = fruitsDuJour(j);
   const reste = j.cuisine.filter(c => !fait(s, n, c.id));
@@ -1559,7 +1569,7 @@ function vueCuisine({ params }) {
   const tout = s.jours.every((x, i) => x.cuisine.every(c => fait(s, i, c.id)));
   const k = E.mois ? E.mois.rang : 0;
   const vides = [["Matin", "pdj"], ["Midi", "dej"], ["Soir", "din"]].filter(([, m]) => j[m] === "rien");
-  return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a><div class="titre"><h1 tabindex="-1">Cuisine</h1>
+  return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}<div class="titre"><h1 tabindex="-1">Cuisine</h1>
     <p>Tu cuisines chaque jour. Le plat du soir se fait en double : la seconde part est ton déjeuner du lendemain.</p>
     <p class="actions" style="margin-top:12px">${boutonPdf("cuisine", "Exporter les fiches en PDF")}</p></div>
   ${selecteurDeJour(s, n, "cuisine")}
@@ -1652,7 +1662,7 @@ function vueAvancement({ params }) {
   const totalJour = s ? s.jours[aujourdhui()].cuisine.length : 0;
   const court = iso => new Intl.DateTimeFormat("fr-FR", p === "semaine" ? { weekday: "short" } : { day: "numeric" }).format(new Date(iso + "T12:00"));
   const basses = Object.keys(E.vitamines.noms).filter(v => x.vitamines[v] / E.vitamines.besoins[v] < 0.8);
-  if (p !== "jour") apresRendu.push(() => Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, aujourdhui: a.aujourdhui,
+  if (p !== "jour") apresRendu.push(() => Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, aujourdhui: enSuivi() ? null : a.aujourdhui,
     videTexte: "Tes calories apparaîtront ici dès le premier plat déclaré cuisiné.", titre: "Calories mangées chaque jour, comparées à l'objectif",
     series: x.detail.some(d => d.kcal != null) ? [
       { nom: "Mangé", couleur: "var(--s1)", marques: true, points: x.detail.filter(d => d.kcal != null).map(d => ({ x: d.date, y: d.kcal })) },
@@ -1691,7 +1701,7 @@ function vueAvancement({ params }) {
 function vueVitamines() {
   barre("");
   const s = E.semaine, v = s && s.vitamines, V = E.vitamines;
-  const tete = `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>
+  const tete = `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}
   <div class="titre"><h1 tabindex="-1">Vitamines</h1>
     <p>Ce que t'apporte la semaine, en moyenne par jour, comparé à tes besoins.</p></div>`;
   if (!v || !Object.keys(v).length) return tete + vide("Pas encore de semaine", "Compose ta semaine pour voir ce qu'elle t'apporte.", "#/semaine", "Aller à la semaine");
@@ -1720,9 +1730,10 @@ function vueVitamines() {
 }
 function vueProfil() {
   barre("");
+  if (enSuivi()) return vueProfilFlemmard();
   const p = E.profil, i = p.identite || {}, ph = E.phase, V = E.vitamines;
   const l = (a, b) => `<li><span>${a}</span><span class="q">${b}</span></li>`;
-  return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>
+  return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}
   <div class="titre"><h1 tabindex="-1">Mon profil</h1><p>${esc(p.programme || "")}</p></div>
   <section aria-labelledby="tQui"><h2 id="tQui" style="margin-bottom:8px">${esc(p.nom)}</h2>
     <ul class="lignes">${i.nom_famille ? l("Nom", esc(`${i.nom || p.nom} ${i.nom_famille}`)) : ""}${l("Identifiant de connexion", esc(p.id))}
@@ -1738,10 +1749,33 @@ function vueProfil() {
     <ul class="lignes">${l("Budget", `${euros(E.reglages.budget_mois)} par mois`)}${l("Enseigne", esc(E.magasin.principale))}${l("Navigateur", p.chrome ? "Mon propre Chrome" : "Le Chrome de Jarvis")}</ul>
     <p class="petit discret" style="margin-top:8px">Ta fiche complète est dans le fichier PROFIL.md de ton dossier de profil.</p></section>`}`;
 }
+function vueProfilFlemmard() {
+  const p = E.profil, i = p.identite || {}, ph = E.phase, kcal = ph.kcal + (E.reglages.ajustement || 0);
+  const l = (a, b) => `<li><span>${a}</span><span class="q">${b}</span></li>`;
+  const lien = (href, nomIcone, titre, sous) => `<li><a href="${href}">${icone(nomIcone)}<span>${titre}${sous ? `<small>${sous}</small>` : ""}</span>${icone("caret-right")}</a></li>`;
+  return `<div class="m-tete"><div><h1 tabindex="-1">${esc(p.nom)}${i.nom_famille ? ` ${esc(i.nom_famille)}` : ""}</h1>
+      <p class="petit discret">${esc(p.id)}${p.programme ? ` · ${esc(p.programme)}` : ""}</p></div></div>
+  <div class="suivi-chiffres">
+    <div class="fait"><b>${nombre(kcal)}</b><span>kcal par jour</span></div>
+    <div class="fait"><b>${ph.prot}<small> g</small></b><span>protéines</span></div>
+    ${E.eau ? `<div class="fait"><b>${virgule(E.eau.litres)}<small> L</small></b><span>d'eau</span></div>` : ""}
+  </div>
+  <p class="petit discret" style="margin:-4px 0 16px">Phase ${ph.n}, ${esc(ph.nom).toLowerCase()}. Ces repères ne remplacent pas un avis médical.</p>
+  <section class="bloc" aria-labelledby="tQui"><h2 id="tQui" style="margin-bottom:8px">Mes informations</h2>
+    <ul class="lignes">${i.date_naissance ? l("Date de naissance", `${esc(dateLongueCourte(i.date_naissance).replace(/^[a-zé]+ /i, ""))} (${i.age} ans)`) : i.age ? l("Âge", `${i.age} ans`) : ""}
+      ${i.sexe ? l("Sexe", esc(i.sexe)) : ""}${i.telephone ? l("Téléphone", esc(i.telephone)) : ""}
+      ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul></section>
+  <ul class="menu" style="margin-top:16px">
+    ${lien("#/reglages", "sliders-horizontal", "Réglages", "Objectif, date de début, alimentation, informations, compte Claude, mot de passe")}
+    ${lien("#/historique", "notebook", "Historique des repas", "Ce que tu as mangé jour après jour")}
+    ${E.utilisateur.admin ? lien("#/profils", "users", "Profils", "") : ""}
+  </ul>
+  <p style="margin-top:18px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>`;
+}
 function vueProfils() {
   barre("");
   if (!E.utilisateur.admin) return vueIntrouvable();
-  return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>
+  return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}
   <div class="titre"><h1 tabindex="-1">Profils</h1><p>Chaque personne a ses objectifs, son stock, son historique et son propre Chrome pour ses paniers.</p></div>
   <ul class="lignes">${E.profils.map(p => `<li><span>${esc(p.nom)}<small>Identifiant ${esc(p.id)}</small></span>
     ${p.id === E.profil.id ? `<span class="q">Affiché</span>` : `<button class="bouton sobre" data-action="voir" data-profil="${esc(p.id)}">Voir</button>`}</li>`).join("")}</ul>
@@ -1842,7 +1876,7 @@ function vueBudget() {
     </section>`;
   }
 
-  return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>
+  return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}
   <div class="titre"><h1 tabindex="-1">Budget et coûts</h1>
     <p>Ton budget couvre ce que tu manges dans le mois. Ce qui est déjà dans ton stock en fait partie, tu n'as donc pas à le racheter.</p></div>
 
@@ -1949,7 +1983,7 @@ function vueCatalogue({ params }) {
 function vueStock() {
   barre("");
   const lignes = E.stock.filter(l => l.nom.toLowerCase().includes(filtreStock.toLowerCase()));
-  return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>
+  return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}
   <div class="titre"><h1 tabindex="-1">Stock</h1>
     <p>Il monte quand tu dis qu'une commande est payée, et baisse quand tu dis qu'un plat est cuisiné.</p></div>
   ${!E.stock.length ? vide("Le stock est vide", "Il se remplira à ta prochaine commande payée.", "#/courses", "Voir les courses") : `
@@ -2030,7 +2064,11 @@ function vueJourSuivi(params) {
       ${dec < dmax ? `<a class="fleche" href="#/semaine?d=${Math.max(2, dec + 1)}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}</nav>
     ${jaugesDuJour(j, o)}
     <p class="reste-jour">${reste}</p>
-    ${E.eau ? `<p class="petit discret eau-jour">${icone("orange")}Eau : <b>${virgule(E.eau.litres)} L</b> à boire dans la journée <span class="discret">(${esc(E.eau.selon)})</span></p>` : ""}
+    ${E.eau && dec === 0 ? (() => { const bu = (E.eau.bu || {})[date] || 0, pct = Math.min(100, Math.round(100 * bu / E.eau.litres));
+      return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <b class="chiffres">${virgule(bu)}</b><small class="chiffres"> / ${virgule(E.eau.litres)} L</small></span>
+        <span class="eau-piste" role="img" aria-label="${pct} % de l'eau à boire"><i style="width:${pct}%"></i></span>
+        ${bu > 0 ? `<button type="button" class="eau-moins" data-action="boire" data-date="${date}" data-ml="-250" aria-label="Retirer un verre">−</button>` : ""}
+        <button type="button" class="eau-plus" data-action="boire" data-date="${date}" data-ml="250">+ 1 verre</button></div>`; })() : ""}
     ${o.gluc || o.lip ? `<p class="petit discret chiffres" style="margin:-4px 0 12px">Glucides ${nombre(Math.round(j.gluc || 0))}${o.gluc ? ` / ${nombre(o.gluc)}` : ""} g · Lipides ${nombre(Math.round(j.lip || 0))}${o.lip ? ` / ${nombre(o.lip)}` : ""} g</p>` : ""}
     ${ici ? `<section class="m-repas grille-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true)}</section>`
       : `<div class="dujour"><strong>Pas de menu prévu ce jour-là.</strong> Note ce que tu manges, ou compose la suite.
@@ -2096,7 +2134,7 @@ function noterRepas({ date, entree = null }) {
   const sansAccent = x => String(x).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/œ/g, "oe").replace(/æ/g, "ae");
   const PETITS = new Set(["de", "du", "des", "la", "le", "les", "et", "au", "aux", "un", "une", "avec", "en", "a", "d", "l"]);
   const motsDe = x => sansAccent(x).split(/[^a-z0-9]+/).filter(m => m && !PETITS.has(m)).map(m => m.length > 3 ? m.replace(/[sx]$/, "") : m);
-  const tous = E.recettes.filter(r => ["plat", "petitdej", "collation"].includes(r.cat));
+  const tous = E.recettes.filter(r => ["plat", "petitdej", "collation"].includes(r.cat) || (r.cat === "fruit" && r.sec));
   const chercherPlats = t => {
     const mots = motsDe(t);
     if (!mots.length) return [];
@@ -2346,7 +2384,7 @@ document.addEventListener("change", ev => {
 });
 function vueJournal() {
   barre("");
-  return `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>
+  return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}
   <div class="titre"><h1 tabindex="-1">Journal de Jarvis</h1><p>Ce qu'il a choisi ou fait, et pourquoi.</p></div>
   ${E.journal.length ? E.journal.concat(journalPlus).map(e => `<article class="entree"><time datetime="${e.date}">${dateHeure(e.date)}</time>
       <h2 style="font-size:17px">${esc(propre(e.titre))}</h2>
@@ -2361,13 +2399,13 @@ function vueReglagesFlemmard() {
   barre("");
   const r = E.reglages, phase = E.phase, i = E.profil.identite || {}, fodmap = E.profil.preferences.modes.includes("fodmap");
   const choisie = r.phase ? (E.phases.find(p => p.n === r.phase) || phase) : phase;
-  const kcal = choisie.kcal + (r.ajustement || 0), f = E.fixes || {};
-  const fixes = [...(f.petit_dej ? [[f.petit_dej, "pdj"]] : []), ...(f.collations || []).map(c => [c, "col0"])].filter(([id]) => recette(id));
+  const kcal = choisie.kcal + (r.ajustement || 0);
   const champ = (id, libelle, corps, aide = "") => `<div class="champ"><label for="${id}">${libelle}</label>${corps}${aide ? `<small>${aide}</small>` : ""}</div>`;
   const saisie = (id, nom, v, type = "text", plus = "") => `<input id="${id}" name="${nom}" type="${type}" value="${esc(v ?? "")}" autocomplete="off" ${plus}>`;
   const choix = (id, nom, v, options) => `<select id="${id}" name="${nom}">${options.map(([k, t]) => `<option value="${k}"${String(k) === String(v) ? " selected" : ""}>${t}</option>`).join("")}</select>`;
   const obj = { "Perte de poids": "perte", "Maintien": "maintien", "Prise de muscle": "prise" }[E.profil.programme] || "maintien";
-  return `<div class="titre"><h1 tabindex="-1">Réglages</h1><p>Mode flemmard : l'écran Jour suit ta journée. Les autres modes arrivent bientôt.</p></div>
+  return `<a class="retour" href="#/profil">${icone("caret-left")}Profil</a>
+  <div class="titre"><h1 tabindex="-1">Réglages</h1><p>Mode flemmard : l'écran Jour suit ta journée. Les autres modes arrivent bientôt.</p></div>
   <div class="reglages">
   <section class="bloc" aria-labelledby="tObj"><h2 id="tObj">Mon objectif</h2>
     <div class="faits"><div class="fait"><b>${nombre(kcal)}</b><span>kcal par jour</span></div><div class="fait"><b>${choisie.prot} g</b><span>de protéines par jour</span></div></div>
@@ -2378,15 +2416,10 @@ function vueReglagesFlemmard() {
       <small id="eObjectif" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
       <button class="bouton second" type="submit">Enregistrer</button>
     </form></section>
-  <section class="bloc" aria-labelledby="tRepas"><h2 id="tRepas">Mes repas</h2>
+  <section class="bloc" aria-labelledby="tRepas"><h2 id="tRepas">Mon alimentation</h2>
     <div class="options">
-      <label class="option"><input type="checkbox" id="rSecs"${r.fruits_secs ? " checked" : ""}><span><b>Une poignée de fruits secs par jour</b><small>30 g, ajoutés aux jours qui viennent.</small></span></label>
       <label class="option"><input type="checkbox" id="rFodmap"${fodmap ? " checked" : ""}><span><b>Pauvre en FODMAP</b><small>Seulement des plats pauvres en FODMAP dans les semaines composées.</small></span></label>
     </div>
-    <h3>Mes repas fixes</h3>
-    ${fixes.length ? `<ul class="lignes">${fixes.map(([id, m]) => `<li><span>${esc(recette(id).nom)}<small>${m === "pdj" ? "Chaque matin" : "Chaque jour, en collation"}</small></span>
-        <button class="bouton sobre" type="button" data-action="fixer" data-plat="${id}" data-moment="${m}" data-fixe="0">Ne plus fixer</button></li>`).join("")}</ul>`
-      : `<p class="petit discret">Aucun. Touche un plat du matin ou une collation sur l'écran Jour, puis « Fixer ce plat ».</p>`}
   </section>
   <section class="bloc" aria-labelledby="tInfos"><h2 id="tInfos">Mes informations</h2>
     <p class="doux petit sous-titre">${E.profil.calcule ? "Change une valeur : tes calories, tes protéines et tes vitamines sont recalculées." : "Ton programme vient de ton fichier de profil : ces informations ne changent pas tes besoins."}</p>
@@ -2434,7 +2467,6 @@ document.addEventListener("submit", async ev => {
   }
 });
 document.addEventListener("change", ev => {
-  if (ev.target.id === "rSecs") agir("/api/reglages", { fruits_secs: ev.target.checked }, ev.target.checked ? "Fruits secs ajoutés aux jours qui viennent." : "Plus de fruits secs.");
   if (ev.target.id === "rFodmap") agir("/api/profil/modifier", { fodmap: ev.target.checked }, ev.target.checked ? "Pauvre en FODMAP : pour les semaines composées." : "FODMAP retiré.");
 });
 function vueReglages() {
@@ -2657,13 +2689,13 @@ const ACTIONS = {
     const c = E.semaine.jours[jour].cuisine.find(x => x.id === r.id);
     if (await confirmer({ titre: "C'est cuisiné ?", oui: "Oui, c'est cuisiné", non: "Pas encore",
       texte: `Les ingrédients de « ${r.nom} » (${pourCombien(c, E.semaine.jours[Number(b.dataset.jour)]) || "ta part"}) sortent de ton stock.` }))
-      agir("/api/prepare", { jour, plat: r.id }, estRepas(r) ? "Stock mis à jour. Tu peux noter le plat." : "Stock mis à jour.");
+      agir("/api/prepare", { jour, plat: r.id }, enSuivi() ? `Noté : « ${r.nom} » est fait.` : estRepas(r) ? "Stock mis à jour. Tu peux noter le plat." : "Stock mis à jour.");
   },
   async journee(b) {
     const jour = Number(b.dataset.jour), j = E.semaine.jours[jour];
     if (await confirmer({ titre: `${j.jour} : tout mangé comme prévu ?`, oui: "Oui, tout", non: "Pas encore",
       texte: "Tous les repas de ce jour sont cochés, et ce qui restait sort de ton stock. Si tu as mangé autre chose, change d'abord le repas." }))
-      agir("/api/prepare", { jour }, "Stock mis à jour.");
+      agir("/api/prepare", { jour }, enSuivi() ? "Noté : toute la journée est faite." : "Stock mis à jour.");
   },
   voir: b => agir("/api/profil/voir", { profil: b.dataset.profil }, "Profil affiché.").then(ok => { if (ok) location.hash = "#/semaine"; }),
   enseignes: () => agir("/api/profil/enseignes", {}, "Chrome s'ouvre sur le PC."),
@@ -2718,6 +2750,7 @@ const ACTIONS = {
   },
   ingredient: b => demanderIngredient({ nom: b.dataset.nom }),
   noter: b => agir("/api/note", { plat: b.dataset.plat, note: Number(b.dataset.note) }, "Note enregistrée."),
+  boire: b => agir("/api/eau", { date: b.dataset.date, ml: Number(b.dataset.ml) }),
   fixer: b => agir("/api/repas/fixer", { plat: b.dataset.plat, moment: b.dataset.moment, fixe: b.dataset.fixe === "1" },
     b.dataset.fixe === "1" ? "Fixé : il revient chaque jour." : "Ce plat n'est plus fixe."),
   reessayer: demarrer,

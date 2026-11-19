@@ -3,16 +3,17 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-19-192730";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-19-193745";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const email = (ident) => `${ident}@meal-prep.invalid`;
 const reponse = (status, corps) => new Response(JSON.stringify(corps), { status, headers: { "Content-Type": "application/json" } });
 
 function urlPhoto(r, largeur) {
-  if (String(r.id).startsWith("perso-")) return `${MP.url}/storage/v1/object/public/photos/${M.uid}/${encodeURIComponent(r.id)}.jpg?v=${r.photo}`;
+  const id = String(r.photo_de || r.id);              // une copie « Banane (2) » a la photo de l'original
+  if (id.startsWith("perso-")) return `${MP.url}/storage/v1/object/public/photos/${M.uid}/${encodeURIComponent(id)}.jpg?v=${r.photo}`;
   const l = [160, 480, 960].reduce((a, b) => (Math.abs(b - largeur) < Math.abs(a - largeur) ? b : a));
-  return `photos/${encodeURIComponent(r.id)}-${l}.jpg`;
+  return `photos/${encodeURIComponent(id)}-${l}.jpg`;
 }
 
 function envoyer(message, transferts = []) {

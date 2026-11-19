@@ -74,7 +74,7 @@ main{padding-top:22px;padding-bottom:calc(var(--nav-bas) + var(--bas) + 112px);m
 .bloc > h2,section > h2{margin-bottom:14px}
 #contenu > div.bloc:has(> .bouton:only-child){background:none;padding:0}
 
-.nav-bas{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,1fr);
+.nav-bas{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);
   height:calc(var(--nav-bas) + var(--bas));padding-bottom:var(--bas);background:var(--canvas);
   border-top:1px solid var(--filet)}
 .nav-bas a{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
@@ -914,9 +914,19 @@ section.suivi-courbe{margin-top:22px}
 .reglages > .bloc{margin:0}
 .reglages h3{margin:18px 0 8px}
 .reglages .faits{margin-bottom:14px}
-.eau-jour{margin:-4px 0 12px}
-.eau-jour .ic{display:inline-block;vertical-align:-3px;margin-right:5px;color:var(--accent);width:16px;height:16px}
+/* l'eau du jour : discrète, un bouton par verre bu (Taha, 19/11/2026) */
+.eau{display:flex;align-items:center;gap:10px;margin:-2px 0 14px;padding:8px 8px 8px 12px;border-radius:12px;background:var(--surface);font-size:.85rem;color:var(--discret)}
+.eau > .ic{flex:none;width:16px;height:16px;color:#7cc4ff}
+.eau-txt{flex:none;white-space:nowrap}
+.eau-txt b{color:var(--encre);font-weight:600}
+.eau-piste{flex:1;min-width:30px;height:5px;border-radius:3px;background:var(--surface-fort);overflow:hidden}
+.eau-piste i{display:block;height:100%;border-radius:3px;background:#7cc4ff}
+.eau button{flex:none;border:0;border-radius:var(--r-pilule);background:var(--surface-fort);color:var(--encre);font:inherit;font-size:.8rem;cursor:pointer}
+.eau-plus{min-height:34px;padding:0 12px}
+.eau-moins{width:34px;height:34px;padding:0}
 /* plats déjà cuisinés ce jour-là : grisés (Taha, 19/11/2026) */
 .exo.cuisine-fait{opacity:.5}
 .exo.cuisine-fait .photo img{filter:grayscale(.8)}
 .exo.cuisine-fait .quand{color:var(--accent)}
+/* 6 onglets en mode flemmard : des libellés un peu plus petits */
+.nav-bas a span:not(.compte){font-size:.68rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
