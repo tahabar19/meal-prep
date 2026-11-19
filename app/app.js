@@ -602,12 +602,13 @@ function actionsDuJour(k, n) {
   d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">${esc(j.jour)}${m && m.nb > 1 ? `, semaine ${k + 1}` : ""}</h2>
     <ul class="menu feuille-menu">
       ${courante && !paye && !E.valide && E.tache.etat !== "en cours" && !enSuivi() ? b("valider", "check", "C'est bon, je valide le menu") : ""}
-      ${b("clonerJour", "copy", "Copier un autre jour ici")}
-      ${j.retire || cuisineLeJour ? "" : b("retirerJour", "x", "Retirer ce jour")}
+      ${enSuivi() ? "" : b("clonerJour", "copy", "Copier un autre jour ici")}
+      ${j.retire || cuisineLeJour || enSuivi() ? "" : b("retirerJour", "x", "Retirer ce jour")}
+      ${enSuivi() && courante && n <= rangDuJour(s) && j.cuisine.some(c => !fait(s, n, c.id)) ? b("journee", "check", "J'ai tout mangé ce jour-là") : ""}
       ${courante ? b("recomposer", "arrows-clockwise", "Recomposer la semaine") : ""}
       ${courante && (E.nb_semaines || 1) < 4 && s.etat === "proposee" && !enSuivi() ? b("ajouterSemaine", "calendar-blank", `Ajouter une ${m ? `${m.semaines.length + 1}e` : "2e"} semaine`) : ""}
-      ${m && courante ? b("suivante", "caret-right", rang + 1 < m.nb ? "Passer à la semaine suivante" : `Composer les ${m.nb} suivantes`) : ""}
-      <li><a href="/export/semaine.pdf" download>${icone("notebook")}<span>Exporter la semaine en PDF</span></a></li>
+      ${m && courante && !enSuivi() ? b("suivante", "caret-right", rang + 1 < m.nb ? "Passer à la semaine suivante" : `Composer les ${m.nb} suivantes`) : ""}
+      ${enSuivi() ? "" : `<li><a href="/export/semaine.pdf" download>${icone("notebook")}<span>Exporter la semaine en PDF</span></a></li>`}
     </ul>
     <div class="actions pied"><button class="bouton second" type="button" value="non">Fermer</button></div></div>`;
   d.querySelector("[value=non]").addEventListener("click", () => d.close("non"));
@@ -1238,6 +1239,7 @@ function ficheRapide(id, ctx, depuis, vu = null) {
       ${ctx && enSuivi() ? `<div class="cp-mange">${courante && ctx.n <= rangDuJour(s)
           ? `<button class="bouton${mange ? " second" : ""}" data-action="manger" data-jour="${ctx.n}" data-plat="${id}" data-annuler="${mange ? 1 : 0}">${icone("check")}${mange ? "Pas encore mangé" : "J'ai mangé"}</button>` : ""}
         <a class="bouton sobre" href="${courante ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Voir la recette</a></div>`
+      : enSuivi() ? `<a class="bouton sobre cp-cuisiner" href="#/cuisine/${id}">${icone("cooking-pot")}Voir la recette</a>`
       : `<a class="bouton cp-cuisiner" href="${courante && ctx ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Cuisiner</a>`}
       ${ctx && (libre || reg) ? `<div class="cp-choix">
         ${libre ? `<button type="button" data-action="changer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}">${icone("swap")}
@@ -1624,7 +1626,8 @@ function vueRecette({ arg, params }) {
   <article class="fiche">
     ${photo(r, 960, "grande", r.nom)}
     <div><h1 tabindex="-1">${esc(r.nom)}</h1>
-      <p class="discret chiffres" style="margin-top:6px">${seance ? `${s.jours[n].jour}, ` : ""}${combien}${seance && seance.pour_demain ? " : ce soir et demain midi" : ""}. ${nombre(r.kcal * facteur)} kcal et ${nombre(r.prot * facteur)} g de protéines par repas.</p>
+      <p class="discret chiffres" style="margin-top:6px">${enSuivi() ? `${nombre(r.kcal * facteur)} kcal et ${nombre(r.prot * facteur)} g de protéines.`
+        : `${seance ? `${s.jours[n].jour}, ` : ""}${combien}${seance && seance.pour_demain ? " : ce soir et demain midi" : ""}. ${nombre(r.kcal * facteur)} kcal et ${nombre(r.prot * facteur)} g de protéines par repas.`}</p>
       ${seance && facteur !== 1 ? `<p class="discret petit" style="margin-top:4px">Les quantités ci-dessous sont déjà ajustées à ton objectif du jour (${nombre(facteur * 100)} % de la recette de base) : tu cuisines tout et tu manges tout.</p>` : ""}</div>
     ${goute && estRepas(r) ? `<section aria-labelledby="tNote"><h2 id="tNote">Ta note</h2>
       <p class="discret petit" style="margin:4px 0 6px">Elle décide si ce plat revient dans les prochaines semaines.</p>
