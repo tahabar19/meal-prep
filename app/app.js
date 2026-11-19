@@ -1773,8 +1773,8 @@ function vueAvancement({ params }) {
 function vueVitaminesMangees(params) {
   // Ce que tu as mangé (plats marqués mangés), comparé à tes besoins (Taha, 19/11/2026).
   const a = E.avancement, V = E.vitamines;
-  const p = ["jour", "semaine", "mois"].includes(params.get("p")) ? params.get("p") : "jour", x = a[p];
-  const NOMS = { jour: "Aujourd'hui", semaine: "Cette semaine", mois: "Ce mois-ci" };
+  // Seulement aujourd'hui (Taha, 19/11/2026 : « retire semaine et mois, garde que le jour »).
+  const p = "jour", x = a.jour;
   const codes = Object.keys(V.noms);
   const pct = c => V.besoins[c] ? Math.round(100 * (x.vitamines[c] || 0) / V.besoins[c]) : 0;
   const couvertes = codes.filter(c => pct(c) >= 100).length, basses = codes.filter(c => pct(c) < 80);
@@ -1789,7 +1789,6 @@ function vueVitaminesMangees(params) {
     <p>${p === "jour" ? "Le total de ce que tu as marqué mangé aujourd'hui (la journée n'est pas finie), comparé à tes besoins d'une journée."
       : (() => { const jours = x.detail.filter(d => d.kcal != null && d.date < a.aujourdhui).map(d => new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric" }).format(new Date(d.date + "T12:00")).replace(".", ""));
           return `La moyenne par jour de ${jours.length ? jours.join(", ") : "tes journées finies"}, comparée à tes besoins d'une journée. Aujourd'hui y entre demain.`; })()}</p></div>
-  <nav class="jours" aria-label="Période">${Object.keys(NOMS).map(k => `<a href="#/vitamines?p=${k}"${k === p ? ' aria-current="true"' : ""}>${NOMS[k]}</a>`).join("")}</nav>
   ${!x.jours_suivis ? vide(p === "jour" ? "Rien de mangé pour l'instant" : `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}`,
       "Les vitamines se remplissent avec les plats que tu marques « mangé ».", "#/semaine", "Aller au jour")
     : `<dl class="kpis">
