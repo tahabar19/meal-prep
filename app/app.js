@@ -1688,15 +1688,13 @@ function vueAvancement({ params }) {
   const court = iso => new Intl.DateTimeFormat("fr-FR", p === "semaine" ? { weekday: "short" } : { day: "numeric" }).format(new Date(iso + "T12:00"));
   const basses = Object.keys(E.vitamines.noms).filter(v => x.vitamines[v] / E.vitamines.besoins[v] < 0.8);
   if (p !== "jour" && enSuivi()) apresRendu.push(() => {
-    // Une barre par jour : verte près de l'objectif (±5 %), orange au-dessus, grise en dessous ; rien pour un jour non compté.
+    // Une courbe : ce que tu as mangé chaque journée finie (depuis ta date de début), et ton objectif en pointillés.
     const jours = x.detail.filter(d => d.date < a.aujourdhui && (!E.reglages.date_debut || d.date >= E.reglages.date_debut));
-    const fmt = new Intl.DateTimeFormat("fr-FR", p === "semaine" ? { weekday: "short" } : { day: "numeric" });
-    Graph.barres($("gMange"), { unite: "kcal", hauteur: 220, cible: a.objectif.kcal, nomCible: "objectif",
-      videTexte: "Les barres apparaissent dès la première journée finie.",
-      donnees: jours.some(d => d.kcal != null) ? jours.map(d => ({ etiquette: fmt.format(new Date(d.date + "T12:00")).replace(".", ""),
-        detail: dateLongueCourte(d.date), valeur: d.kcal || 0,
-        couleur: d.kcal == null ? "var(--surface-fort)" : Math.abs(d.kcal - a.objectif.kcal) <= a.objectif.kcal * 0.05 ? "var(--accent)"
-          : d.kcal > a.objectif.kcal ? "#f0a24b" : "#8c918e" })) : [] });
+    const manges = jours.filter(d => d.kcal != null).map(d => ({ x: d.date, y: d.kcal }));
+    Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, titre: "Calories mangées chaque jour, comparées à l'objectif",
+      videTexte: "La courbe apparaît dès la première journée finie.",
+      series: manges.length ? [{ nom: "Mangé", couleur: "var(--s1)", marques: true, points: manges },
+        { nom: "Objectif", couleur: "var(--s2)", pointille: true, points: jours.map(d => ({ x: d.date, y: a.objectif.kcal })) }] : [] });
   });
   if (p !== "jour" && !enSuivi()) apresRendu.push(() => Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, aujourdhui: enSuivi() ? null : a.aujourdhui,
     videTexte: "Tes calories apparaîtront ici dès le premier plat déclaré cuisiné.", titre: "Calories mangées chaque jour, comparées à l'objectif",
@@ -1725,8 +1723,7 @@ function vueAvancement({ params }) {
     ${argent}
   </dl>
   ${p !== "jour" ? `<section class="bloc" aria-labelledby="tJours"><h2 id="tJours">Calories : ce que tu as mangé et ton objectif</h2>
-    ${enSuivi() ? `<div class="legende"><span><i style="background:var(--accent)"></i>Dans l'objectif (±5 %)</span><span><i style="background:#f0a24b"></i>Au-dessus</span><span><i style="background:#8c918e"></i>En dessous</span></div>`
-      : `<div class="legende"><span><i style="background:var(--s1)"></i>Mangé</span><span><i style="background:var(--s2)"></i>Objectif</span></div>`}
+    <div class="legende"><span><i style="background:var(--s1)"></i>Mangé</span><span><i style="background:var(--s2)"></i>Objectif</span></div>
     <div id="gMange"></div>
     <p class="petit discret" style="margin-top:8px">Un jour sans point est un jour non déclaré.</p></section>` : ""}
   ${enSuivi() ? "" : `<section class="bloc" aria-labelledby="tVitA"><h2 id="tVitA">Vitamines${p === "jour" ? " du jour" : ", moyenne par jour"}</h2>
@@ -2120,7 +2117,7 @@ function vueJourSuivi(params) {
   return `<div class="rubrique-jour"><div class="m-tete">
       <div><h1 tabindex="-1">${dec === 0 ? "Aujourd'hui" : demain ? "Demain" : esc(nomJour)}</h1><p class="petit discret">${esc(dateLongueCourte(date))}</p></div>
       <div class="ligne-boutons"><a class="bouton sobre rond" href="#/historique" aria-label="Historique des repas">${icone("notebook")}</a>
-        ${ici ? `<button class="bouton sobre rond" data-action="actionsJour" data-semaine="${ici.k}" data-jour="${ici.n}" aria-label="Autres actions">${icone("dots-three-outline")}</button>` : ""}</div>
+</div>
     </div>
     <nav class="jours jours-suivi" aria-label="Jour"><a href="#/semaine"${dec ? "" : ' aria-current="true"'}>Aujourd'hui</a>
       ${dec >= 2 ? `<a class="fleche" href="#/semaine?d=${dec - 1}" aria-label="Jour d'avant">${icone("caret-left")}</a><a href="#/semaine?d=${dec}" aria-current="true">${esc(bulle)}</a>`
