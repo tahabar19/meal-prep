@@ -19,7 +19,6 @@ const ONGLETS_FLEMMARD = [
   { id: "avancement", nom: "Avancement", icone: "chart-bar" },
   { id: "vitamines", nom: "Vitamines", icone: "orange" },
   { id: "suivi", nom: "Suivi", icone: "chart-line" },
-  { id: "profil", nom: "Profil", icone: "user-circle" },
 ];
 const JOURS_COURTS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const ORDRE = { plat: 0, petitdej: 1, collation: 2, fruit: 3 };
@@ -176,6 +175,17 @@ function rendreNavigation(actif) {
   if (!E) { $("fil").innerHTML = ""; $("pucePhase").hidden = true; }
   const onglets = E && enSuivi() ? ONGLETS_FLEMMARD : ONGLETS;
   $("navBas").innerHTML = E ? onglets.map(o => lien(o, true)).join("") : "";
+  // Le profil, en haut à droite, en face du nom de l'appli (Taha, 19/11/2026) : la barre du bas respire.
+  let profil = $("enteteProfil");
+  if (!profil) {
+    profil = document.createElement("a");
+    profil.id = "enteteProfil"; profil.className = "entete-profil"; profil.href = "#/profil";
+    document.querySelector(".entete-in").appendChild(profil);
+  }
+  profil.hidden = !(E && enSuivi());
+  profil.innerHTML = `${icone(actif === "profil" ? "user-circle" : "user-circle")}<span class="sr">Profil</span>`;
+  profil.setAttribute("aria-label", E ? `Profil de ${E.profil.nom}` : "Profil");
+  if (actif === "profil") profil.setAttribute("aria-current", "page"); else profil.removeAttribute("aria-current");
   $("navHaut").innerHTML = E ? onglets.map(o => lien(o, false)).join("") : "";
 }
 function barre(html) {
@@ -1700,10 +1710,10 @@ function vueAvancement({ params }) {
     <div class="legende"><span><i style="background:var(--s1)"></i>Mangé</span><span><i style="background:var(--s2)"></i>Objectif</span></div>
     <div id="gMange"></div>
     <p class="petit discret" style="margin-top:8px">Un jour sans point est un jour non déclaré.</p></section>` : ""}
-  <section class="bloc" aria-labelledby="tVitA"><h2 id="tVitA">Vitamines${p === "jour" ? " du jour" : ", moyenne par jour"}</h2>
+  ${enSuivi() ? "" : `<section class="bloc" aria-labelledby="tVitA"><h2 id="tVitA">Vitamines${p === "jour" ? " du jour" : ", moyenne par jour"}</h2>
     <p class="discret petit" style="margin:4px 0 14px">${basses.length ? `À surveiller : ${basses.join(", ")}.` : "Tous tes besoins sont couverts à 80 % ou plus."}</p>
     ${barresVitamines(x.vitamines, true)}
-    <p style="margin-top:12px"><a class="bouton sobre" href="#/vitamines">Voir les détails${icone("caret-right")}</a></p></section>`}
+    <p style="margin-top:12px"><a class="bouton sobre" href="#/vitamines">Voir les détails${icone("caret-right")}</a></p></section>`}`}
   ${enSuivi() ? "" : `<p class="bloc"><a class="bouton sobre" href="#/budget">Voir le détail du budget</a></p>`}`;
 }
 function vueVitamines() {
