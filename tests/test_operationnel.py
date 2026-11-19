@@ -204,7 +204,7 @@ class C_Securite(unittest.TestCase):
     def test_cles_claude_jamais_lisibles(self):
         s, d = comme_essai("GET", "/rest/v1/cles_claude?select=*")
         self.assertTrue(s >= 400 or d == [])
-        s, d = comme_essai("POST", "/rest/v1/cles_claude", {"user_id": self.moi, "cle": "sk-ant-faux-faux-faux"})
+        s, d = comme_essai("POST", "/rest/v1/cles_claude", {"user_id": self.moi, "cle": "cle-factice-pour-essai"})
         self.assertGreaterEqual(s, 400, "une clé ne s'écrit que par la fonction claude (qui la vérifie)")
 
     def test_journal_ecrit_jamais_relu(self):
