@@ -338,9 +338,11 @@ function repasDuJour(s, k, n, compact = false, sansCollation = false, avecCuire 
     <div class="exos">${lignes.map(([quand, id, detail, moment]) => { const r = recette(id);
       if (id === "rien") return carteSansRepas(quand, k, n, moment);
       const v = platDuJour(s, n, id, moment), compte = repasCompte(j, moment, id), t = tailleDe(j, id);
-      return `<div class="exo repas-ligne"><a class="repas" href="#/plat/${id}" data-semaine="${k}" data-jour="${n}" data-moment="${moment}">
+      // Déjà cuisiné ce jour-là : grisé, pour ne pas le confondre avec ce qui reste à faire (Taha, 19/11/2026).
+      const cuit = courante && !!fait(s, n, id);
+      return `<div class="exo repas-ligne${cuit ? " cuisine-fait" : ""}"><a class="repas" href="#/plat/${id}" data-semaine="${k}" data-jour="${n}" data-moment="${moment}">
         ${photo(r, 480)}
-        <div class="exo-texte"><div class="quand">${quand}${estFixe(id, moment) ? " · fixe" : detail ? `, ${detail}` : ""}</div><h3>${esc(r.nom)}</h3>
+        <div class="exo-texte"><div class="quand">${quand}${cuit ? " · cuisiné" : estFixe(id, moment) ? " · fixe" : detail ? `, ${detail}` : ""}</div><h3>${esc(r.nom)}</h3>
         <div class="chiffres">${nombre(compte ? compte.kcal : v.kcal * t)} kcal, ${nombre(compte ? compte.prot : v.prot * t)} g de protéines${v.ajusteeCeJour ? " · quantités ajustées ce jour" : ""}</div></div></a>
       ${sansIcones ? "" : `${libre(id, moment) ? `<button class="changer" data-action="changer" data-semaine="${k}" data-jour="${n}" data-moment="${moment}" aria-label="Changer le ${nomMoment(moment)} de ${j.jour.toLowerCase()}" title="Changer">${icone("swap")}</button>` : ""}
       ${avecCuire ? `<a class="changer cuire${reglable(s, k, n, id, moment) ? "" : " haut"}" href="${courante ? `#/cuisine/${id}?jour=${n}` : `#/plat/${id}`}" aria-label="Cuisiner ${esc(r.nom)}" title="Cuisiner">${icone("cooking-pot")}</a>` : ""}

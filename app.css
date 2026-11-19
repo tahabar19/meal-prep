@@ -914,5 +914,9 @@ section.suivi-courbe{margin-top:22px}
 .reglages > .bloc{margin:0}
 .reglages h3{margin:18px 0 8px}
 .reglages .faits{margin-bottom:14px}
-.eau-jour{display:flex;align-items:center;gap:6px;margin:-4px 0 12px}
-.eau-jour .ic{color:var(--accent);width:16px;height:16px}
+.eau-jour{margin:-4px 0 12px}
+.eau-jour .ic{display:inline-block;vertical-align:-3px;margin-right:5px;color:var(--accent);width:16px;height:16px}
+/* plats déjà cuisinés ce jour-là : grisés (Taha, 19/11/2026) */
+.exo.cuisine-fait{opacity:.5}
+.exo.cuisine-fait .photo img{filter:grayscale(.8)}
+.exo.cuisine-fait .quand{color:var(--accent)}
