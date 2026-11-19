@@ -24,6 +24,7 @@ RACINE = "/mp"
 UTILISATEUR = ""
 REGLAGES = {}
 A_FAIRE = []                      # ce qui partait dans un fil : fait après la réponse
+JOURNAUX = []                     # le journal et les erreurs : envoyés à la table « journal » (lisible par l'admin seulement)
 
 
 def _pont(action: str, corps: dict) -> dict:
@@ -142,7 +143,10 @@ def preparer() -> None:
     s._claude_json = _claude_json
     s._claude_avec_photo = _claude_avec_photo
     s.sauvegarder = lambda *a, **k: None          # les sauvegardes, c'est Supabase
-    s.consigner = lambda quoi, texte: print(f"[{quoi}] {texte}")
+    # Un seul journal, centralisé (Taha, 19/11/2026) : plus de journal.json dans le profil.
+    s.journal = lambda type_, titre, details=None: JOURNAUX.append(
+        {"type": str(type_)[:40], "titre": str(titre)[:300], "details": [str(x)[:1000] for x in (details or [])][:30]})
+    s.consigner = lambda quoi, texte: JOURNAUX.append({"type": f"erreur:{quoi}"[:40], "titre": str(texte)[:300], "details": [str(texte)[:4000]]})
 
     class Requete(s._Requete):
         reponse = None
@@ -173,10 +177,10 @@ def _lire_page(url: str) -> str:
     return d.get("texte") or ""
 
 
-def _claude(blocs: list, max_tokens: int = 8000) -> dict | None:
+def _claude(blocs: list, max_tokens: int = 4000, tache: str = "aide") -> dict | None:
     if not REGLAGES.get("repas.plat_perso_ia", True):
         return None
-    d = _pont("messages", {"contenu": blocs, "max_tokens": max_tokens})
+    d = _pont("messages", {"contenu": blocs, "max_tokens": max_tokens, "tache": tache})
     if d.get("erreur"):
         raise _ErreurClaude(d["erreur"])
     trouve = re.search(r"\{.*\}", d.get("texte") or "", re.S)
@@ -205,12 +209,42 @@ def _claude_avec_photo(demande: str, photo: bytes | None, timeout: int = 150) ->
     if photo:
         type_ = "image/png" if photo[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
         blocs.insert(0, {"type": "image", "media_type": type_, "data": base64.b64encode(photo).decode()})
-    return _claude(blocs, 8000)                      # une erreur (pas de clé…) remonte jusqu'à la page
+    return _claude(blocs, 4000, "repas")             # une erreur (pas de clé, hors sujet…) remonte jusqu'à la page
+
+
+# ------------------------------------------------------------------ créer son profil (en ligne)
+def valider_profil(champs_json: str) -> str:
+    """Le formulaire de création vérifié AVANT de créer le compte : "" si tout va bien, sinon le message."""
+    from repas import profil as mod_profil
+    try:
+        mod_profil.valider({**json.loads(champs_json), "mot_de_passe": "x" * 8}, lambda cle, defaut=None: defaut)
+        return ""
+    except ValueError as e:
+        return str(e)
+
+
+def creer_profil(champs: dict) -> None:
+    """Le profil de la personne qui vient de créer son compte : comme sur le PC (calories, protéines, vitamines),
+    puis ses deux premières semaines (mode flemmard)."""
+    from repas import profil as mod_profil
+    d = _dossier()
+    if os.path.isdir(d) and not os.listdir(d):
+        os.rmdir(d)
+    mod_profil.creer({**champs, "identifiant": UTILISATEUR, "mot_de_passe": "x" * 8}, 0, serveur.reglage)
+    mod_profil.choisir(UTILISATEUR)
+    serveur._ecrire_p("reglages_site.json", {"nb_semaines": 2})      # deux semaines d'un coup, comme les autres
+    serveur.generer_mois(None, garder=False)
 
 
 # ------------------------------------------------------------------ une requête de la page
 def traiter(methode: str, chemin: str, corps: str = "") -> str:
     """Comme le serveur du PC : renvoie {"status", "corps" (JSON) | "binaire" (base64), "type"}."""
+    if chemin == "/api/web/creer_profil":
+        try:
+            creer_profil(json.loads(corps or "{}"))
+        except ValueError as e:
+            return json.dumps({"status": 400, "corps": json.dumps({"erreur": str(e)}, ensure_ascii=False)})
+        methode, chemin, corps = "GET", "/api/etat", ""
     from email.message import Message
     h = Message()
     h["Host"] = "localhost"
@@ -281,6 +315,13 @@ def changements(avant_json: str) -> str:
                     out.append({"nom": nom, "texte": f.read()})
     out += [{"nom": nom, "retire": True} for nom in avant if nom not in apres_]
     return json.dumps(out, ensure_ascii=False)
+
+
+def journaux() -> str:
+    """Les lignes de journal écrites depuis la dernière fois (la page les envoie à Supabase)."""
+    lignes = JOURNAUX[:]
+    JOURNAUX.clear()
+    return json.dumps(lignes, ensure_ascii=False)
 
 
 def instantane_json() -> str:

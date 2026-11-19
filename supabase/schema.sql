@@ -58,3 +58,29 @@ create policy "photos retirees par soi" on storage.objects for delete to authent
 drop policy if exists "photos listees par soi" on storage.objects;
 create policy "photos listees par soi" on storage.objects for select to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ---------- Journal (ce que l'appli a fait, les erreurs) : centralisé, lisible par l'admin seulement ----------
+-- Chacun peut y écrire SES lignes ; personne ne peut les relire depuis l'appli (aucune règle de lecture).
+-- L'admin les récupère avec outils/journaux.py (clé de service).
+create table if not exists public.journal (
+  id bigint generated always as identity primary key,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  quand timestamptz not null default now(),
+  type text not null,
+  titre text not null,
+  details jsonb not null default '[]'::jsonb
+);
+alter table public.journal enable row level security;
+drop policy if exists "journal ecrit par soi" on public.journal;
+create policy "journal ecrit par soi" on public.journal for insert to authenticated with check (user_id = auth.uid());
+create index if not exists journal_user_quand on public.journal (user_id, quand desc);
+
+-- ---------- Questions à Claude : pour limiter ce que chacun peut demander par heure (fonction « claude ») ----------
+create table if not exists public.usage_claude (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  quand timestamptz not null default now(),
+  action text not null
+);
+alter table public.usage_claude enable row level security;
+create index if not exists usage_claude_user_quand on public.usage_claude (user_id, quand desc);

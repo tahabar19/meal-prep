@@ -96,13 +96,10 @@ def page():
         # Les photos : celles du catalogue sont des fichiers de l'appli, celles de tes plats sont dans Supabase.
         ('<img src="/photo/${r.id}?l=${largeur}&v=${r.photo}"', '<img src="${urlPhoto(r, largeur)}"'),
         ('navigator.serviceWorker.register("/sw.js")', 'navigator.serviceWorker.register("sw.js")'),
-        # Réglages : brancher son compte Claude (comme Rafiq).
-        ("  ${modeSuivi}\n", "  ${modeSuivi}\n  ${blocClaude()}\n"),
         # Pas de PDF à télécharger en ligne (Chrome du PC).
-        # En ligne : pas de PC à allumer, pas de profil à créer soi-même (comptes créés par Taha).
+        # En ligne : pas de PC à allumer.
         ('<h1 tabindex="-1" style="margin-bottom:8px">Jarvis ne répond pas</h1>\n    <p>Vérifie que le PC est allumé et que le site y tourne, sur le même Wi-Fi que ce téléphone.</p>',
          '<h1 tabindex="-1" style="margin-bottom:8px">L\'appli ne répond pas</h1>\n    <p>Vérifie ta connexion à internet, puis réessaie.</p>'),
-        ('\n    <p style="margin-top:22px"><button class="bouton sobre" data-action="versCreation">Créer mon profil</button></p>`;', '`;'),
         ('const boutonPdf = (quoi, texte = "Exporter en PDF") => `<a class="bouton sobre" href="/export/${quoi}.pdf" download>${icone("notebook")}${texte}</a>`;',
          'const boutonPdf = () => "";'),
     ])
