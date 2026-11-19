@@ -170,6 +170,11 @@ def demarrer(utilisateur: str, reglages: dict) -> None:
     mod_profil.choisir(utilisateur)
 
 
+def regler(reglages_json: str) -> None:
+    """La page dit si la personne a branché son compte Claude : sans lui, rien d'automatique (repas.plat_perso_ia)."""
+    REGLAGES.update(json.loads(reglages_json))
+
+
 def _lire_page(url: str) -> str:
     d = _pont("web", {"url": url})
     if d.get("erreur"):

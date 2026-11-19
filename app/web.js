@@ -3,7 +3,7 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-19-202913";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-19-203609";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const email = (ident) => `${ident}@meal-prep.invalid`;
@@ -60,6 +60,7 @@ async function demarrerMoteur(session) {
   M.temps = { supabase: Math.round(performance.now() - t0) };
   const ri = await envoyer({
     type: "init", version: VERSION, url: MP.url, anon: MP.anon, jeton: session.access_token, identifiant: M.ident,
+    reglages: { "repas.plat_perso_ia": !!M.claude },      // sans compte Claude : rien d'automatique, tout à la main
     fichiers: fichiers || [],
     photos: (objets || []).filter((o) => o.name.endsWith(".jpg")).map((o) => ({ nom: "photos/" + o.name, maj: Date.parse(o.updated_at || o.created_at) || 0 })),
   });
@@ -232,7 +233,8 @@ document.addEventListener("submit", async (ev) => {
   if (error && !erreur) { try { erreur = (await error.context.json()).erreur; } catch { erreur = error.message; } }
   if (erreur) { e.textContent = erreur; return; }
   M.claude = { endpoint: data.endpoint, modele: data.modele };
-  if (typeof rendre === "function") rendre();
+  M.worker.postMessage({ type: "reglages", reglages: { "repas.plat_perso_ia": true } });
+  if (typeof demarrer === "function") demarrer();
   if (typeof dire === "function") dire("Compte Claude connecté.");
 });
 document.addEventListener("click", async (ev) => {
@@ -240,6 +242,7 @@ document.addEventListener("click", async (ev) => {
   if (!b) return;
   await sb.rpc("oublier_cle_claude");
   M.claude = null;
-  if (typeof rendre === "function") rendre();
+  M.worker.postMessage({ type: "reglages", reglages: { "repas.plat_perso_ia": false } });
+  if (typeof demarrer === "function") demarrer();
   if (typeof dire === "function") dire("Compte Claude déconnecté.");
 });
