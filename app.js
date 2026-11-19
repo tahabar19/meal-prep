@@ -1120,7 +1120,8 @@ async function demanderAjustement(id, quantites = null, jour = null) {
     ${RAPIDES.length ? `<div class="gouts" style="margin-top:12px" aria-label="Ajustements rapides">${RAPIDES.map(([nom, role, f]) => `<button type="button" data-role="${role}" data-facteur="${f}">${nom}</button>`).join("")}</div>` : ""}
     <h3>Ingrédients</h3>
     <ul class="lignes reglables">${a.ingredients.map((i, n) => i.u === "qs" ? `<li><span>${esc(i.n)}</span><span class="q">au goût</span></li>`
-      : `<li><label for="aj${n}">${esc(i.n)}${i.ajoute ? `<small>ajouté par toi</small>` : i.q !== i.base ? `<small>${i.q === 0 ? "retiré · " : ""}${quantite(i.base * t, i.u)} dans la recette</small>` : ""}
+      : `<li${i.q === 0 ? ' class="retire"' : ""}>${i.q === 0 ? `<button type="button" class="ing-remettre" data-remettre-ing="${n}" aria-label="Remettre ${esc(i.n)}">↺</button>`
+          : `<button type="button" class="ing-poubelle" data-retirer-ing="${n}" aria-label="Retirer ${esc(i.n)}">${icone("poubelle")}</button>`}<label for="aj${n}">${esc(i.n)}${i.ajoute ? `<small>ajouté par toi</small>` : i.q !== i.base ? `<small>${i.q === 0 ? "retiré · " : ""}${quantite(i.base * t, i.u)} dans la recette</small>` : ""}
         ${i.ajoute ? "" : `<small><button type="button" class="lien" data-changer="${n}">Changer d'ingrédient</button></small>`}${seance && seance.repas > 1 ? `<small>à cuisiner pour ${seance.repas} repas : ${quantite(i.q * seance.portions, i.u)}</small>` : ""}</label>
         <span class="reglage"><button type="button" data-n="${n}" data-sens="-1" aria-label="Moins de ${esc(i.n)}">−</button>
           <input id="aj${n}" data-n="${n}" type="number" inputmode="decimal" min="0" step="${pas(i)}" value="${vu(i)}" aria-describedby="au${n}">
@@ -1155,6 +1156,19 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   };
   $("ajAjouter").addEventListener("click", ajouterIngredient);
   $("ajNouveau").addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); ajouterIngredient(); } });
+  // La poubelle : l'ingrédient est retiré de l'assiette (quantité 0) ; « ↺ » le remet comme dans la recette.
+  d.querySelectorAll("[data-retirer-ing]").forEach(b => b.addEventListener("click", ev => {
+    ev.preventDefault();
+    const i = a.ingredients[Number(b.dataset.retirerIng)], q = { ...actuel };
+    if (i.ajoute) delete q[i.n]; else q[i.n] = 0;
+    refaire(q);
+  }));
+  d.querySelectorAll("[data-remettre-ing]").forEach(b => b.addEventListener("click", ev => {
+    ev.preventDefault();
+    const q = { ...actuel };
+    delete q[a.ingredients[Number(b.dataset.remettreIng)].n];
+    refaire(q);
+  }));
   d.querySelectorAll("[data-changer]").forEach(b => b.addEventListener("click", ev => {
     ev.preventDefault();
     remplace = a.ingredients[Number(b.dataset.changer)].n;
