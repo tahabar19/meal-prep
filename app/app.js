@@ -1883,7 +1883,7 @@ function vueVitaminesMangees(params) {
       <div><dt>À surveiller</dt><dd>${basses.length ? basses.join(", ") : "Aucune"}</dd><p>Vitamines sous 80 % du besoin.</p></div>
     </dl>
     <section class="bloc" aria-labelledby="tApportsM"><h2 id="tApportsM">${p === "jour" ? (dec ? `Apport ${dec === 1 ? "d'hier" : "de ce jour"}` : "Apport du jour") : "Apport moyen par jour"}</h2>
-      ${Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? `<p class="petit discret legende-prevu"><i></i>En gris : ${dec ? "si tout le prévu de ce jour avait été mangé" : "quand tu auras mangé tout le prévu du jour"}.</p>` : ""}
+      ${Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? `<p class="petit discret legende-prevu"><span><i class="mange"></i>Mangé${dec ? "" : " jusqu'ici"}</span><span><i class="bas"></i>Mangé, sous 80 %</span><span><i></i>${dec ? "Si tout le prévu avait été mangé" : "Avec tout le prévu du jour"}</span></p>` : ""}
       ${barresVitamines(x.vitamines, true, x.vitamines_prevues)}
       ${p !== "jour" ? `<p class="petit discret" style="margin-top:8px">${x.jours_suivis} jour${x.jours_suivis > 1 ? "s" : ""} compté${x.jours_suivis > 1 ? "s" : ""}.</p>` : ""}</section>`}
   <section class="bloc" aria-labelledby="tLireV2"><details class="nu"><summary><h2 id="tLireV2">Comment lire ces chiffres</h2>${icone("caret-right")}</summary>
