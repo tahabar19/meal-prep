@@ -44,8 +44,8 @@ const Graph = (() => {
   }
 
   // Courbes dans le temps. series = [{ nom, couleur, points: [{ x: 'AAAA-MM-JJ', y }], pointille, marques }]
-  // yMin : l'axe descend au moins jusqu'à cette valeur (Taha, 20/11/2026 : 500 kcal sous la journée la plus basse).
-  function courbes(hote, { series, unite = "", hauteur = 220, aujourdhui = null, videTexte = "Pas encore de données.", titre = "", decimales = 0, yMin = null }) {
+  // yMin / yMax : le bas et le haut de l'axe (Taha, 20/11/2026 : 500 kcal sous la journée la plus basse, 200 au-dessus de la plus haute).
+  function courbes(hote, { series, unite = "", hauteur = 220, aujourdhui = null, videTexte = "Pas encore de données.", titre = "", decimales = 0, yMin = null, yMax = null }) {
     const tous = series.flatMap(s => s.points);
     if (!tous.length) return vide(hote, videTexte);
     const { svg, bulle, L, H } = cadre(hote, hauteur, titre);
@@ -56,7 +56,8 @@ const Graph = (() => {
     let y0 = Math.min(...ys), y1 = Math.max(...ys);
     const marge = (y1 - y0) * 0.15 || Math.max(1, y1 * 0.05);
     y0 -= marge; y1 += marge;
-    if (yMin != null) y0 = Math.min(y0, yMin);
+    if (yMin != null) y0 = yMin;                     // les bornes demandées sont tenues exactement
+    if (yMax != null) y1 = yMax;
     const X = d => m.g + ((+new Date(d) - x0) / (x1 - x0)) * (L - m.g - m.d);
     const Y = v => H - m.b - ((v - y0) / (y1 - y0)) * (H - m.h - m.b);
     for (const v of graduations(y0, y1)) {

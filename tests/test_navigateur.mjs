@@ -202,7 +202,9 @@ try {
     vrai(!(await B.js(`!!document.querySelector('main a[href*="p=semaine"], main a[href*="p=mois"]')`)), 'les périodes semaine/mois sont encore là');
     // les jours d'avant : ‹ pour hier, puis › pour revenir (Taha, 20/11/2026)
     const hier = await B.js(`(document.querySelector('.jours-vitamines a.fleche[aria-label="Jour d\\'avant"]') || {}).hash || ''`);
-    vrai(await B.js(`!!document.querySelector('#vitDate[type=date]')`), 'pas de calendrier sur la date');
+    await B.js(`document.getElementById('vitDate').click()`); await att(200);
+    vrai(await B.js(`!document.getElementById('vitCal').hidden && !!document.querySelector('#vitCal .cal-jours button')`), 'le calendrier ne s\'ouvre pas');
+    vrai(await B.js(`[...document.querySelectorAll('#vitCal [data-jour]')].every(b => b.disabled === (b.dataset.jour > E.avancement.aujourdhui || b.disabled && b.dataset.jour < E.avancement.aujourdhui))`), 'des jours à venir ne sont pas grisés');
     if (hier) {
       await aller(hier);
       vrai(await B.js(`!!document.querySelector('.jours-vitamines a.fleche[href="#/vitamines"]')`), 'pas de › pour revenir à aujourd\'hui');
