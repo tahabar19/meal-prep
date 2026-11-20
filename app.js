@@ -1741,7 +1741,7 @@ function vueAvancement({ params }) {
   const moisTropTot = p === "mois" && enSuivi() && (x.jours_finis || 0) < 7;
   const suivi = x.jours_suivis > 0 && !moisTropTot, parJour = p === "jour" ? "" : " par jour, en moyenne";
   const macro = (nom, valeur, but, prevu = null) => valeur == null ? "" : kpi(nom + (p === "jour" && prevuJour ? (nom === "Fibres" ? " mangées" : " mangés") : parJour), `${nombre(valeur)} g`,
-    but ? `${nombre(Math.round(100 * valeur / but))} % des ${nombre(but)} g ${nom === "Fibres" ? "conseillés" : "de ta phase"}.${prevu != null ? ` ${nombre(Math.round(prevu))} g avec tout le prévu.` : ""}` : "Pas d'objectif fixé dans ton profil.",
+    but ? `${nombre(Math.round(100 * valeur / but))} % de ton objectif.${prevu != null ? ` ${nombre(Math.round(100 * prevu / but))} % avec tout le prévu.` : ""}` : "Pas d'objectif fixé dans ton profil.",
     but ? Math.round(100 * valeur / but) : null, but && prevu != null ? Math.round(100 * prevu / but) : null);
   const pctK = Math.round(100 * x.kcal / a.objectif.kcal), pctP = Math.round(100 * x.prot / a.objectif.prot);
   // Aujourd'hui : la journée prévue en gris derrière ce qui est mangé, comme sur l'écran Jour (Taha, 20/11/2026).
@@ -1792,8 +1792,8 @@ function vueAvancement({ params }) {
     <dl class="kpis bloc">${argent}</dl>`}` : `
   ${prevuJour ? `<p class="legende-jauges legende-avancement"><span><i class="mange"></i>mangé</span><span><i></i>prévu</span></p>` : ""}
   <dl class="kpis" style="margin-top:14px">
-    ${kpi(p === "jour" ? "Calories mangées" : "Calories" + parJour, `${nombre(x.kcal)} kcal`, `${nombre(pctK)} % de ton objectif${x.kcal > a.objectif.kcal * 1.05 ? ", au-dessus" : ""}.${prevuJour ? ` ${nombre(prevuJour.kcal)} kcal avec tout le prévu.` : ""}`, pctK, prevuJour ? Math.round(100 * prevuJour.kcal / a.objectif.kcal) : null)}
-    ${kpi(p === "jour" ? "Protéines mangées" : "Protéines" + parJour, `${x.prot} g`, `${nombre(pctP)} % de ton objectif.${prevuJour ? ` ${nombre(prevuJour.prot)} g avec tout le prévu.` : ""}`, pctP, prevuJour ? Math.round(100 * prevuJour.prot / a.objectif.prot) : null)}
+    ${kpi(p === "jour" ? "Calories mangées" : "Calories" + parJour, `${nombre(x.kcal)} kcal`, `${nombre(pctK)} % de ton objectif${x.kcal > a.objectif.kcal * 1.05 ? ", au-dessus" : ""}.${prevuJour ? ` ${nombre(Math.round(100 * prevuJour.kcal / a.objectif.kcal))} % avec tout le prévu.` : ""}`, pctK, prevuJour ? Math.round(100 * prevuJour.kcal / a.objectif.kcal) : null)}
+    ${kpi(p === "jour" ? "Protéines mangées" : "Protéines" + parJour, `${x.prot} g`, `${nombre(pctP)} % de ton objectif.${prevuJour ? ` ${nombre(Math.round(100 * prevuJour.prot / a.objectif.prot))} % avec tout le prévu.` : ""}`, pctP, prevuJour ? Math.round(100 * prevuJour.prot / a.objectif.prot) : null)}
     ${macro("Glucides", x.gluc, a.objectif.gluc, prevuJour ? prevuJour.gluc : null)}
     ${macro("Lipides", x.lip, a.objectif.lip, prevuJour ? prevuJour.lip : null)}
     ${macro("Fibres", x.fib, a.objectif.fib, prevuJour && prevuJour.fib != null ? prevuJour.fib : null)}
@@ -2199,12 +2199,11 @@ const dateLongueCourte = iso => new Intl.DateTimeFormat("fr-FR", { weekday: "lon
 function jaugesDuJour(j, o, mange = null) {
   // Les chiffres sont ceux du PRÉVU ; aujourd'hui, la barre montre en gris le prévu et en vert, pour illustrer,
   // ce qui est déjà mangé (Taha, 20/11/2026 : « la barre verte c'est juste pour illustration »).
-  const jauge = (nom, prevu, val, but, unite) => {
-    const pctP = but ? Math.min(100, Math.round(100 * prevu / but)) : 0, pct = val != null && but ? Math.min(100, Math.round(100 * val / but)) : null;
-    return `<div class="jauge"><div><span>${nom}</span><b class="chiffres">${nombre(Math.round(prevu))}<small>${but ? ` / ${nombre(but)}` : ""} ${unite}</small></b></div>
-      <span class="piste" role="img" aria-label="${pctP} % de l'objectif${pct != null ? `, déjà mangé ${pct} %` : ""}">${pct != null ? `<b style="width:${pctP}%"></b><i style="width:${pct}%"></i>` : `<i style="width:${pctP}%"></i>`}</span></div>`; };
-  return `<div class="m-resume">${jauge("Calories", j.kcal, mange ? mange.kcal : null, o.kcal, "kcal")}${jauge("Protéines", j.prot, mange ? mange.prot : null, o.prot, "g")}
-    ${mange ? `<p class="legende-jauges"><span><i class="mange"></i>mangé</span><span><i></i>prévu</span></p>` : ""}</div>`;
+  const jauge = (nom, prevu, but, unite) => {
+    const pctP = but ? Math.min(100, Math.round(100 * prevu / but)) : 0;
+    return `<div class="jauge"><div><span>${nom === "Calories" ? "Calories prévues" : "Protéines prévues"}</span><b class="chiffres">${nombre(Math.round(prevu))}<small>${but ? ` / ${nombre(but)}` : ""} ${unite}</small></b></div>
+      <span class="piste" role="img" aria-label="${pctP} % de l'objectif"><i style="width:${pctP}%"></i></span></div>`; };
+  return `<div class="m-resume">${jauge("Calories", j.kcal, o.kcal, "kcal")}${jauge("Protéines", j.prot, o.prot, "g")}</div>`;
 }
 function ligneRepasNote(e) {
   return `<button type="button" class="ligne-note" data-action="ouvrirRepas" data-id="${e.id}">
