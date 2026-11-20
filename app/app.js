@@ -1740,8 +1740,9 @@ function vueAvancement({ params }) {
   // Le mois attend une semaine complète (7 journées finies ce mois-ci) : avant, la semaine dit déjà tout (Taha, 20/11/2026).
   const moisTropTot = p === "mois" && enSuivi() && (x.jours_finis || 0) < 7;
   const suivi = x.jours_suivis > 0 && !moisTropTot, parJour = p === "jour" ? "" : " par jour, en moyenne";
-  const macro = (nom, valeur, but) => valeur == null ? "" : kpi(nom + parJour, `${nombre(valeur)} g`,
-    but ? `${nombre(Math.round(100 * valeur / but))} % des ${nombre(but)} g ${nom === "Fibres" ? "conseillés" : "de ta phase"}.` : "Pas d'objectif fixé dans ton profil.", but ? Math.round(100 * valeur / but) : null);
+  const macro = (nom, valeur, but, prevu = null) => valeur == null ? "" : kpi(nom + (p === "jour" && prevuJour ? (nom === "Fibres" ? " mangées" : " mangés") : parJour), `${nombre(valeur)} g`,
+    but ? `${nombre(Math.round(100 * valeur / but))} % des ${nombre(but)} g ${nom === "Fibres" ? "conseillés" : "de ta phase"}.${prevu != null ? ` ${nombre(Math.round(prevu))} g avec tout le prévu.` : ""}` : "Pas d'objectif fixé dans ton profil.",
+    but ? Math.round(100 * valeur / but) : null, but && prevu != null ? Math.round(100 * prevu / but) : null);
   const pctK = Math.round(100 * x.kcal / a.objectif.kcal), pctP = Math.round(100 * x.prot / a.objectif.prot);
   // Aujourd'hui : la journée prévue en gris derrière ce qui est mangé, comme sur l'écran Jour (Taha, 20/11/2026).
   const prevuJour = p === "jour" && enSuivi() && E.journal_repas ? (E.journal_repas.jours || []).find(d => d.date === a.aujourdhui) || null : null;
@@ -1789,12 +1790,13 @@ function vueAvancement({ params }) {
     <a class="bouton second" href="#/semaine">Noter ce que je mange</a></div>` : `<p>L'avancement se remplit quand tu touches « C'est cuisiné » ou « Journée faite » dans l'onglet Cuisine.</p>
     <a class="bouton second" href="#/cuisine">Aller à la cuisine</a></div>
     <dl class="kpis bloc">${argent}</dl>`}` : `
+  ${prevuJour ? `<p class="legende-jauges legende-avancement"><span><i class="mange"></i>mangé</span><span><i></i>prévu</span></p>` : ""}
   <dl class="kpis" style="margin-top:14px">
     ${kpi(p === "jour" ? "Calories mangées" : "Calories" + parJour, `${nombre(x.kcal)} kcal`, `${nombre(pctK)} % de ton objectif${x.kcal > a.objectif.kcal * 1.05 ? ", au-dessus" : ""}.${prevuJour ? ` ${nombre(prevuJour.kcal)} kcal avec tout le prévu.` : ""}`, pctK, prevuJour ? Math.round(100 * prevuJour.kcal / a.objectif.kcal) : null)}
     ${kpi(p === "jour" ? "Protéines mangées" : "Protéines" + parJour, `${x.prot} g`, `${nombre(pctP)} % de ton objectif.${prevuJour ? ` ${nombre(prevuJour.prot)} g avec tout le prévu.` : ""}`, pctP, prevuJour ? Math.round(100 * prevuJour.prot / a.objectif.prot) : null)}
-    ${macro("Glucides", x.gluc, a.objectif.gluc)}
-    ${macro("Lipides", x.lip, a.objectif.lip)}
-    ${macro("Fibres", x.fib, a.objectif.fib)}
+    ${macro("Glucides", x.gluc, a.objectif.gluc, prevuJour ? prevuJour.gluc : null)}
+    ${macro("Lipides", x.lip, a.objectif.lip, prevuJour ? prevuJour.lip : null)}
+    ${macro("Fibres", x.fib, a.objectif.fib, prevuJour && prevuJour.fib != null ? prevuJour.fib : null)}
     ${enSuivi() ? (p === "jour" ? "" : kpi("Jours notés", `${x.jours_suivis} sur ${x.jours}`, "Jours où tu as noté tes repas.", Math.round(100 * x.jours_suivis / x.jours)))
       : p === "jour" ? kpi("Fait aujourd'hui", `${faitsJour} sur ${totalJour}`, "Repas, collations et fruits prévus ce jour.", totalJour ? Math.round(100 * faitsJour / totalJour) : null)
       : kpi("Jours suivis", `${x.jours_suivis} sur ${x.jours}`, "Jours où tu as déclaré avoir cuisiné.", Math.round(100 * x.jours_suivis / x.jours))}
@@ -1883,7 +1885,7 @@ function vueVitaminesMangees(params) {
       <div><dt>À surveiller</dt><dd>${basses.length ? basses.join(", ") : "Aucune"}</dd><p>Vitamines sous 80 % du besoin.</p></div>
     </dl>
     <section class="bloc" aria-labelledby="tApportsM"><h2 id="tApportsM">${p === "jour" ? (dec ? `Apport ${dec === 1 ? "d'hier" : "de ce jour"}` : "Apport du jour") : "Apport moyen par jour"}</h2>
-      ${!dec && Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? `<p class="petit discret legende-prevu"><span><i class="bas"></i>Sous 80 % du besoin</span><span><i></i>Avec tout le prévu du jour</span></p>` : ""}
+      ${!dec && Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? `<p class="petit discret legende-prevu"><span><i class="consomme"></i>Consommé</span><span><i></i>Avec tout le prévu du jour</span></p>` : ""}
       ${barresVitamines(x.vitamines, true, dec ? null : x.vitamines_prevues)}
       ${p !== "jour" ? `<p class="petit discret" style="margin-top:8px">${x.jours_suivis} jour${x.jours_suivis > 1 ? "s" : ""} compté${x.jours_suivis > 1 ? "s" : ""}.</p>` : ""}</section>`}
   <section class="bloc" aria-labelledby="tLireV2"><details class="nu"><summary><h2 id="tLireV2">Comment lire ces chiffres</h2>${icone("caret-right")}</summary>
@@ -2195,13 +2197,13 @@ const MOMENTS_REPAS = [["pdj", "Matin"], ["dej", "Midi"], ["col", "Collation"], 
 const isoPlus = n => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const dateLongueCourte = iso => new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(new Date(iso + "T12:00"));
 function jaugesDuJour(j, o, mange = null) {
-  // Aujourd'hui : en plein ce qui est vraiment mangé jusqu'ici, en gris toute la journée prévue (Taha, 20/11/2026).
-  const jauge = (nom, val, prevu, but, unite) => { const pct = but ? Math.min(100, Math.round(100 * val / but)) : 0;
-    const pctP = prevu != null && but ? Math.min(100, Math.round(100 * prevu / but)) : null;
-    return `<div class="jauge"><div><span>${nom}${prevu != null ? " mangées" : ""}</span><b class="chiffres">${nombre(Math.round(val))}<small>${but ? ` / ${nombre(but)}` : ""} ${unite}</small></b>
-      ${prevu != null ? `<small class="prevu">${nombre(Math.round(prevu))} prévues</small>` : ""}</div>
-      <span class="piste" role="img" aria-label="${pct} % de l'objectif${pctP != null ? `, ${pctP} % avec tout le prévu` : ""}">${pctP != null && pctP > pct ? `<b style="width:${pctP}%"></b>` : ""}<i style="width:${pct}%"></i></span></div>`; };
-  return `<div class="m-resume">${jauge("Calories", mange ? mange.kcal : j.kcal, mange ? j.kcal : null, o.kcal, "kcal")}${jauge("Protéines", mange ? mange.prot : j.prot, mange ? j.prot : null, o.prot, "g")}
+  // Les chiffres sont ceux du PRÉVU ; aujourd'hui, la barre montre en gris le prévu et en vert, pour illustrer,
+  // ce qui est déjà mangé (Taha, 20/11/2026 : « la barre verte c'est juste pour illustration »).
+  const jauge = (nom, prevu, val, but, unite) => {
+    const pctP = but ? Math.min(100, Math.round(100 * prevu / but)) : 0, pct = val != null && but ? Math.min(100, Math.round(100 * val / but)) : null;
+    return `<div class="jauge"><div><span>${nom}</span><b class="chiffres">${nombre(Math.round(prevu))}<small>${but ? ` / ${nombre(but)}` : ""} ${unite}</small></b></div>
+      <span class="piste" role="img" aria-label="${pctP} % de l'objectif${pct != null ? `, déjà mangé ${pct} %` : ""}">${pct != null ? `<b style="width:${pctP}%"></b><i style="width:${pct}%"></i>` : `<i style="width:${pctP}%"></i>`}</span></div>`; };
+  return `<div class="m-resume">${jauge("Calories", j.kcal, mange ? mange.kcal : null, o.kcal, "kcal")}${jauge("Protéines", j.prot, mange ? mange.prot : null, o.prot, "g")}
     ${mange ? `<p class="legende-jauges"><span><i class="mange"></i>mangé</span><span><i></i>prévu</span></p>` : ""}</div>`;
 }
 function ligneRepasNote(e) {
@@ -2232,11 +2234,11 @@ function vueJourSuivi(params) {
   const nomJour = new Intl.DateTimeFormat("fr-FR", { weekday: "long" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
   const bulle = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
   const j = J.jours.find(x => x.date === date) || { entrees: [], repas: [], kcal: 0, prot: 0, gluc: 0, lip: 0, reste: { kcal: J.objectif.kcal, prot: J.objectif.prot } };
-  // Aujourd'hui, « il te reste » se compte sur ce qui est vraiment mangé (Taha, 20/11/2026) ; les autres jours, sur le prévu.
+  // Aujourd'hui, la barre illustre aussi ce qui est déjà mangé ; les chiffres restent ceux du prévu (Taha, 20/11/2026).
   const mangeJour = dec === 0 && E.avancement ? E.avancement.jour : null;
-  const o = J.objectif, r = mangeJour ? { kcal: Math.round(o.kcal - mangeJour.kcal), prot: Math.round(o.prot - mangeJour.prot) } : j.reste || {}, ici = semainePourDate(date);
+  const o = J.objectif, r = j.reste || {}, ici = semainePourDate(date);
   const m = E.mois, courante = ici && (!m || ici.k === m.rang);
-  const reste = r.kcal > 0 ? `Il te reste ${mangeJour ? "à manger " : ""}<b>${nombre(r.kcal)} kcal</b>${r.prot > 0 ? ` et <b>${nombre(r.prot)} g de protéines</b>` : ", protéines atteintes"}.`
+  const reste = r.kcal > 0 ? `Il te reste <b>${nombre(r.kcal)} kcal</b>${r.prot > 0 ? ` et <b>${nombre(r.prot)} g de protéines</b>` : ", protéines atteintes"}.`
     : `Objectif de calories atteint${r.kcal < -100 ? ` (+${nombre(-r.kcal)} kcal)` : ""}${r.prot > 0 ? `, il manque ${nombre(r.prot)} g de protéines` : ""}.`;
   const jp = ici ? ici.s.jours[ici.n] : null;
   // Après demain, « Pour finir la journée » se calcule à la demande (0,2 s par jour), une fois par état.
@@ -2273,7 +2275,7 @@ function vueJourSuivi(params) {
       return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <b class="chiffres" id="eauBu">${virgule(bu)}</b><small class="chiffres"> / ${virgule(E.eau.litres)} L</small></span>
         <input type="range" class="eau-barre" id="eauBarre" min="0" max="${maxi}" step="0.25" value="${bu}" data-date="${date}" aria-label="Eau bue aujourd'hui, en litres"
           style="--rempli:${Math.min(100, 100 * bu / maxi)}%;--but:${100 * E.eau.litres / maxi}%"></div>`; })() : ""}
-    ${o.gluc || o.lip ? `<p class="petit discret chiffres" style="margin:-4px 0 12px">Glucides ${nombre(Math.round((mangeJour || j).gluc || 0))}${o.gluc ? ` / ${nombre(o.gluc)}` : ""} g · Lipides ${nombre(Math.round((mangeJour || j).lip || 0))}${o.lip ? ` / ${nombre(o.lip)}` : ""} g${mangeJour ? " mangés" : ""}</p>` : ""}
+    ${o.gluc || o.lip ? `<p class="petit discret chiffres" style="margin:-4px 0 12px">Glucides ${nombre(Math.round(j.gluc || 0))}${o.gluc ? ` / ${nombre(o.gluc)}` : ""} g · Lipides ${nombre(Math.round(j.lip || 0))}${o.lip ? ` / ${nombre(o.lip)}` : ""} g</p>` : ""}
     ${ici ? `<section class="m-repas grille-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true)}</section>`
       : `<div class="dujour"><strong>Pas de menu prévu ce jour-là.</strong> Note ce que tu manges, ou compose la suite.
         <p style="margin-top:8px"><button class="bouton second" data-action="suivante">Composer la suite</button></p></div>`}
@@ -2560,9 +2562,9 @@ function vueSuivi({ params }) {
     torse: { titre: "Tour de torse", unite: "cm", series: [
       { nom: "Au repos", couleur: "var(--s2)", marques: true, points: points("torse_avant") }, { nom: "Après la séance", couleur: "var(--s1)", marques: true, points: points("torse_apres") }] } };
   const S = SERIES[courbe];
-  // Poids : l'axe va de 5 kg sous la pesée la plus basse à 5 kg au-dessus de la plus haute, toujours écrits (Taha, 20/11/2026).
+  // Poids : l'axe va de 2 kg sous la pesée la plus basse à 2 kg au-dessus de la plus haute, toujours écrits (Taha, 20/11/2026).
   const kilos = courbe === "poids" ? S.series[0].points.map(p => p.y) : [];
-  const bornes = kilos.length ? { yMin: Math.max(0, Math.floor(Math.min(...kilos) - 5)), yMax: Math.ceil(Math.max(...kilos) + 5) } : {};
+  const bornes = kilos.length ? { yMin: Math.max(0, Math.floor(Math.min(...kilos) - 2)), yMax: Math.ceil(Math.max(...kilos) + 2) } : {};
   apresRendu.push(() => Graph.courbes($("gSuivi"), { unite: S.unite, decimales: 1, hauteur: PETIT.matches ? 190 : 230, titre: S.titre, ...bornes,
     videTexte: "La courbe apparaît dès la deuxième mesure.", series: S.series.every(s => s.points.length < 2) ? [] : S.series }));
   const champ = (cle, libelle, unite) => `<div class="champ" style="margin:0"><label for="su_${cle}">${libelle}</label>
