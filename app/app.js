@@ -56,6 +56,16 @@ const periode = s => { const d = debutDe(s); if (!d) return ""; const f = new Da
   const mois = x => new Intl.DateTimeFormat("fr-FR", { month: "short" }).format(x);
   return `du ${jj(d)}${d.getMonth() === f.getMonth() ? "" : " " + mois(d)} au ${jj(f)} ${mois(f)}`; };
 const fait = (s, jour, id) => (s.prepares || {})[`${jour}|${id}`];       // cette recette, ce jour-la, est cuisinee
+const TACTILE = matchMedia("(pointer: coarse)");           // téléphone : pas de focus posé par le code
+// showModal() active le premier champ d'une fenêtre : sur téléphone on le relâche, le clavier s'ouvrira au toucher.
+if (TACTILE.matches && window.HTMLDialogElement) {
+  const montrer = HTMLDialogElement.prototype.showModal;
+  HTMLDialogElement.prototype.showModal = function () {
+    montrer.call(this);
+    const a = document.activeElement;
+    if (a && this.contains(a) && a.matches("input, textarea, select")) a.blur();
+  };
+}
 const icone = nom => `<span class="ic" aria-hidden="true">${ICONES[nom] || ""}</span>`;
 // Ce que fait l'IA (Claude) se voit dans les champs (Taha, 20/11/2026 : « on n'a pas l'impression que c'est de l'IA »).
 const BADGE_IA = `<span class="badge-ia">${icone("sparkle")}IA</span>`;
@@ -1080,7 +1090,7 @@ async function demanderIngredient(o) {
     d.close("oui"); rendre();
     dire(o.creer ? `« ${nom} » créé.` : `Valeurs enregistrées${v.nb_plats ? ` : ${v.nb_plats} plat${v.nb_plats > 1 ? "s" : ""} recalculé${v.nb_plats > 1 ? "s" : ""}` : ""}.`);
   });
-  (o.creer ? $("inNom") : $("in_kcal")).focus();
+  if (!TACTILE.matches) (o.creer ? $("inNom") : $("in_kcal")).focus();
   d.scrollTop = 0;
 }
 
@@ -2361,7 +2371,7 @@ function noterRepas({ date, entree = null }) {
       } catch (e) { $("eNr").textContent = "Jarvis ne répond pas."; ok.disabled = false; ok.innerHTML = libelle; }
     });
     if (!d.open) d.showModal();
-    setTimeout(() => $("nrTexte") && $("nrTexte").focus(), 50);
+    if (!TACTILE.matches) setTimeout(() => $("nrTexte") && $("nrTexte").focus(), 50);     // sur iPhone : jamais (clavier bloqué)
   };
   const verifier = (p, aLaMain = false, parIA = false) => {
     const items = p.items.map(i => ({ ...i }));
@@ -3050,6 +3060,12 @@ const ACTIONS = {
 
 PETIT.addEventListener("change", () => rendre());
 // Une feuille ou la carte d'un plat est ouverte : la page derrière ne bouge plus quand on fait défiler (Taha, 19/11/2026).
+// iPhone : un champ activé par le code (sans toucher) n'ouvre pas le clavier, et le toucher ensuite ne l'ouvre plus
+// (Taha, 20/11/2026 : « le clavier ne pop plus »). Toucher un champ déjà actif le réactive pendant le geste.
+document.addEventListener("touchend", ev => {
+  const c = ev.target.closest && ev.target.closest("textarea, select, input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=date]):not([type=button]):not([type=submit])");
+  if (c && document.activeElement === c && !c.readOnly && !c.disabled) { c.blur(); c.focus({ preventScroll: true }); }
+}, { passive: true });
 const verrou = { y: 0, actif: false };
 function verrouiller(oui) {
   if (oui === verrou.actif) return;
