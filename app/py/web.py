@@ -142,6 +142,7 @@ def preparer() -> None:
     etiquettes._lire = lambda url, delai=10, entetes=None: _lire_page(url)
     s._claude_json = _claude_json
     s._claude_avec_photo = _claude_avec_photo
+    s._octets_photo_du_site = _photo_du_catalogue
     s.sauvegarder = lambda *a, **k: None          # les sauvegardes, c'est Supabase
     # Un seul journal, centralisé (Taha, 19/11/2026) : plus de journal.json dans le profil.
     s.journal = lambda type_, titre, details=None: JOURNAUX.append(
@@ -173,6 +174,15 @@ def demarrer(utilisateur: str, reglages: dict) -> None:
 def regler(reglages_json: str) -> None:
     """La page dit si la personne a branché son compte Claude : sans lui, rien d'automatique (repas.plat_perso_ia)."""
     REGLAGES.update(json.loads(reglages_json))
+
+
+def _photo_du_catalogue(ident: str, chemin=None) -> bytes:
+    """Les photos du catalogue sont des fichiers de l'appli (vides dans le moteur) : la page la donne."""
+    from urllib.parse import quote
+    d = _pont("local", {"chemin": f"photos/{quote(ident)}-960.jpg"})
+    if d.get("erreur"):
+        raise OSError(d["erreur"])
+    return base64.b64decode(d.get("base64") or "")
 
 
 def _lire_page(url: str) -> str:

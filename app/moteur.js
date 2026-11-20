@@ -16,6 +16,19 @@ self.pont_sync = (action, corpsJson) => {
     try { d.send(); } catch (e) { return JSON.stringify({ erreur: "Open Food Facts ne répond pas." }); }
     return JSON.stringify({ status: d.status, texte: d.responseText });
   }
+  // Une photo du catalogue (fichier de l'appli) : la photo de secours d'un de tes plats.
+  if (action === "local") {
+    if (!/^photos\/[\w%.-]+-(160|480|960)\.jpg$/.test(corps.chemin || "")) return JSON.stringify({ erreur: "Chemin refusé." });
+    const d = new XMLHttpRequest();
+    d.open("GET", corps.chemin, false);
+    d.responseType = "arraybuffer";
+    try { d.send(); } catch (e) { return JSON.stringify({ erreur: "Photo introuvable." }); }
+    if (d.status !== 200) return JSON.stringify({ erreur: `Photo introuvable (${d.status}).` });
+    const o = new Uint8Array(d.response);
+    let s = "";
+    for (let i = 0; i < o.length; i += 0x8000) s += String.fromCharCode.apply(null, o.subarray(i, i + 0x8000));
+    return JSON.stringify({ base64: btoa(s) });
+  }
   const x = new XMLHttpRequest();
   x.open("POST", cfg.url + "/functions/v1/claude", false);
   x.setRequestHeader("Content-Type", "application/json");
@@ -66,7 +79,7 @@ function prechauffer(version) {
 
 // Pillow (photos) : seulement pour ce qui touche aux photos, chargé en fond après le démarrage.
 const avecPillow = () => (pillow = pillow || py.loadPackage(["pillow"]));
-const AVEC_PHOTOS = ["/api/repas/au_menu", "/api/plat_perso", "/api/repas/analyser"];
+const AVEC_PHOTOS = ["/api/repas/au_menu", "/api/plat_perso", "/api/repas/analyser", "/api/plat/photo"];
 
 async function init(m) {
   cfg = { url: m.url, anon: m.anon, jeton: m.jeton };

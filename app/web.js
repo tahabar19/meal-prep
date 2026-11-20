@@ -3,7 +3,7 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-19-221417";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-20-083620";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const email = (ident) => `${ident}@meal-prep.invalid`;
@@ -209,13 +209,13 @@ window.fetch = async (entree, options = {}) => {
 function blocClaude() {
   const c = M.claude;
   return `<section class="bloc" aria-labelledby="tClaude"><h2 id="tClaude">Compte Claude</h2>
-    ${c ? `<p class="doux">Connecté · <b>${esc(c.modele || "claude-opus-5-5")}</b>${c.endpoint ? ` · ${esc(c.endpoint)}` : ""}</p>
+    ${c ? `<p class="doux">Connecté · <b>${esc(c.modele && c.modele !== "claude-opus-5-5" ? c.modele : "claude-sonnet-5-5")}</b>${c.endpoint ? ` · ${esc(c.endpoint)}` : ""}</p>
       <p class="actions" style="margin-top:10px"><button class="bouton second" type="button" data-claude="oublier">Déconnecter</button></p>`
     : `<p class="doux">« Calculer » un repas, lire une étiquette ou trouver la photo d'un plat : l'appli le demande à Claude, avec ta clé.</p>
       <form id="fClaude" class="formulaire" novalidate style="margin-top:12px">
         <div class="champ"><label for="cleClaude">Clé API</label><input id="cleClaude" type="password" placeholder="sk-…" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
         <div class="champ"><label for="apiClaude">Adresse de l'API <small class="discret">(vide = Anthropic)</small></label><input id="apiClaude" inputmode="url" placeholder="https://api.anthropic.com" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
-        <div class="champ"><label for="modeleClaude">Modèle</label><input id="modeleClaude" value="claude-opus-5-5" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
+        <div class="champ"><label for="modeleClaude">Modèle</label><input id="modeleClaude" value="claude-sonnet-5-5" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
         <small id="eClaude" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
         <p class="actions" style="margin-top:10px"><button class="bouton" type="submit">Connecter</button></p>
       </form>`}</section>`;

@@ -57,6 +57,8 @@ const periode = s => { const d = debutDe(s); if (!d) return ""; const f = new Da
   return `du ${jj(d)}${d.getMonth() === f.getMonth() ? "" : " " + mois(d)} au ${jj(f)} ${mois(f)}`; };
 const fait = (s, jour, id) => (s.prepares || {})[`${jour}|${id}`];       // cette recette, ce jour-la, est cuisinee
 const icone = nom => `<span class="ic" aria-hidden="true">${ICONES[nom] || ""}</span>`;
+// Ce que fait l'IA (Claude) se voit dans les champs (Taha, 20/11/2026 : « on n'a pas l'impression que c'est de l'IA »).
+const BADGE_IA = `<span class="badge-ia">${icone("sparkle")}IA</span>`;
 
 function quantite(q, u) {
   if (u === "qs") return "au goût";
@@ -674,7 +676,7 @@ function demanderChangement(k, n, moment, onglet = "proches") {
       ${sansRepas ? "" : `<button class="bouton second" type="button" data-retirer>${icone("x")}Retirer ce repas</button>`}</div>
     ${sansRepas || (moment === "dej" && j.dej_reste) || PETIT.matches ? "" : `<p style="margin:8px 0 0"><button class="lien" type="button" data-ajuster>${icone("notebook")}Modifier les ingrédients de ce plat, ce jour</button></p>`}
     ${suite ? `<p class="petit discret" style="margin-top:10px">${suite}</p>` : ""}
-    <div class="champ formulaire" style="margin:14px 0 0"><label for="chPlat">Chercher un plat ou un ingrédient</label>
+    <div class="champ formulaire ch-recherche"><label for="chPlat">Chercher un plat ou un ingrédient</label>
       <input id="chPlat" type="search" autocomplete="off" placeholder="Poulet, curry, saumon…"></div>
     <div class="segments" role="tablist" aria-label="Trier les propositions">
       ${ONGLETS_C.map(([id, nom]) => `<button type="button" role="tab" aria-selected="${id === onglet}" data-onglet="${id}">${nom}</button>`).join("")}</div>
@@ -876,7 +878,7 @@ function demanderPlatPerso(ctx, saisie = { nom: "", ingredients: [], telQuel: tr
       <small>Un par un, ou plusieurs séparés par des virgules, « et » ou « + ». Sans quantité, Jarvis met une portion habituelle, que tu règles à l'écran suivant. La marque ou le magasin ne gênent pas (« Skyr – Lidl »). Un produit inconnu ? Tu pourras le créer avec Claude.</small></div>
     <div class="gouts" id="ppListe" aria-label="Ingrédients choisis">${saisie.ingredients.map((n, i) => `<button type="button" data-oter="${i}" aria-label="Retirer ${esc(n)}">${esc(n)}${qs[n] != null ? ` · ${nombre(qs[n])}${unites[n] && unites[n] !== "pièce" ? " " + unites[n] : ""}` : ""}${icone("x")}</button>`).join("")}</div>
     <div class="options" style="margin-top:14px"><label class="option"><input type="checkbox" id="ppCompleter"${saisie.telQuel ? "" : " checked"}>
-      <span><b>Jarvis complète la recette</b><small>Seulement si tu le veux : il ajoute ce qui manque (matière grasse, épices, accompagnement) et règle les quantités sur ${ctx.remplace ? `« ${esc(recette(ctx.remplace).nom)} »` : "ton objectif"}. Il faut alors un nom de plat.</small></span></label></div>
+      <span><b>Jarvis complète la recette ${BADGE_IA}</b><small>Seulement si tu le veux : il ajoute ce qui manque (matière grasse, épices, accompagnement) et règle les quantités sur ${ctx.remplace ? `« ${esc(recette(ctx.remplace).nom)} »` : "ton objectif"}. Il faut alors un nom de plat.</small></span></label></div>
     <small id="ePerso" class="erreur" role="alert" style="display:block;margin-top:12px;color:var(--critique)">${erreur}</small>
     <div class="actions pied"><button class="bouton second" type="button" value="non">${ctx.retour ? "Retour" : "Annuler"}</button>
       <button class="bouton" type="submit">Voir le plat</button></div></form>`;
@@ -933,7 +935,7 @@ async function apercuPlatPerso(ctx, saisie) {
   if (!p.recette) {
     return demanderPlatPerso(ctx, saisie, p.inconnus.map(x => `Je ne connais pas « ${esc(x.nom)} ».${x.proches.length
       ? ` Tu voulais dire ${x.proches.map(n => `<button type="button" class="lien" data-pour="${esc(x.nom)}" data-proche="${esc(n)}">${esc(n)}</button>`).join(", ")} ?` : ""}
-      Sinon <button type="button" class="lien" data-creer="${esc(x.nom)}">crée « ${esc(x.nom)} » avec Claude</button>.`).join("<br>"));
+      Sinon <button type="button" class="lien" data-creer="${esc(x.nom)}">crée « ${esc(x.nom)} » avec Claude ${BADGE_IA}</button>.`).join("<br>"));
   }
   const r = p.recette, c = p.cible, f = ctx.k != null ? planDe(ctx.k).jours[ctx.n].facteur : 1;
   const mesure = (nom, valeur, cible, unite) => { const pct = Math.min(100, Math.round(100 * valeur / Math.max(1, cible)));
@@ -1256,7 +1258,7 @@ function ficheRapide(id, ctx, depuis, vu = null) {
   fond.className = "carte-fond";
   fond.innerHTML = `<article class="carte-plat" role="dialog" aria-modal="true" aria-labelledby="cpTitre">
     <div class="cp-photo">${photo(r0, 960, "grande", r0.nom)}
-      ${r0.perso && !r0.photo && !r0.photo_de ? `<label class="cp-ajout-photo">${icone("image")}Ajouter une photo<input type="file" accept="image/*" hidden data-photo-plat="${id}"></label>` : ""}
+      ${r0.perso && !r0.photo_de ? `<label class="cp-ajout-photo">${icone("image")}${r0.photo ? "Changer la photo" : "Prendre une photo"}<input type="file" accept="image/*" hidden data-photo-plat="${id}"></label>` : ""}
       <button type="button" class="cp-fermer" aria-label="Fermer">${icone("x")}</button></div>
     <div class="cp-corps">
       ${quand || vu ? `<p class="petit discret">${esc(vu ? vu.quand : quand)}</p>` : ""}
@@ -1285,13 +1287,12 @@ function ficheRapide(id, ctx, depuis, vu = null) {
       ${ctx && (libre || reg) ? `<div class="cp-choix">
         ${libre ? `<button type="button" data-action="changer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}">${icone("swap")}
           <span><b>Remplacer par un autre plat</b><small>Un plat du catalogue, un des tiens, ou retirer ce repas</small></span>${icone("caret-right")}</button>` : ""}
-        ${reg ? `<button type="button" data-action="reequilibrer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}" data-plat="${id}">${icone("sliders-horizontal")}
-          <span><b>Ajuster les quantités</b><small>Jarvis règle les grammes de ce plat pour ton objectif du jour</small></span>${icone("caret-right")}</button>` : ""}
         ${(libre || enSuivi()) && !(ctx.moment === "dej" && j.dej_reste) ? `<button type="button" data-action="ajusterJour" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}">${icone("notebook")}
           <span><b>Modifier les ingrédients</b><small>Retirer, ajouter ou changer un ingrédient, pour ce jour</small></span>${icone("caret-right")}</button>` : ""}
         ${ctx.moment === "pdj" || ctx.moment.startsWith("col") ? `<button type="button" data-action="fixer" data-plat="${id}" data-moment="${ctx.moment}" data-fixe="${estFixe(id, ctx.moment) ? 0 : 1}">${icone("lock-simple")}
           <span><b>${estFixe(id, ctx.moment) ? "Ne plus fixer ce plat" : "Fixer ce plat"}</b><small>${estFixe(id, ctx.moment) ? "Il reste prévu, mais n'est plus imposé chaque jour" : `Il revient chaque ${ctx.moment === "pdj" ? "matin" : "jour, en collation"}, toujours une portion`}</small></span>${icone("caret-right")}</button>` : ""}
       </div>` : ctx ? "" : `<div class="cp-avis">${boutonsGout(r0)}</div>`}
+      ${reg ? `<p class="cp-equilibrer"><button type="button" class="bouton sobre" data-action="reequilibrer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}" data-plat="${id}">${icone("sliders-horizontal")}Équilibrer pour la journée</button></p>` : ""}
     </div></article>`;
   document.body.appendChild(fond);
   const carte = fond.querySelector(".carte-plat");
@@ -2237,7 +2238,7 @@ function noterRepas({ date, entree = null }) {
   // 1. décrire (texte, photo, chiffres) ; 2. vérifier ce que Claude a compris, corriger, enregistrer.
   const d = $("dialogue"), heure = new Date().getHours();
   let moment = entree ? entree.moment : heure < 11 ? "pdj" : heure < 15 ? "dej" : heure < 18 ? "col" : "din";
-  let photoJointe = null, texte = "";
+  let photoJointe = null, texte = "", photoPlat;      // photoPlat : la photo qui deviendra celle du plat
   const puces = () => `<div class="gouts" role="group" aria-label="Repas">${MOMENTS_REPAS.map(([m, nom]) => `<button type="button" data-moment="${m}" aria-pressed="${m === moment}">${nom}</button>`).join("")}</div>`;
   const brancherPuces = () => d.querySelectorAll("[data-moment]").forEach(b => b.addEventListener("click", () => {
     moment = b.dataset.moment; d.querySelectorAll("[data-moment]").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
@@ -2281,8 +2282,9 @@ function noterRepas({ date, entree = null }) {
     d.innerHTML = `<form class="feuille formulaire" novalidate>
       <h2 id="dialogueTitre">${date === E.journal_repas.aujourdhui ? "Ajouter" : esc(dateLongueCourte(date).replace(/^./, c => c.toUpperCase()))}</h2>
       ${puces()}
-      <div class="champ" style="margin-top:14px"><label for="nrTexte">Un plat, ou ce que tu as mangé, comme tu veux</label>
-        <textarea id="nrTexte" rows="4" placeholder="Ex. : 2 œufs, 70 g de pain pita et mon café Tassimo. Ou : un kebab frites. Ou : shake, 30 g de protéines, 150 kcal">${esc(texte)}</textarea></div>
+      <div class="champ champ-ia" style="margin-top:14px"><label for="nrTexte">Un plat, ou ce que tu as mangé, comme tu veux ${BADGE_IA}</label>
+        <textarea id="nrTexte" rows="4" placeholder="Ex. : 2 œufs, 70 g de pain pita et mon café Tassimo. Ou : un kebab frites. Ou : shake, 30 g de protéines, 150 kcal">${esc(texte)}</textarea>
+        <small>Claude, l'IA, trouve les aliments, les grammes et les macros. Tes plats se retrouvent dès que tu tapes leur nom.</small></div>
       <div id="nrPlats" class="nr-plats"></div>
       <div class="photo-ajout">
         <label class="bouton second" for="nrPhoto">${icone("image")}${photoJointe ? "Changer la photo" : "Ajouter une photo"}</label>
@@ -2292,7 +2294,7 @@ function noterRepas({ date, entree = null }) {
       <small id="eNr" class="erreur" role="alert" style="display:block;margin-top:10px;color:var(--critique)"></small>
       <p class="petit" style="margin-top:10px"><button type="button" class="lien" id="nrMain">Entrer les chiffres moi-même</button></p>
       <div class="actions pied"><button class="bouton second" type="button" value="non">Annuler</button>
-        <button class="bouton" type="submit">Calculer</button></div></form>`;
+        <button class="bouton bouton-ia" type="submit">${icone("sparkle")}Calculer avec l'IA</button></div></form>`;
     brancherPuces();
     d.querySelector("[value=non]").addEventListener("click", () => d.close("non"));
     $("nrTexte").addEventListener("input", ev => { texte = ev.target.value; proposerPlats(); });
@@ -2300,9 +2302,10 @@ function noterRepas({ date, entree = null }) {
     $("nrPhoto").addEventListener("change", async ev => {
       const f = ev.target.files[0]; if (!f) return;
       try { photoJointe = await photoReduite(f); } catch (e) { $("eNr").textContent = "Photo illisible."; return; }
+      photoPlat = undefined;
       saisie();
     });
-    if ($("nrSansPhoto")) $("nrSansPhoto").addEventListener("click", () => { photoJointe = null; saisie(); });
+    if ($("nrSansPhoto")) $("nrSansPhoto").addEventListener("click", () => { photoJointe = null; photoPlat = undefined; saisie(); });
     $("nrMain").addEventListener("click", () => verifier({ nom: texte.slice(0, 60), items: [{ nom: texte.slice(0, 60) || "Repas", g: null, pour100: null, kcal: 0, prot: 0, gluc: 0, lip: 0, fib: 0, source: "donné par toi" }], remarque: "" }, true));
     d.querySelector("form").addEventListener("submit", async ev => {
       ev.preventDefault(); ev.stopPropagation();
@@ -2310,22 +2313,25 @@ function noterRepas({ date, entree = null }) {
       if (!texte && !photoJointe) { $("eNr").textContent = "Écris ce que tu as mangé, ou ajoute une photo."; return; }
       const exact = !photoJointe && chercherPlats(texte).find(x => x.exact);
       if (exact) return ajouterPlatConnu(exact.r);              // le nom exact d'un de tes plats : pas besoin de Claude
-      const ok = d.querySelector("[type=submit]"); ok.disabled = true; ok.textContent = "Claude calcule…";
+      const ok = d.querySelector("[type=submit]"), libelle = ok.innerHTML; ok.disabled = true; ok.innerHTML = `${icone("sparkle")}L'IA calcule…`;
       $("eNr").textContent = "";
       try {
         const r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ texte, photo: photoJointe, moment, date }) });
         const rep = await r.json();
-        if (!r.ok) { $("eNr").textContent = rep.erreur || "Claude n'a pas pu calculer."; ok.disabled = false; ok.textContent = "Calculer"; return; }
+        if (!r.ok) { $("eNr").textContent = rep.erreur || "Claude n'a pas pu calculer."; ok.disabled = false; ok.innerHTML = libelle; return; }
         moment = rep.proposition.moment || moment;
-        verifier(rep.proposition);
-      } catch (e) { $("eNr").textContent = "Jarvis ne répond pas."; ok.disabled = false; ok.textContent = "Calculer"; }
+        verifier(rep.proposition, false, true);
+      } catch (e) { $("eNr").textContent = "Jarvis ne répond pas."; ok.disabled = false; ok.innerHTML = libelle; }
     });
     if (!d.open) d.showModal();
     setTimeout(() => $("nrTexte") && $("nrTexte").focus(), 50);
   };
-  const verifier = (p, aLaMain = false) => {
+  const verifier = (p, aLaMain = false, parIA = false) => {
     const items = p.items.map(i => ({ ...i }));
+    // La photo de l'assiette devient celle du plat ; pas celle d'un ticket ou d'une étiquette.
+    if (photoPlat === undefined) photoPlat = photoJointe && !items.some(i => /ticket|étiquette sur la photo/.test(i.source || "")) ? photoJointe : null;
+    const deNouveau = () => verifier({ ...p, items, nom: $("nrNom").value }, aLaMain, parIA);
     const MAC = ["kcal", "prot", "gluc", "lip", "fib"];
     const recalc = i => { if (i.pour100 && i.g) MAC.forEach(m => { i[m] = Math.round(i.pour100[m] * i.g) / 100; }); };
     const somme = m => items.reduce((t, i) => t + (Number(i[m]) || 0), 0);
@@ -2336,7 +2342,9 @@ function noterRepas({ date, entree = null }) {
         <span class="nr-chiffres">${["kcal", "prot", "gluc", "lip"].map(m => `<label><input type="text" inputmode="decimal" data-k="${k}" data-champ="${m}" value="${virgule(Math.round(i[m] * 10) / 10)}" ${i.pour100 && i.g ? "readonly" : ""}><span>${{ kcal: "kcal", prot: "prot.", gluc: "gluc.", lip: "lip." }[m]}</span></label>`).join("")}</span>
         <small class="discret">${esc(i.source || "")}${i.url ? ` · <a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">étiquette</a>` : ""}</small>
         <button type="button" class="effacer" data-retirer="${k}" aria-label="Retirer ${esc(i.nom)}">${icone("x")}</button></li>`).join("");
-      $("nrTotal").textContent = `${nombre(Math.round(somme("kcal")))} kcal · ${nombre(Math.round(somme("prot")))} g de protéines · ${nombre(Math.round(somme("gluc")))} g glucides · ${nombre(Math.round(somme("lip")))} g lipides`;
+      // Les macros du plat, en grand, comme sur la carte d'un plat (Taha, 20/11/2026)
+      $("nrTotal").innerHTML = [["kcal", "", "kcal"], ["prot", " g", "prot."], ["gluc", " g", "gluc."], ["lip", " g", "lip."]]
+        .map(([m, u, nom]) => `<div><b>${nombre(Math.round(somme(m)))}${u}</b><span>${nom}</span></div>`).join("");
       d.querySelectorAll("#nrItems input").forEach(inp => inp.addEventListener("change", () => {
         const i = items[Number(inp.dataset.k)];
         if (inp.classList.contains("nr-nom")) { i.nom = inp.value.trim() || i.nom; return; }
@@ -2353,9 +2361,18 @@ function noterRepas({ date, entree = null }) {
       ${puces()}
       ${p.remarque ? `<p class="dujour" style="margin-top:12px">${esc(p.remarque)}</p>` : ""}
       <div class="champ" style="margin-top:12px"><label for="nrNom">Nom du repas</label><input id="nrNom" type="text" maxlength="80" value="${esc(p.nom || "")}"></div>
+      <p class="petit discret nr-titre-macros">Les macros du plat</p>
+      <div class="cp-chiffres nr-macros" id="nrTotal" aria-live="polite"></div>
+      ${!aLaMain && E.claude !== false ? `<div class="champ champ-ia nr-repondre"><label for="nrCorrection">Répondre à Claude ${BADGE_IA}</label>
+        <textarea id="nrCorrection" rows="2" placeholder="Ex. : ajoute 20 g de whey · enlève la banane · vise 600 kcal et 40 g de protéines"></textarea>
+        <button type="button" class="bouton second bouton-ia" id="nrCorriger">${icone("sparkle")}Corriger avec l'IA</button></div>` : ""}
       <ul class="lignes items-note" id="nrItems"></ul>
       <p style="margin:6px 0 0"><button type="button" class="lien" id="nrAjout">+ Ajouter un aliment</button></p>
-      <p class="total-note chiffres" id="nrTotal"></p>
+      ${semainePourDate(date) ? `<div class="photo-ajout nr-photo-plat">
+        ${photoPlat ? `<img src="${photoPlat}" alt="Photo du plat" class="apercu-photo">` : ""}
+        <label class="bouton second" for="nrPhotoPlat">${icone("image")}${photoPlat ? "Changer la photo du plat" : "Prendre une photo du plat"}</label>
+        <input id="nrPhotoPlat" type="file" accept="image/*" hidden>
+        ${photoPlat ? `<button type="button" class="lien" id="nrSansPhotoPlat">Retirer la photo</button>` : `<small class="discret">Facultatif : sans photo, l'appli en trouve une.</small>`}</div>` : ""}
       <small id="eNr" class="erreur" role="alert" style="display:block;margin-top:8px;color:var(--critique)"></small>
       ${entree && semainePourDate(date) ? `<p style="margin:10px 0 0"><button type="button" class="bouton second" id="nrAuMenu" style="width:100%">${icone("cooking-pot")}Mettre dans le menu du jour</button></p>` : ""}
       <div class="actions pied">${entree ? `<button class="bouton second" type="button" id="nrSuppr">Supprimer</button>` : `<button class="bouton second" type="button" id="nrRetour">Retour</button>`}
@@ -2364,6 +2381,26 @@ function noterRepas({ date, entree = null }) {
     rendreListe();
     $("nrAjout").addEventListener("click", () => { items.push({ nom: "Aliment", g: null, pour100: null, kcal: 0, prot: 0, gluc: 0, lip: 0, fib: 0, source: "donné par toi" }); rendreListe(); });
     if ($("nrRetour")) $("nrRetour").addEventListener("click", saisie);
+    if ($("nrPhotoPlat")) $("nrPhotoPlat").addEventListener("change", async ev => {
+      const f = ev.target.files[0]; if (!f) return;
+      try { photoPlat = await photoReduite(f); } catch (e) { $("eNr").textContent = "Photo illisible."; return; }
+      deNouveau();
+    });
+    if ($("nrSansPhotoPlat")) $("nrSansPhotoPlat").addEventListener("click", () => { photoPlat = null; deNouveau(); });
+    // Répondre à Claude : il refait la liste avec ta demande (ajouter, changer, viser des macros).
+    if ($("nrCorriger")) $("nrCorriger").addEventListener("click", async ev => {
+      const correction = $("nrCorrection").value.trim();
+      if (!correction) { $("eNr").textContent = "Écris ce que Claude doit changer."; $("nrCorrection").focus(); return; }
+      const b = ev.currentTarget, libelle = b.innerHTML;
+      b.disabled = true; b.innerHTML = `${icone("sparkle")}L'IA corrige…`; $("eNr").textContent = "";
+      try {
+        const r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ texte, photo: photoJointe, moment, date, correction, precedent: items }) });
+        const rep = await r.json();
+        if (!r.ok) { $("eNr").textContent = rep.erreur || "Claude n'a pas pu corriger."; b.disabled = false; b.innerHTML = libelle; return; }
+        verifier(rep.proposition, false, true);
+      } catch (e) { $("eNr").textContent = "Jarvis ne répond pas."; b.disabled = false; b.innerHTML = libelle; }
+    });
     if ($("nrSuppr")) $("nrSuppr").addEventListener("click", async () => {
       if (await appel("/api/repas/oublier", { id: entree.id }) === true) { d.close("oui"); rendre(); dire("Repas supprimé."); } });
     // Un repas nouveau devient un plat du menu du jour, au repas choisi (Taha, 19/11/2026 : pas une rubrique à part) ;
@@ -2371,9 +2408,7 @@ function noterRepas({ date, entree = null }) {
     const auMenu = async bouton => {
       bouton.disabled = true;
       const nom = $("nrNom").value.trim();
-      // La photo de l'assiette devient celle du plat ; pas celle d'un ticket ou d'une étiquette.
-      const assiette = photoJointe && !items.some(i => /ticket|étiquette sur la photo/.test(i.source || ""));
-      const rep = await appel("/api/repas/au_menu", { id: entree ? entree.id : "", date, moment, nom, items, ...(assiette ? { photo: photoJointe } : {}) });
+      const rep = await appel("/api/repas/au_menu", { id: entree ? entree.id : "", date, moment, nom, items, ...(photoPlat ? { photo: photoPlat } : {}) });
       bouton.disabled = false;
       if (rep === true) { d.close("oui"); rendre(); dire(E.au_menu && E.au_menu.note ? "Repas noté." : `Ajouté au menu : « ${(recette(E.au_menu.plat) || { nom }).nom} ».`); }
       else if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
@@ -2539,10 +2574,10 @@ function blocObjectifs() {
     <p class="doux petit sous-titre">${E.phases_perso ? "Tes périodes : l'appli prend celle du jour." : "Ton programme actuel, en périodes : change ce que tu veux, puis enregistre."} Les vitamines suivent tes calories.</p>
     <div id="periodes">${periodesActuelles().map(lignePeriode).join("")}</div>
     <p style="margin:8px 0 14px"><button type="button" class="lien" id="ajoutPeriode">+ Ajouter une période</button></p>
-    <details class="claude-objectifs"><summary>Demander à Claude${icone("caret-right")}</summary>
-      <div class="champ" style="margin-top:10px"><label for="oDemande">Ce que tu veux</label>
+    <details class="claude-objectifs"><summary><span>Demander à Claude ${BADGE_IA}</span>${icone("caret-right")}</summary>
+      <div class="champ champ-ia" style="margin-top:10px"><label for="oDemande">Ce que tu veux</label>
         <textarea id="oDemande" rows="2" placeholder="Ex. : perdre 4 kg d'ici mars, puis prendre du muscle jusqu'à l'été"></textarea></div>
-      <button type="button" class="bouton second" id="oProposer">Proposer des périodes</button>
+      <button type="button" class="bouton second bouton-ia" id="oProposer">${icone("sparkle")}Proposer des périodes</button>
       <p class="petit discret" id="oExplication" style="margin-top:8px">Il faut avoir branché ton compte Claude (plus bas). Tu vérifies sa proposition avant d'enregistrer.</p>
     </details>
     <small id="ePeriodes" class="erreur" role="alert" style="display:block;margin-top:10px;color:var(--critique)"></small>
@@ -2560,14 +2595,14 @@ document.addEventListener("click", async ev => {
   }
   if (t.dataset.retirerPeriode !== undefined) { t.closest(".periode").remove(); return; }
   if (t.id === "oProposer") {
-    t.disabled = true; t.textContent = "Claude réfléchit…"; $("ePeriodes").textContent = "";
+    t.disabled = true; t.innerHTML = `${icone("sparkle")}L'IA réfléchit…`; $("ePeriodes").textContent = "";
     try {
       const r = await fetch("/api/objectifs/proposer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ demande: $("oDemande").value }) });
       const rep = await r.json();
       if (!r.ok) $("ePeriodes").textContent = rep.erreur || "Claude n'a pas pu proposer.";
       else { $("periodes").innerHTML = rep.proposition.phases.map(lignePeriode).join(""); $("oExplication").textContent = rep.proposition.explication || "Vérifie, puis enregistre."; }
     } catch (e) { $("ePeriodes").textContent = "Pas de réponse."; }
-    t.disabled = false; t.textContent = "Proposer des périodes";
+    t.disabled = false; t.innerHTML = `${icone("sparkle")}Proposer des périodes`;
     return;
   }
   const phases = t.id === "oAutomatique" ? [] : [...document.querySelectorAll(".periode")].map(d => Object.fromEntries(
@@ -2665,7 +2700,7 @@ document.addEventListener("input", ev => {
   if ($("eauBu")) $("eauBu").textContent = virgule(Number(b.value));
 });
 document.addEventListener("change", async ev => {
-  if (ev.target.dataset && ev.target.dataset.photoPlat) {        // sans compte Claude, la photo de son plat se met à la main
+  if (ev.target.dataset && ev.target.dataset.photoPlat) {        // ta photo de ton plat (prise ou choisie), avec ou sans Claude
     const f = ev.target.files[0]; if (!f) return;
     let image;
     try { image = await photoReduite(f); } catch (e) { return dire("Photo illisible."); }
@@ -2872,7 +2907,7 @@ const ACTIONS = {
   ouvrirRepas: b => { const e = E.journal_repas.jours.flatMap(j => j.entrees).find(x => x.id === b.dataset.id); if (e) noterRepas({ date: e.date, entree: e }); },
   reequilibrer: b => { const k = Number(b.dataset.semaine), n = Number(b.dataset.jour);
     apercuChangement(k, { type: "reequilibrer", jour: n, moment: b.dataset.moment, plat: b.dataset.plat },
-      `Ajuster les quantités`); },
+      `Équilibrer pour la journée`); },
   ajusterJour: b => demanderAjustement(b.dataset.plat, null, { k: Number(b.dataset.semaine), n: Number(b.dataset.jour) }),
   appoint: () => agir("/api/appoint", {}, "Stock mis à jour avec ces produits."),
   async oublierSuivi(b) {
