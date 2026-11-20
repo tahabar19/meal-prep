@@ -1029,14 +1029,18 @@ section.suivi-courbe{margin-top:22px}
 .cal-jours button.choisi::after{background:var(--sur-accent)}
 /* Vitamines : la journée prévue en gris derrière ce qui est mangé, et à quoi sert chaque vitamine (Taha, 20/11/2026) */
 .barres .piste{position:relative}
-.barres .piste b{position:absolute;left:0;top:0;bottom:0;border-radius:inherit;background:rgba(255,255,255,.16)}
+.barres .piste b{position:absolute;left:0;top:0;bottom:0;border-radius:inherit;background:var(--prevu)}
 .barres .piste i{position:relative}
 .barres .role{display:block;margin-top:1px;font-size:.74rem;color:var(--discret);font-weight:400}
 .barres .prevu{color:var(--discret);opacity:.8}
-.legende-prevu{display:flex;align-items:center;gap:8px;margin:-4px 0 12px}
-.legende-prevu i{flex:none;width:18px;height:8px;border-radius:4px;background:rgba(255,255,255,.16)}
+.legende-prevu{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:-4px 0 12px}
+.legende-prevu span{display:inline-flex;align-items:center;gap:6px}
+.legende-prevu i{flex:none;width:18px;height:8px;border-radius:4px;background:var(--prevu)}
+.legende-prevu i.mange{background:var(--accent)}
+.legende-prevu i.bas{background:var(--alerte)}
 /* Jour et Avancement « Aujourd'hui » : la journée prévue en gris derrière ce qui est mangé (Taha, 20/11/2026) */
 .jauge .piste,.kpis .piste{position:relative}
-.jauge .piste b,.kpis .piste b{position:absolute;left:0;top:0;bottom:0;border-radius:inherit;background:rgba(255,255,255,.16)}
+.jauge .piste b,.kpis .piste b{position:absolute;left:0;top:0;bottom:0;border-radius:inherit;background:var(--prevu)}
 .jauge .piste i,.kpis .piste i{position:relative}
 .jauge small.prevu{font-size:.72rem;color:var(--discret);opacity:.85}
+:root{--prevu:rgba(255,255,255,.3)}
