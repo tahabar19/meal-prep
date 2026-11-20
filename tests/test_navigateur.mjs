@@ -199,7 +199,15 @@ try {
   await test('Vitamines : seulement aujourd\'hui, liste « À compléter »', async () => {
     await aller('#/vitamines');
     vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'pas de titre');
-    vrai(!(await B.js(`!!document.querySelector('main nav.jours')`)), 'les périodes semaine/mois sont encore là');
+    vrai(!(await B.js(`!!document.querySelector('main a[href*="p=semaine"], main a[href*="p=mois"]')`)), 'les périodes semaine/mois sont encore là');
+    // les jours d'avant : ‹ pour hier, puis › pour revenir (Taha, 20/11/2026)
+    const hier = await B.js(`(document.querySelector('.jours-vitamines a.fleche[aria-label="Jour d\\'avant"]') || {}).hash || ''`);
+    vrai(await B.js(`!!document.querySelector('#vitDate[type=date]')`), 'pas de calendrier sur la date');
+    if (hier) {
+      await aller(hier);
+      vrai(await B.js(`!!document.querySelector('.jours-vitamines a.fleche[href="#/vitamines"]')`), 'pas de › pour revenir à aujourd\'hui');
+      await aller('#/vitamines');
+    }
     if (await B.js(`E.claude === false && E.vitamines_a_completer.length > 0`))
       vrai(await B.js(`!!document.querySelector('.a-completer')`), 'sans compte Claude, « À compléter » doit apparaître');
   });

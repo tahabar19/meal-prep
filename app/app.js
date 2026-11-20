@@ -157,7 +157,8 @@ function ongletDe(vue) {
 /* ------------------------------------------------------------ navigation */
 const enSuivi = () => !!(E && E.journal_repas && E.journal_repas.actif);   // mode flemmard : on note ce qu'on mange
 // Un plat fixé par la personne (bouton « Fixer ce plat ») : il revient chaque jour, toujours une portion (Taha, 19/11/2026).
-const estFixe = (id, moment) => !!(E && E.fixes && (moment === "pdj" ? E.fixes.petit_dej === id : String(moment).startsWith("col") && (E.fixes.collations || []).includes(id)));
+const estFixe = (id, moment) => !!(E && E.fixes && ({ pdj: E.fixes.petit_dej, dej: E.fixes.dejeuner, din: E.fixes.diner }[moment] === id
+  || String(moment).startsWith("col") && (E.fixes.collations || []).includes(id)));
 function comptesNav() {
   // Produits a acheter et repas a cuisiner aujourd'hui : les pastilles de Courses et Cuisine.
   const s = E && E.semaine;
@@ -1289,10 +1290,15 @@ function ficheRapide(id, ctx, depuis, vu = null) {
           <span><b>Remplacer par un autre plat</b><small>Un plat du catalogue, un des tiens, ou retirer ce repas</small></span>${icone("caret-right")}</button>` : ""}
         ${(libre || enSuivi()) && !(ctx.moment === "dej" && j.dej_reste) ? `<button type="button" data-action="ajusterJour" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}">${icone("notebook")}
           <span><b>Modifier les ingrédients</b><small>Retirer, ajouter ou changer un ingrédient, pour ce jour</small></span>${icone("caret-right")}</button>` : ""}
-        ${ctx.moment === "pdj" || ctx.moment.startsWith("col") ? `<button type="button" data-action="fixer" data-plat="${id}" data-moment="${ctx.moment}" data-fixe="${estFixe(id, ctx.moment) ? 0 : 1}">${icone("lock-simple")}
-          <span><b>${estFixe(id, ctx.moment) ? "Ne plus fixer ce plat" : "Fixer ce plat"}</b><small>${estFixe(id, ctx.moment) ? "Il reste prévu, mais n'est plus imposé chaque jour" : `Il revient chaque ${ctx.moment === "pdj" ? "matin" : "jour, en collation"}, toujours une portion`}</small></span>${icone("caret-right")}</button>` : ""}
       </div>` : ctx ? "" : `<div class="cp-avis">${boutonsGout(r0)}</div>`}
-      ${reg ? `<p class="cp-equilibrer"><button type="button" class="bouton sobre" data-action="reequilibrer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}" data-plat="${id}">${icone("sliders-horizontal")}Équilibrer pour la journée</button></p>` : ""}
+      ${(() => {
+        // Deux petits boutons discrets en bas de la carte (Taha, 20/11/2026) : équilibrer la journée, fixer le plat.
+        // Tout plat se fixe, à son repas (Taha, 20/11/2026).
+        const fixable = !!ctx, fixe = fixable && estFixe(id, ctx.moment);
+        const chaque = { pdj: "matin", dej: "midi", din: "soir" }[ctx && ctx.moment];
+        const boutons = [reg ? `<button type="button" class="bouton sobre" data-action="reequilibrer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}" data-plat="${id}">${icone("sliders-horizontal")}Équilibrer pour la journée</button>` : "",
+          fixable ? `<button type="button" class="bouton sobre" data-action="fixer" data-plat="${id}" data-moment="${ctx.moment}" data-fixe="${fixe ? 0 : 1}" title="${fixe ? "Il reste prévu, mais n'est plus imposé chaque jour" : `Il revient chaque ${chaque || "jour, en collation"}, toujours une portion`}">${icone("lock-simple")}${fixe ? "Ne plus fixer" : "Fixer ce plat"}</button>` : ""].filter(Boolean);
+        return boutons.length ? `<p class="cp-equilibrer">${boutons.join("")}</p>` : ""; })()}
     </div></article>`;
   document.body.appendChild(fond);
   const carte = fond.querySelector(".carte-plat");
@@ -1715,7 +1721,9 @@ function vueAvancement({ params }) {
   const kpi = (libelle, valeur, aide, pct) => `<div><dt>${libelle}</dt><dd>${valeur}</dd>
     ${pct == null ? "" : `<span class="piste" role="img" aria-label="${nombre(pct)} % de l'objectif"><i style="width:${Math.min(100, pct)}%"></i></span>`}
     ${aide ? `<p>${aide}</p>` : ""}</div>`;
-  const suivi = x.jours_suivis > 0, parJour = p === "jour" ? "" : " par jour, en moyenne";
+  // Le mois attend une semaine complète (7 journées finies ce mois-ci) : avant, la semaine dit déjà tout (Taha, 20/11/2026).
+  const moisTropTot = p === "mois" && enSuivi() && (x.jours_finis || 0) < 7;
+  const suivi = x.jours_suivis > 0 && !moisTropTot, parJour = p === "jour" ? "" : " par jour, en moyenne";
   const macro = (nom, valeur, but) => valeur == null ? "" : kpi(nom + parJour, `${nombre(valeur)} g`,
     but ? `${nombre(Math.round(100 * valeur / but))} % des ${nombre(but)} g ${nom === "Fibres" ? "conseillés" : "de ta phase"}.` : "Pas d'objectif fixé dans ton profil.", but ? Math.round(100 * valeur / but) : null);
   const pctK = Math.round(100 * x.kcal / a.objectif.kcal), pctP = Math.round(100 * x.prot / a.objectif.prot);
@@ -1729,16 +1737,19 @@ function vueAvancement({ params }) {
   const totalJour = s ? s.jours[aujourdhui()].cuisine.length : 0;
   const court = iso => new Intl.DateTimeFormat("fr-FR", p === "semaine" ? { weekday: "short" } : { day: "numeric" }).format(new Date(iso + "T12:00"));
   const basses = Object.keys(E.vitamines.noms).filter(v => x.vitamines[v] / E.vitamines.besoins[v] < 0.8);
-  if (p !== "jour" && enSuivi()) apresRendu.push(() => {
+  if (p !== "jour" && enSuivi() && suivi) apresRendu.push(() => {
     // Une courbe : ce que tu as mangé chaque journée finie (depuis ta date de début), et ton objectif en pointillés.
     const jours = x.detail.filter(d => d.date < a.aujourdhui && (!E.reglages.date_debut || d.date >= E.reglages.date_debut));
     const manges = jours.filter(d => d.kcal != null).map(d => ({ x: d.date, y: d.kcal }));
+    // L'axe descend 500 kcal sous la journée la moins calorique (Taha, 20/11/2026).
     Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, titre: "Calories mangées chaque jour, comparées à l'objectif",
+      yMin: manges.length ? Math.max(0, Math.min(...manges.map(m => m.y)) - 500) : null,
       videTexte: "La courbe apparaît dès la première journée finie.",
       series: manges.length ? [{ nom: "Mangé", couleur: "var(--s1)", marques: true, points: manges },
         { nom: "Objectif", couleur: "var(--s2)", pointille: true, points: jours.map(d => ({ x: d.date, y: a.objectif.kcal })) }] : [] });
   });
   if (p !== "jour" && !enSuivi()) apresRendu.push(() => Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, aujourdhui: enSuivi() ? null : a.aujourdhui,
+    yMin: x.detail.some(d => d.kcal != null) ? Math.max(0, Math.min(...x.detail.filter(d => d.kcal != null).map(d => d.kcal)) - 500) : null,
     videTexte: "Tes calories apparaîtront ici dès le premier plat déclaré cuisiné.", titre: "Calories mangées chaque jour, comparées à l'objectif",
     series: x.detail.some(d => d.kcal != null) ? [
       { nom: "Mangé", couleur: "var(--s1)", marques: true, points: x.detail.filter(d => d.kcal != null).map(d => ({ x: d.date, y: d.kcal })) },
@@ -1748,7 +1759,10 @@ function vueAvancement({ params }) {
   <nav class="jours" aria-label="Période">
     ${Object.keys(NOMS).map(k => `<a href="#/avancement?p=${k}"${k === p ? ' aria-current="true"' : ""}>${NOMS[k]}</a>`).join("")}
   </nav>
-  ${!suivi ? `<div class="vide"><h2>${enSuivi() && p !== "jour" ? `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}` : `Rien de cuisiné ${p === "jour" ? "aujourd'hui" : p === "semaine" ? "cette semaine" : "ce mois-ci"}`}</h2>
+  ${moisTropTot ? `<div class="vide"><h2>Le mois arrive après ta première semaine</h2>
+    <p>Il s'affiche quand 7 journées de ce mois sont finies : encore ${7 - (x.jours_finis || 0)} jour${7 - (x.jours_finis || 0) > 1 ? "s" : ""}. En attendant, regarde « Cette semaine ».</p>
+    <a class="bouton second" href="#/avancement?p=semaine">Voir cette semaine</a></div>`
+  : !suivi ? `<div class="vide"><h2>${enSuivi() && p !== "jour" ? `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}` : `Rien de cuisiné ${p === "jour" ? "aujourd'hui" : p === "semaine" ? "cette semaine" : "ce mois-ci"}`}</h2>
     ${enSuivi() ? `<p>${p === "jour" ? "L'avancement se remplit avec les repas que tu notes." : "La semaine et le mois comptent les journées terminées : la moyenne commence demain."}</p>
     <a class="bouton second" href="#/semaine">Noter ce que je mange</a></div>` : `<p>L'avancement se remplit quand tu touches « C'est cuisiné » ou « Journée faite » dans l'onglet Cuisine.</p>
     <a class="bouton second" href="#/cuisine">Aller à la cuisine</a></div>
@@ -1777,8 +1791,28 @@ function vueAvancement({ params }) {
 function vueVitaminesMangees(params) {
   // Ce que tu as mangé (plats marqués mangés), comparé à tes besoins (Taha, 19/11/2026).
   const a = E.avancement, V = E.vitamines;
-  // Seulement aujourd'hui (Taha, 19/11/2026 : « retire semaine et mois, garde que le jour »).
-  const p = "jour", x = a.jour;
+  // Un jour à la fois (Taha, 19/11/2026 : « garde que le jour ») ; ?j=AAAA-MM-JJ, avec ‹ et › comme les jours de
+  // l'écran Jour, et la date qui ouvre un calendrier (Taha, 20/11/2026). Du début du suivi à aujourd'hui.
+  const decaler = (iso, n) => { const x = new Date(iso + "T12:00"); x.setDate(x.getDate() + n);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
+  const passes = Object.keys(a.par_jour || {}).sort();
+  const premier = [E.reglages.date_debut, passes[0], a.aujourdhui].filter(d => d && d <= a.aujourdhui).sort()[0];
+  const voulu = /^\d{4}-\d{2}-\d{2}$/.test(params.get("j") || "") ? params.get("j") : a.aujourdhui;
+  const date = voulu > a.aujourdhui ? a.aujourdhui : voulu < premier ? premier : voulu;
+  const dec = Math.round((new Date(a.aujourdhui + "T12:00") - new Date(date + "T12:00")) / 864e5);
+  const p = "jour", x = dec ? (a.par_jour || {})[date] || { jours_suivis: 0, vitamines: {} } : a.jour;
+  const bulle = dec === 0 ? "Aujourd'hui" : dec === 1 ? "Hier"
+    : new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
+  const lien = d => `#/vitamines${d === a.aujourdhui ? "" : `?j=${d}`}`;
+  const nav = `<nav class="jours jours-suivi jours-vitamines" aria-label="Jour">
+    ${date > premier ? `<a class="fleche" href="${lien(decaler(date, -1))}" aria-label="Jour d'avant">${icone("caret-left")}</a>` : ""}
+    <label class="date-choix" aria-current="true">${esc(bulle)}${icone("calendar-blank")}
+      <input type="date" id="vitDate" value="${date}" min="${premier}" max="${a.aujourdhui}" aria-label="Choisir un jour"></label>
+    ${dec > 0 ? `<a class="fleche" href="${lien(decaler(date, 1))}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}</nav>`;
+  apresRendu.push(() => { const champ = $("vitDate"); if (!champ) return;
+    champ.addEventListener("change", () => { if (champ.value) location.hash = lien(champ.value); });
+    // le calendrier du téléphone s'ouvre au toucher de la date (showPicker là où il existe)
+    champ.closest("label").addEventListener("click", ev => { if (ev.target !== champ && champ.showPicker) { ev.preventDefault(); try { champ.showPicker(); } catch (e) { champ.focus(); } } }); });
   const codes = Object.keys(V.noms);
   const pct = c => V.besoins[c] ? Math.round(100 * (x.vitamines[c] || 0) / V.besoins[c]) : 0;
   const couvertes = codes.filter(c => pct(c) >= 100).length, basses = codes.filter(c => pct(c) < 80);
@@ -1790,16 +1824,18 @@ function vueVitaminesMangees(params) {
           <small class="erreur" id="eCv${i}" style="display:block;color:var(--critique)"></small>
           <button class="bouton second" type="submit">Enregistrer</button></form></details>`).join("")}</section>` : ""}
   <div class="titre"><h1 tabindex="-1">Vitamines</h1>
-    <p>${p === "jour" ? "Le total de ce que tu as marqué mangé aujourd'hui (la journée n'est pas finie), comparé à tes besoins d'une journée."
+    <p>${p === "jour" ? (dec ? `Le total de ce que tu as marqué mangé ${dec === 1 ? "hier" : "ce jour-là"}, comparé à tes besoins d'une journée.`
+      : "Le total de ce que tu as marqué mangé aujourd'hui (la journée n'est pas finie), comparé à tes besoins d'une journée.")
       : (() => { const jours = x.detail.filter(d => d.kcal != null && d.date < a.aujourdhui).map(d => new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric" }).format(new Date(d.date + "T12:00")).replace(".", ""));
           return `La moyenne par jour de ${jours.length ? jours.join(", ") : "tes journées finies"}, comparée à tes besoins d'une journée. Aujourd'hui y entre demain.`; })()}</p></div>
-  ${!x.jours_suivis ? vide(p === "jour" ? "Rien de mangé pour l'instant" : `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}`,
+  ${nav}
+  ${!x.jours_suivis ? vide(p === "jour" ? (dec ? "Rien de marqué mangé ce jour-là" : "Rien de mangé pour l'instant") : `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}`,
       "Les vitamines se remplissent avec les plats que tu marques « mangé ».", "#/semaine", "Aller au jour")
     : `<dl class="kpis">
       <div><dt>Besoins couverts</dt><dd>${couvertes} sur ${codes.length}</dd><p>Vitamines à 100 % ou plus de ton besoin.</p></div>
       <div><dt>À surveiller</dt><dd>${basses.length ? basses.join(", ") : "Aucune"}</dd><p>Vitamines sous 80 % du besoin.</p></div>
     </dl>
-    <section class="bloc" aria-labelledby="tApportsM"><h2 id="tApportsM">${p === "jour" ? "Apport du jour" : "Apport moyen par jour"}</h2>
+    <section class="bloc" aria-labelledby="tApportsM"><h2 id="tApportsM">${p === "jour" ? (dec ? `Apport ${dec === 1 ? "d'hier" : "de ce jour"}` : "Apport du jour") : "Apport moyen par jour"}</h2>
       ${barresVitamines(x.vitamines, true)}
       ${p !== "jour" ? `<p class="petit discret" style="margin-top:8px">${x.jours_suivis} jour${x.jours_suivis > 1 ? "s" : ""} compté${x.jours_suivis > 1 ? "s" : ""}.</p>` : ""}</section>`}
   <section class="bloc" aria-labelledby="tLireV2"><details class="nu"><summary><h2 id="tLireV2">Comment lire ces chiffres</h2>${icone("caret-right")}</summary>

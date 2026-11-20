@@ -991,8 +991,8 @@ section.suivi-courbe{margin-top:22px}
   box-shadow:0 2px 10px rgba(0,0,0,.25)}
 .cp-fermer .ic{width:18px;height:18px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
 .cp-fermer::after{content:"";position:absolute;inset:-10px -10px -14px -14px}   /* plus facile à toucher, sans le grossir */
-.cp-equilibrer{margin:14px 0 0;text-align:center}
-.cp-equilibrer .bouton{min-height:40px;padding:0 14px;font-size:.84rem;color:var(--discret)}
+.cp-equilibrer{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 6px;margin:14px 0 0}
+.cp-equilibrer .bouton{min-height:40px;padding:0 12px;font-size:.84rem;color:var(--discret)}
 .cp-equilibrer .bouton .ic{width:16px;height:16px}
 .ch-recherche{margin:26px 0 0;padding-top:20px;border-top:1px solid var(--filet)}
 .badge-ia{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:1px 7px 1px 5px;border-radius:var(--r-pilule);
@@ -1008,3 +1008,9 @@ section.suivi-courbe{margin-top:22px}
 .nr-repondre .bouton{margin-top:8px;width:100%;min-height:44px}
 .nr-photo-plat{margin-top:14px}
 .claude-objectifs > summary > span{display:inline-flex;align-items:center}
+.jours-vitamines{margin:6px 0 14px}
+/* Vitamines : la date ouvre le calendrier du téléphone (Taha, 20/11/2026) */
+.jours .date-choix{position:relative;flex:none;display:flex;align-items:center;justify-content:center;gap:6px;min-width:54px;height:44px;padding:0 16px;
+  border-radius:var(--r-pilule);background:var(--surface-fort);color:var(--encre);font-weight:600;font-size:.9rem;box-shadow:inset 0 0 0 1.5px var(--accent);cursor:pointer}
+.jours .date-choix .ic{width:15px;height:15px;color:var(--discret)}
+.jours .date-choix input{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;font-size:16px;cursor:pointer;-webkit-appearance:none;appearance:none}
