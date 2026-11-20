@@ -1049,3 +1049,8 @@ section.suivi-courbe{margin-top:22px}
 .legende-jauges span{display:inline-flex;align-items:center;gap:5px}
 .legende-jauges i{width:12px;height:5px;border-radius:3px;background:var(--prevu)}
 .legende-jauges i.mange{background:var(--accent)}
+/* Les barres de progression cerclées d'un fin trait clair : on voit où elles finissent (Taha, 20/11/2026) */
+.jauge .piste,.kpis .piste,.barres .piste{box-shadow:inset 0 0 0 1px rgba(255,255,255,.22)}
+/* « Consommé » : vert, ou orange sous 80 % du besoin */
+.legende-prevu i.consomme{background:linear-gradient(90deg,var(--accent) 50%,var(--alerte) 50%)}
+.legende-avancement{display:flex;gap:12px;margin:12px 0 -4px;font-size:.68rem;color:var(--discret);opacity:.7}
