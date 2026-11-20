@@ -1751,15 +1751,19 @@ function vueAvancement({ params }) {
     // Une courbe : ce que tu as mangé chaque journée finie (depuis ta date de début), et ton objectif en pointillés.
     const jours = x.detail.filter(d => d.date < a.aujourdhui && (!E.reglages.date_debut || d.date >= E.reglages.date_debut));
     const manges = jours.filter(d => d.kcal != null).map(d => ({ x: d.date, y: d.kcal }));
-    // L'axe descend 500 kcal sous la journée la moins calorique (Taha, 20/11/2026).
+    // L'axe va de 500 kcal sous la journée la moins calorique à 200 kcal au-dessus de la plus calorique
+    // (Taha, 20/11/2026) ; l'objectif reste toujours visible.
+    const ys = manges.map(m => m.y), obj = a.objectif.kcal;
     Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, titre: "Calories mangées chaque jour, comparées à l'objectif",
-      yMin: manges.length ? Math.max(0, Math.min(...manges.map(m => m.y)) - 500) : null,
+      yMin: ys.length ? Math.max(0, Math.min(Math.min(...ys) - 500, obj - 100)) : null,
+      yMax: ys.length ? Math.max(Math.max(...ys) + 200, obj + 100) : null,
       videTexte: "La courbe apparaît dès la première journée finie.",
       series: manges.length ? [{ nom: "Mangé", couleur: "var(--s1)", marques: true, points: manges },
         { nom: "Objectif", couleur: "var(--s2)", pointille: true, points: jours.map(d => ({ x: d.date, y: a.objectif.kcal })) }] : [] });
   });
   if (p !== "jour" && !enSuivi()) apresRendu.push(() => Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, aujourdhui: enSuivi() ? null : a.aujourdhui,
-    yMin: x.detail.some(d => d.kcal != null) ? Math.max(0, Math.min(...x.detail.filter(d => d.kcal != null).map(d => d.kcal)) - 500) : null,
+    ...(() => { const ys = x.detail.filter(d => d.kcal != null).map(d => d.kcal), obj = a.objectif.kcal;
+      return ys.length ? { yMin: Math.max(0, Math.min(Math.min(...ys) - 500, obj - 100)), yMax: Math.max(Math.max(...ys) + 200, obj + 100) } : {}; })(),
     videTexte: "Tes calories apparaîtront ici dès le premier plat déclaré cuisiné.", titre: "Calories mangées chaque jour, comparées à l'objectif",
     series: x.detail.some(d => d.kcal != null) ? [
       { nom: "Mangé", couleur: "var(--s1)", marques: true, points: x.detail.filter(d => d.kcal != null).map(d => ({ x: d.date, y: d.kcal })) },
@@ -1816,13 +1820,38 @@ function vueVitaminesMangees(params) {
   const lien = d => `#/vitamines${d === a.aujourdhui ? "" : `?j=${d}`}`;
   const nav = `<nav class="jours jours-suivi jours-vitamines" aria-label="Jour">
     ${date > premier ? `<a class="fleche" href="${lien(decaler(date, -1))}" aria-label="Jour d'avant">${icone("caret-left")}</a>` : ""}
-    <label class="date-choix" aria-current="true">${esc(bulle)}${icone("calendar-blank")}
-      <input type="date" id="vitDate" value="${date}" min="${premier}" max="${a.aujourdhui}" aria-label="Choisir un jour"></label>
-    ${dec > 0 ? `<a class="fleche" href="${lien(decaler(date, 1))}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}</nav>`;
-  apresRendu.push(() => { const champ = $("vitDate"); if (!champ) return;
-    champ.addEventListener("change", () => { if (champ.value) location.hash = lien(champ.value); });
-    // le calendrier du téléphone s'ouvre au toucher de la date (showPicker là où il existe)
-    champ.closest("label").addEventListener("click", ev => { if (ev.target !== champ && champ.showPicker) { ev.preventDefault(); try { champ.showPicker(); } catch (e) { champ.focus(); } } }); });
+    <button type="button" class="date-choix" id="vitDate" aria-current="true" aria-expanded="false" aria-controls="vitCal">${esc(bulle)}${icone("calendar-blank")}</button>
+    ${dec > 0 ? `<a class="fleche" href="${lien(decaler(date, 1))}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}</nav>
+    <div class="cal" id="vitCal" hidden></div>`;
+  // Le calendrier : les jours après aujourd'hui (et avant le début du suivi) grisés, un point sous les jours mangés
+  // (Taha, 20/11/2026 ; celui de l'iPhone ne grise rien).
+  const avecDonnees = new Set([...passes, ...(a.jour.jours_suivis ? [a.aujourdhui] : [])]);
+  const MOIS = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+  const calendrier = mois => {                  // mois = "AAAA-MM"
+    const [an, m] = mois.split("-").map(Number), premierDuMois = new Date(an, m - 1, 1, 12);
+    const vide = (premierDuMois.getDay() + 6) % 7, nb = new Date(an, m, 0).getDate();
+    const iso = n => `${mois}-${String(n).padStart(2, "0")}`;
+    const avant = mois > premier.slice(0, 7), apres = mois < a.aujourdhui.slice(0, 7);
+    const cases = Array.from({ length: vide }, () => "<span></span>").concat(Array.from({ length: nb }, (_, k) => {
+      const d = iso(k + 1), hors = d > a.aujourdhui || d < premier;
+      return `<button type="button" data-jour="${d}"${hors ? " disabled" : ""} class="${[d === date ? "choisi" : "", d === a.aujourdhui ? "auj" : "", avecDonnees.has(d) ? "mange" : ""].filter(Boolean).join(" ")}">${k + 1}</button>`; }));
+    return `<div class="cal-tete"><button type="button" data-mois="-1"${avant ? "" : " disabled"} aria-label="Mois d'avant">${icone("caret-left")}</button>
+      <b>${esc(MOIS.format(premierDuMois).replace(/^./, c => c.toUpperCase()))}</b>
+      <button type="button" data-mois="1"${apres ? "" : " disabled"} aria-label="Mois suivant">${icone("caret-right")}</button></div>
+      <div class="cal-jours">${["L", "M", "M", "J", "V", "S", "D"].map(j => `<span>${j}</span>`).join("")}${cases.join("")}</div>`;
+  };
+  apresRendu.push(() => {
+    const bouton = $("vitDate"), cal = $("vitCal"); if (!bouton) return;
+    let mois = date.slice(0, 7);
+    const dessiner = () => { cal.innerHTML = calendrier(mois); };
+    bouton.addEventListener("click", () => { cal.hidden = !cal.hidden; bouton.setAttribute("aria-expanded", String(!cal.hidden)); if (!cal.hidden) dessiner(); });
+    cal.addEventListener("click", ev => {
+      const j = ev.target.closest("[data-jour]"), m = ev.target.closest("[data-mois]");
+      if (j && !j.disabled) location.hash = lien(j.dataset.jour);
+      else if (m && !m.disabled) { const x = new Date(mois + "-15T12:00"); x.setMonth(x.getMonth() + Number(m.dataset.mois));
+        mois = `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`; dessiner(); }
+    });
+  });
   const codes = Object.keys(V.noms);
   const pct = c => V.besoins[c] ? Math.round(100 * (x.vitamines[c] || 0) / V.besoins[c]) : 0;
   const couvertes = codes.filter(c => pct(c) >= 100).length, basses = codes.filter(c => pct(c) < 80);

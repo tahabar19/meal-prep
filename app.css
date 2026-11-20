@@ -1010,7 +1010,20 @@ section.suivi-courbe{margin-top:22px}
 .claude-objectifs > summary > span{display:inline-flex;align-items:center}
 .jours-vitamines{margin:6px 0 14px}
 /* Vitamines : la date ouvre le calendrier du téléphone (Taha, 20/11/2026) */
-.jours .date-choix{position:relative;flex:none;display:flex;align-items:center;justify-content:center;gap:6px;min-width:54px;height:44px;padding:0 16px;
+.jours .date-choix{position:relative;border:0;font-family:inherit;flex:none;display:flex;align-items:center;justify-content:center;gap:6px;min-width:54px;height:44px;padding:0 16px;
   border-radius:var(--r-pilule);background:var(--surface-fort);color:var(--encre);font-weight:600;font-size:.9rem;box-shadow:inset 0 0 0 1.5px var(--accent);cursor:pointer}
 .jours .date-choix .ic{width:15px;height:15px;color:var(--discret)}
-.jours .date-choix input{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;margin:0;font-size:16px;cursor:pointer;-webkit-appearance:none;appearance:none}
+/* le calendrier des vitamines : jours à venir grisés, un point sous les jours mangés (Taha, 20/11/2026) */
+.cal{max-width:340px;margin:-4px 0 16px;padding:12px;border-radius:16px;background:var(--surface)}
+.cal-tete{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cal-tete b{color:var(--encre);font-weight:600}
+.cal-tete button{display:grid;place-items:center;width:38px;height:38px;border:0;border-radius:50%;background:var(--surface-fort);color:var(--encre);cursor:pointer}
+.cal-tete button:disabled{opacity:.3;cursor:default}
+.cal-jours{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
+.cal-jours > span{font-size:.72rem;color:var(--discret);padding:2px 0 4px}
+.cal-jours button{position:relative;height:40px;border:0;border-radius:10px;background:none;color:var(--encre);font:inherit;font-size:.9rem;cursor:pointer;font-variant-numeric:tabular-nums}
+.cal-jours button:disabled{color:var(--discret);opacity:.35;cursor:default}
+.cal-jours button.mange::after{content:"";position:absolute;left:50%;bottom:5px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:var(--accent)}
+.cal-jours button.auj{box-shadow:inset 0 0 0 1px var(--filet)}
+.cal-jours button.choisi{background:var(--accent);color:var(--sur-accent);font-weight:600}
+.cal-jours button.choisi::after{background:var(--sur-accent)}
