@@ -44,7 +44,8 @@ const Graph = (() => {
   }
 
   // Courbes dans le temps. series = [{ nom, couleur, points: [{ x: 'AAAA-MM-JJ', y }], pointille, marques }]
-  function courbes(hote, { series, unite = "", hauteur = 220, aujourdhui = null, videTexte = "Pas encore de données.", titre = "", decimales = 0 }) {
+  // yMin : l'axe descend au moins jusqu'à cette valeur (Taha, 20/11/2026 : 500 kcal sous la journée la plus basse).
+  function courbes(hote, { series, unite = "", hauteur = 220, aujourdhui = null, videTexte = "Pas encore de données.", titre = "", decimales = 0, yMin = null }) {
     const tous = series.flatMap(s => s.points);
     if (!tous.length) return vide(hote, videTexte);
     const { svg, bulle, L, H } = cadre(hote, hauteur, titre);
@@ -55,16 +56,21 @@ const Graph = (() => {
     let y0 = Math.min(...ys), y1 = Math.max(...ys);
     const marge = (y1 - y0) * 0.15 || Math.max(1, y1 * 0.05);
     y0 -= marge; y1 += marge;
+    if (yMin != null) y0 = Math.min(y0, yMin);
     const X = d => m.g + ((+new Date(d) - x0) / (x1 - x0)) * (L - m.g - m.d);
     const Y = v => H - m.b - ((v - y0) / (y1 - y0)) * (H - m.h - m.b);
     for (const v of graduations(y0, y1)) {
       el("line", { x1: m.g, x2: L - m.d, y1: Y(v), y2: Y(v), class: "grille" }, svg);
       el("text", { x: m.g - 8, y: Y(v) + 4, class: "axe", "text-anchor": "end" }, svg).textContent = nb(v, decimales && y1 - y0 < 8 ? decimales : 0);
     }
-    for (let i = 0; i <= 4; i++) {
-      const d = x0 + ((x1 - x0) * i) / 4;
-      el("text", { x: X(d), y: H - 6, class: "axe", "text-anchor": i === 0 ? "start" : i === 4 ? "end" : "middle" }, svg).textContent = jourCourt(d);
-    }
+    // Les dates de l'axe : des jours entiers, chacun une seule fois (Taha, 20/11/2026 : « 16 nov » répété).
+    const JOUR = 864e5, nbJours = Math.round((x1 - x0) / JOUR), pasJours = Math.max(1, Math.ceil(nbJours / Math.max(2, Math.floor((L - m.g - m.d) / 64))));
+    const reperes = [];
+    for (let k = nbJours; k >= 0; k -= pasJours) reperes.unshift(x0 + k * JOUR);      // le dernier jour a toujours sa date
+    reperes.forEach((d, i) => {
+      const bord = X(d) < m.g + 24 ? "start" : X(d) > L - m.d - 24 ? "end" : "middle";
+      el("text", { x: X(d), y: H - 6, class: "axe", "text-anchor": bord }, svg).textContent = jourCourt(d);
+    });
     if (aujourdhui && +new Date(aujourdhui) >= x0 && +new Date(aujourdhui) <= x1) {
       el("line", { x1: X(aujourdhui), x2: X(aujourdhui), y1: m.h, y2: H - m.b, class: "repere" }, svg);
       el("text", { x: X(aujourdhui) + 6, y: m.h + 10, class: "axe" }, svg).textContent = "aujourd'hui";
