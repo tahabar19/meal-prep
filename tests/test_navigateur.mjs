@@ -114,10 +114,12 @@ try {
     vrai(await B.js(`(document.getElementById('enteteProfil') || {}).textContent || ''`).then(t => t.includes('Profil')), 'bouton Profil absent');
   });
 
-  await test('Changer de jour (Aujourd\'hui, Demain, suivants)', async () => {
+  await test('Changer de jour (Aujourd\'hui, Demain, rien après)', async () => {
     await aller('#/semaine?d=1');
     vrai(await attendre(`(document.querySelector('main h1') || {}).textContent === 'Demain'`, 10000) >= 0, 'Demain ne s\'affiche pas');
     vrai(await B.js(`document.querySelectorAll('.grille-plats a.repas').length`) > 0, 'aucun plat demain');
+    // le jour se calcule à J-1 (Taha, 20/11/2026) : rien après demain
+    vrai(!(await B.js(`!!document.querySelector('.jours-suivi a.fleche[aria-label="Jour suivant"]')`)), 'des jours après demain sont proposés');
     await aller('#/semaine');
     vrai(await attendre(`(document.querySelector('main h1') || {}).textContent === "Aujourd'hui"`, 10000) >= 0, 'retour à aujourd\'hui impossible');
   });

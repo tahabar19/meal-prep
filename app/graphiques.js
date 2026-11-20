@@ -60,7 +60,14 @@ const Graph = (() => {
     if (yMax != null) y1 = yMax;
     const X = d => m.g + ((+new Date(d) - x0) / (x1 - x0)) * (L - m.g - m.d);
     const Y = v => H - m.b - ((v - y0) / (y1 - y0)) * (H - m.h - m.b);
-    for (const v of graduations(y0, y1)) {
+    // Avec des bornes demandées, le bas et le haut de l'axe sont toujours écrits ; les graduations trop proches
+    // d'eux (moins de 18 px) s'effacent pour que les chiffres ne se chevauchent pas (Taha, 20/11/2026).
+    let lignesY = graduations(y0, y1);
+    if (yMin != null || yMax != null) {
+      const bornes = [yMin != null ? y0 : null, yMax != null ? y1 : null].filter(v => v != null).map(v => Math.round(v));
+      lignesY = [...bornes, ...lignesY.filter(v => bornes.every(b => Math.abs(Y(v) - Y(b)) >= 18))].sort((a, b) => a - b);
+    }
+    for (const v of lignesY) {
       el("line", { x1: m.g, x2: L - m.d, y1: Y(v), y2: Y(v), class: "grille" }, svg);
       el("text", { x: m.g - 8, y: Y(v) + 4, class: "axe", "text-anchor": "end" }, svg).textContent = nb(v, decimales && y1 - y0 < 8 ? decimales : 0);
     }
