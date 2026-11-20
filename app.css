@@ -1044,3 +1044,8 @@ section.suivi-courbe{margin-top:22px}
 .jauge .piste i,.kpis .piste i{position:relative}
 .jauge small.prevu{font-size:.72rem;color:var(--discret);opacity:.85}
 :root{--prevu:rgba(255,255,255,.3)}
+/* Jour : la légende des jauges, très discrète (Taha, 20/11/2026) */
+.m-resume .legende-jauges{grid-column:1/-1;display:flex;gap:12px;margin:2px 0 0;font-size:.68rem;color:var(--discret);opacity:.7}
+.legende-jauges span{display:inline-flex;align-items:center;gap:5px}
+.legende-jauges i{width:12px;height:5px;border-radius:3px;background:var(--prevu)}
+.legende-jauges i.mange{background:var(--accent)}

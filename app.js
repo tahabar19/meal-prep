@@ -1883,8 +1883,8 @@ function vueVitaminesMangees(params) {
       <div><dt>À surveiller</dt><dd>${basses.length ? basses.join(", ") : "Aucune"}</dd><p>Vitamines sous 80 % du besoin.</p></div>
     </dl>
     <section class="bloc" aria-labelledby="tApportsM"><h2 id="tApportsM">${p === "jour" ? (dec ? `Apport ${dec === 1 ? "d'hier" : "de ce jour"}` : "Apport du jour") : "Apport moyen par jour"}</h2>
-      ${Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? `<p class="petit discret legende-prevu"><span><i class="mange"></i>Mangé${dec ? "" : " jusqu'ici"}</span><span><i class="bas"></i>Mangé, sous 80 %</span><span><i></i>${dec ? "Si tout le prévu avait été mangé" : "Avec tout le prévu du jour"}</span></p>` : ""}
-      ${barresVitamines(x.vitamines, true, x.vitamines_prevues)}
+      ${!dec && Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? `<p class="petit discret legende-prevu"><span><i class="bas"></i>Sous 80 % du besoin</span><span><i></i>Avec tout le prévu du jour</span></p>` : ""}
+      ${barresVitamines(x.vitamines, true, dec ? null : x.vitamines_prevues)}
       ${p !== "jour" ? `<p class="petit discret" style="margin-top:8px">${x.jours_suivis} jour${x.jours_suivis > 1 ? "s" : ""} compté${x.jours_suivis > 1 ? "s" : ""}.</p>` : ""}</section>`}
   <section class="bloc" aria-labelledby="tLireV2"><details class="nu"><summary><h2 id="tLireV2">Comment lire ces chiffres</h2>${icone("caret-right")}</summary>
     <ul class="definitions" style="margin-top:10px">
@@ -2201,7 +2201,8 @@ function jaugesDuJour(j, o, mange = null) {
     return `<div class="jauge"><div><span>${nom}${prevu != null ? " mangées" : ""}</span><b class="chiffres">${nombre(Math.round(val))}<small>${but ? ` / ${nombre(but)}` : ""} ${unite}</small></b>
       ${prevu != null ? `<small class="prevu">${nombre(Math.round(prevu))} prévues</small>` : ""}</div>
       <span class="piste" role="img" aria-label="${pct} % de l'objectif${pctP != null ? `, ${pctP} % avec tout le prévu` : ""}">${pctP != null && pctP > pct ? `<b style="width:${pctP}%"></b>` : ""}<i style="width:${pct}%"></i></span></div>`; };
-  return `<div class="m-resume">${jauge("Calories", mange ? mange.kcal : j.kcal, mange ? j.kcal : null, o.kcal, "kcal")}${jauge("Protéines", mange ? mange.prot : j.prot, mange ? j.prot : null, o.prot, "g")}</div>`;
+  return `<div class="m-resume">${jauge("Calories", mange ? mange.kcal : j.kcal, mange ? j.kcal : null, o.kcal, "kcal")}${jauge("Protéines", mange ? mange.prot : j.prot, mange ? j.prot : null, o.prot, "g")}
+    ${mange ? `<p class="legende-jauges"><span><i class="mange"></i>mangé</span><span><i></i>prévu</span></p>` : ""}</div>`;
 }
 function ligneRepasNote(e) {
   return `<button type="button" class="ligne-note" data-action="ouvrirRepas" data-id="${e.id}">
@@ -2559,9 +2560,9 @@ function vueSuivi({ params }) {
     torse: { titre: "Tour de torse", unite: "cm", series: [
       { nom: "Au repos", couleur: "var(--s2)", marques: true, points: points("torse_avant") }, { nom: "Après la séance", couleur: "var(--s1)", marques: true, points: points("torse_apres") }] } };
   const S = SERIES[courbe];
-  // Poids : l'axe va de 30 kg sous la pesée la plus basse à 20 kg au-dessus de la plus haute, toujours écrits (Taha, 20/11/2026).
+  // Poids : l'axe va de 5 kg sous la pesée la plus basse à 5 kg au-dessus de la plus haute, toujours écrits (Taha, 20/11/2026).
   const kilos = courbe === "poids" ? S.series[0].points.map(p => p.y) : [];
-  const bornes = kilos.length ? { yMin: Math.max(0, Math.floor(Math.min(...kilos) - 30)), yMax: Math.ceil(Math.max(...kilos) + 20) } : {};
+  const bornes = kilos.length ? { yMin: Math.max(0, Math.floor(Math.min(...kilos) - 5)), yMax: Math.ceil(Math.max(...kilos) + 5) } : {};
   apresRendu.push(() => Graph.courbes($("gSuivi"), { unite: S.unite, decimales: 1, hauteur: PETIT.matches ? 190 : 230, titre: S.titre, ...bornes,
     videTexte: "La courbe apparaît dès la deuxième mesure.", series: S.series.every(s => s.points.length < 2) ? [] : S.series }));
   const champ = (cle, libelle, unite) => `<div class="champ" style="margin:0"><label for="su_${cle}">${libelle}</label>

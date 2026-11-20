@@ -92,7 +92,8 @@ const Graph = (() => {
     }
     const fil = el("line", { y1: m.h, y2: H - m.b, class: "reticule", visibility: "hidden" }, svg);
     const zone = el("rect", { x: m.g, y: m.h, width: L - m.g - m.d, height: H - m.h - m.b, fill: "transparent" }, svg);
-    zone.addEventListener("pointermove", e => {
+    // Souris : la valeur au survol ; téléphone : toucher un point montre sa valeur, qui reste affichée (Taha, 20/11/2026).
+    const voir = e => {
       const r = svg.getBoundingClientRect(), px = ((e.clientX - r.left) / r.width) * L;
       let proche = null;
       for (const p of tous) if (!proche || Math.abs(X(p.x) - px) < Math.abs(X(proche.x) - px)) proche = p;
@@ -104,8 +105,10 @@ const Graph = (() => {
         return p ? `<span><i style="background:${s.couleur}"></i>${s.nom}</span><b>${nb(p.y, decimales)} ${unite}</b>` : "";
       }).join("");
       montrer(bulle, hote, (X(proche.x) / L) * r.width, (Y(proche.y) / H) * r.height, `<em>${jourCourt(proche.x)}</em>${lignes}`);
-    });
-    zone.addEventListener("pointerleave", () => { fil.setAttribute("visibility", "hidden"); bulle.hidden = true; });
+    };
+    zone.addEventListener("pointermove", voir);
+    zone.addEventListener("pointerdown", voir);
+    zone.addEventListener("pointerleave", e => { if (e.pointerType === "mouse") { fil.setAttribute("visibility", "hidden"); bulle.hidden = true; } });
   }
 
   // Barres. donnees = [{ etiquette, valeur, detail, couleur, choisi }] ; cible = trait pointillé (objectif).
