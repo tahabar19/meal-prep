@@ -983,3 +983,28 @@ section.suivi-courbe{margin-top:22px}
 .ing-poubelle .ic{width:18px;height:18px}
 .ing-poubelle:hover{color:var(--critique)}
 .reglables > li.retire > label{opacity:.5;text-decoration:line-through}
+/* 20/11/2026 (Taha) : la carte d'un plat sous la barre de l'iPhone ; « Équilibrer pour la journée » discret ;
+   « Remplacer » : la recherche séparée du haut ; ce que fait l'IA se voit ; les macros du plat calculé */
+/* le ✕ reste en haut à droite de la photo, juste un peu plus bas ; un cercle de verre dépoli, visible sur toute photo */
+.cp-fermer{top:26px;right:12px;width:36px;height:36px;background:rgba(0,0,0,.28);color:#fff;
+  border:1px solid rgba(255,255,255,.35);-webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4);
+  box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.cp-fermer .ic{width:18px;height:18px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+.cp-fermer::after{content:"";position:absolute;inset:-10px -10px -14px -14px}   /* plus facile à toucher, sans le grossir */
+.cp-equilibrer{margin:14px 0 0;text-align:center}
+.cp-equilibrer .bouton{min-height:40px;padding:0 14px;font-size:.84rem;color:var(--discret)}
+.cp-equilibrer .bouton .ic{width:16px;height:16px}
+.ch-recherche{margin:26px 0 0;padding-top:20px;border-top:1px solid var(--filet)}
+.badge-ia{display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:1px 7px 1px 5px;border-radius:var(--r-pilule);
+  background:rgba(167,139,250,.16);color:#c4b5fd;font-size:.68rem;font-weight:600;letter-spacing:.02em;vertical-align:middle}
+.badge-ia .ic{width:11px;height:11px}
+.champ-ia textarea,.champ-ia input{border-color:rgba(167,139,250,.45)}
+.champ-ia textarea:focus,.champ-ia input:focus{border-color:#a78bfa;box-shadow:0 0 0 3px rgba(167,139,250,.2)}
+.bouton-ia .ic{color:inherit}
+.bouton.second.bouton-ia{color:#c4b5fd}
+.nr-titre-macros{margin:12px 0 6px}
+.nr-macros{margin:0 0 4px}
+.nr-repondre{margin-top:14px}
+.nr-repondre .bouton{margin-top:8px;width:100%;min-height:44px}
+.nr-photo-plat{margin-top:14px}
+.claude-objectifs > summary > span{display:inline-flex;align-items:center}
