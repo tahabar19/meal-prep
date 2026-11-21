@@ -85,6 +85,15 @@ function photo(r, largeur, classe = "", alt = "") {
     ${classe.includes("grande") ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"></div>`;
 }
 
+// Les ingrédients d'un plat : en quelques mots sous son nom, ou en liste avec les quantités d'une assiette
+// (Taha, 21/11/2026 : « quand je choisis un plat, voir les ingrédients »).
+const ingredientsCourts = r => (r && r.ing ? r.ing.filter(i => i.u !== "qs").map(i => i.n) : []).join(", ");
+function listeIngredients(r, t = 1) {
+  const ing = (r && r.ing) || [];
+  if (!ing.length) return `<p class="petit discret">Ingrédients inconnus.</p>`;
+  return `<ul class="lignes ing-assiette">${ing.map(i => `<li><span>${esc(i.n)}</span><span class="q chiffres">${i.u === "qs" ? "au goût" : quantite(Math.round(i.q * t * 10) / 10, i.u)}</span></li>`).join("")}</ul>`;
+}
+
 /* ------------------------------------------------------------ messages, confirmation */
 function dire(texte) {
   const t = $("toast");
@@ -672,7 +681,8 @@ function demanderChangement(k, n, moment, onglet = "proches") {
       ${photo(r, 160, "carre")}
       <span class="texte"><b>${esc(r.nom)}</b>
         <span class="chiffres">${nombre(r.kcal * f)} kcal, ${nombre(r.prot * f)} g de protéines, ${euros(r.cout * f)}</span>
-        <span class="ecarts">${ecartLisible((r.prot - actuel.prot) * f, "g", true)}${ecartLisible((r.kcal - actuel.kcal) * f, "kcal", null)}</span></span>
+        <span class="ecarts">${ecartLisible((r.prot - actuel.prot) * f, "g", true)}${ecartLisible((r.kcal - actuel.kcal) * f, "kcal", null)}</span>
+        <small class="discret ing-courts">${esc(ingredientsCourts(r))}</small></span>
       ${icone("caret-right")}</button></li>`;
   // Le repas dont on parle : un plat ajouté au midi (jour.au_repas) est « le déjeuner », pas « la collation ».
   const place = moment.startsWith("col") && !nouvelle ? ((j.au_repas || {})[actuelId] || "col") : moment;
@@ -773,19 +783,19 @@ async function apercuChangement(k, operation, titre, retour) {
       : operation.type === "objectif" && !a.combler ? `<p class="dujour"><strong>Déjà dans l'objectif.</strong> Rien à régler.</p>`
       : operation.type === "objectif" && !a.reglables ? `<p class="petit discret">Rien à régler en grammes ce jour-là : il ne reste que tes plats à toi, tes repas fixes ou des repas déjà cuisinés.</p>`
       : operation.type === "reequilibrer" && a.atteint ? `<p class="dujour" style="margin-top:0"><strong>Déjà dans l'objectif.</strong> Les grammes de ce plat restent comme ils sont.</p>` : "";
-  d.innerHTML = `<form class="feuille" method="dialog" novalidate>
-    <h2 id="dialogueTitre">${esc(titre)}</h2>
-    ${operation.type === "reequilibrer" ? `<p class="petit discret" style="margin:-4px 0 14px">« ${esc(recette(operation.plat).nom)} », ${esc(a.jour.toLowerCase())}. Jarvis règle les grammes de ce plat, et seulement les siens, pour viser ${nombre(a.objectif.kcal)} kcal et ${a.objectif.prot} g de protéines.</p>` : ""}
-    ${operation.type === "reequilibrer" ? GRAMMES : ""}
-    ${operation.type === "reequilibrer" && !a.atteint ? `<div class="alerte" role="status" style="margin:0 0 14px">${icone("warning-circle")}<span><strong>Ce plat ne suffit pas pour tenir l'objectif.</strong>
-      Même en réglant ses grammes (de la moitié au double), ${a.jour.toLowerCase()} ${a.reglages && a.reglages.length ? "arrive" : "reste"} à ${nombre(a.jour_kcal)} kcal et ${nombre(a.jour_prot)} g de protéines, pour ${nombre(a.objectif.kcal)} kcal et ${a.objectif.prot} g visés.
-      ${a.remplacer ? "Ces plats-là tiennent mieux l'objectif, grammes réglés :" : "Aucun autre plat de ce repas ne ferait mieux."}</span></div>` : ""}
-    ${operation.type === "reequilibrer" && !a.atteint ? `
-      ${a.remplacer ? `<ul class="candidats">${a.remplacer.plats.map(x => `<li><button type="button" class="candidat" data-remplacer="${x.id}">${photo(recette(x.id), 160, "carre")}
-        <span class="texte"><b>${esc(x.nom)}</b><span class="chiffres">Journée : ${nombre(x.kcal_jour)} kcal, ${nombre(x.prot_jour)} g de protéines${x.atteint ? " · dans l'objectif" : ""}</span>
-        ${x.avec && x.avec.length ? `<small class="discret">Avec ${esc(x.avec.join(", "))}</small>` : ""}</span>${icone("caret-right")}</button></li>`).join("")}</ul>` : ""}` : ""}
-    ${a.ecarts.length ? `<h3>${operation.type === "reequilibrer" ? "Ta journée" : "Ce que ça change dans ta journée"}</h3>
-      ${a.ecarts.map(e => { const mesure = (nom, avant, apres, unite, objectif, bonSiPlus) => {
+  // Choisir un plat : ses ingrédients et sa quantité, réglables avant de valider ; les chiffres de la journée
+  // suivent tout de suite (Taha, 21/11/2026). Pas pour un plat dont Jarvis règle lui-même les grammes.
+  const choisi = ["changer", "ajouter"].includes(operation.type) && !operation.regler_plat && recette(operation.plat)
+    && (recette(operation.plat).ing || []).length ? recette(operation.plat) : null;
+  const tChoisi = choisi ? tailleDe(planDe(k).jours[operation.jour], choisi.id) : 1;
+  let fois = 1;
+  const ecartsHTML = () => {
+    const plusK = choisi ? (fois - 1) * choisi.kcal * tChoisi : 0, plusP = choisi ? (fois - 1) * choisi.prot * tChoisi : 0;
+    const base = a.ecarts.length ? a.ecarts : plusK || plusP ? [{ jour: a.jour, kcal: 0, prot: 0, kcal_total: a.jour_kcal, prot_total: a.jour_prot }] : [];
+    const liste = base.map(e => e.jour !== a.jour ? e : { ...e, kcal: Math.round(e.kcal + plusK), prot: Math.round(e.prot + plusP),
+      kcal_total: Math.round(e.kcal_total + plusK), prot_total: Math.round(e.prot_total + plusP) });
+    return liste.length ? `<h3>${operation.type === "reequilibrer" ? "Ta journée" : "Ce que ça change dans ta journée"}</h3>
+      ${liste.map(e => { const mesure = (nom, avant, apres, unite, objectif, bonSiPlus) => {
           const delta = apres - avant, pct = Math.min(100, Math.round(100 * apres / objectif));
           return `<div class="mesure"><span class="nom">${nom}</span>
             <span class="valeurs chiffres">${nombre(avant)} <span aria-hidden="true">→</span><span class="sr">devient</span> <b>${nombre(apres)} ${unite}</b></span>
@@ -796,7 +806,25 @@ async function apercuChangement(k, operation, titre, retour) {
           ${e.jour !== a.jour ? `<p class="petit discret" style="margin:-4px 0 12px">Le déjeuner de ${e.jour.toLowerCase()} est la seconde part du dîner de ${a.jour.toLowerCase()} : il change donc aussi.</p>` : ""}
           ${mesure("Protéines", e.prot_total - e.prot, e.prot_total, "g", a.objectif.prot, true)}
           ${mesure("Calories", e.kcal_total - e.kcal, e.kcal_total, "kcal", a.objectif.kcal, null)}</div>`; }).join("")}`
-      : `<p>Calories et protéines ne changent pas.</p>`}
+      : `<p>Calories et protéines ne changent pas.</p>`;
+  };
+  d.innerHTML = `<form class="feuille" method="dialog" novalidate>
+    <h2 id="dialogueTitre">${esc(titre)}</h2>
+    ${choisi ? `<div class="ap-choisi"><div class="cp-quantite"><span>Quantité</span>
+        <button type="button" data-ap-fois="-0.5" aria-label="Moins" disabled>−</button><b class="chiffres" id="apFois">×1</b>
+        <button type="button" data-ap-fois="0.5" aria-label="Plus">+</button></div>
+      <p class="chiffres ap-macros" id="apMacros">${nombre(Math.round(choisi.kcal * tChoisi))} kcal, ${nombre(Math.round(choisi.prot * tChoisi))} g de protéines</p>
+      <h3>Ingrédients</h3><div id="apIng">${listeIngredients(choisi, tChoisi)}</div></div>` : ""}
+    ${operation.type === "reequilibrer" ? `<p class="petit discret" style="margin:-4px 0 14px">« ${esc(recette(operation.plat).nom)} », ${esc(a.jour.toLowerCase())}. Jarvis règle les grammes de ce plat, et seulement les siens, pour viser ${nombre(a.objectif.kcal)} kcal et ${a.objectif.prot} g de protéines.</p>` : ""}
+    ${operation.type === "reequilibrer" ? GRAMMES : ""}
+    ${operation.type === "reequilibrer" && !a.atteint ? `<div class="alerte" role="status" style="margin:0 0 14px">${icone("warning-circle")}<span><strong>Ce plat ne suffit pas pour tenir l'objectif.</strong>
+      Même en réglant ses grammes (de la moitié au double), ${a.jour.toLowerCase()} ${a.reglages && a.reglages.length ? "arrive" : "reste"} à ${nombre(a.jour_kcal)} kcal et ${nombre(a.jour_prot)} g de protéines, pour ${nombre(a.objectif.kcal)} kcal et ${a.objectif.prot} g visés.
+      ${a.remplacer ? "Ces plats-là tiennent mieux l'objectif, grammes réglés :" : "Aucun autre plat de ce repas ne ferait mieux."}</span></div>` : ""}
+    ${operation.type === "reequilibrer" && !a.atteint ? `
+      ${a.remplacer ? `<ul class="candidats">${a.remplacer.plats.map(x => `<li><button type="button" class="candidat" data-remplacer="${x.id}">${photo(recette(x.id), 160, "carre")}
+        <span class="texte"><b>${esc(x.nom)}</b><span class="chiffres">Journée : ${nombre(x.kcal_jour)} kcal, ${nombre(x.prot_jour)} g de protéines${x.atteint ? " · dans l'objectif" : ""}</span>
+        ${x.avec && x.avec.length ? `<small class="discret">Avec ${esc(x.avec.join(", "))}</small>` : ""}</span>${icone("caret-right")}</button></li>`).join("")}</ul>` : ""}` : ""}
+    <div id="apEcarts">${ecartsHTML()}</div>
     ${operation.type === "reequilibrer" ? "" : GRAMMES}
     ${a.combler && a.combler.plats.length ? `<h3>Il manque encore ${nombre(a.combler.kcal)} kcal${a.combler.prot > 5 ? ` et ${nombre(a.combler.prot)} g de protéines` : ""}</h3>
       <p class="petit discret" style="margin:-4px 0 6px">${a.combler.moment.startsWith("col") ? "Ajoute une collation" : `Mets un ${nomMoment(a.combler.moment)}`} : ces plats comblent le mieux ce qui manque. Jarvis règle ensuite les grammes du plat choisi.</p>
@@ -817,6 +845,15 @@ async function apercuChangement(k, operation, titre, retour) {
     <div class="actions pied"><button class="bouton second" type="button" value="non">${retour ? "Retour" : "Annuler"}</button>
       <button class="bouton" type="submit" value="oui">${operation.type === "reequilibrer" ? "Appliquer" : "Confirmer"}</button></div></form>`;
   d.querySelector("[value=non]").addEventListener("click", () => retour ? retour() : d.close("non"));
+  d.querySelectorAll("[data-ap-fois]").forEach(b => b.addEventListener("click", () => {
+    fois = Math.min(5, Math.max(0.5, fois + Number(b.dataset.apFois)));
+    $("apFois").textContent = `×${virgule(fois)}`;
+    d.querySelector('[data-ap-fois="-0.5"]').disabled = fois <= 0.5;
+    d.querySelector('[data-ap-fois="0.5"]').disabled = fois >= 5;
+    $("apMacros").textContent = `${nombre(Math.round(choisi.kcal * tChoisi * fois))} kcal, ${nombre(Math.round(choisi.prot * tChoisi * fois))} g de protéines`;
+    $("apIng").innerHTML = listeIngredients(choisi, tChoisi * fois);
+    $("apEcarts").innerHTML = ecartsHTML();
+  }));
   d.querySelectorAll("[data-remplacer]").forEach(b => b.addEventListener("click", () => {
     const plat = b.dataset.remplacer;
     const op = { type: "changer", jour: operation.jour, moment: a.remplacer.moment, plat, regler_plat: true,
@@ -836,7 +873,18 @@ async function apercuChangement(k, operation, titre, retour) {
     if (a.confirmation_requise && !$("auCourant").checked) { $("eCourant").textContent = "Coche la case pour confirmer que tu as vu les écarts."; return $("auCourant").focus(); }
     const supplements = [...d.querySelectorAll("[name=supplement]:checked")].map(i => i.value);
     d.close("oui");
-    agir("/api/semaine/modifier", { operation, semaine: k, confirme: true, supplements }, "Changement enregistré.");
+    const fini = agir("/api/semaine/modifier", { operation, semaine: k, confirme: true, supplements }, choisi && fois !== 1 ? "" : "Changement enregistré.");
+    if (choisi && fois !== 1) fini.then(ok => {
+      // Puis la quantité choisie, sur le plat tel qu'il est maintenant au menu (une copie « (2) » si le plat y était déjà).
+      const jn = ok && planDe(k) && planDe(k).jours[operation.jour], m = operation.moment || "";
+      if (!jn) return;
+      const id = operation.type === "changer" && ["pdj", "dej", "din"].includes(m) ? jn[m]
+        : operation.type === "changer" && m.startsWith("col") ? jn.collations[Number(m.slice(3))] : jn.collations[jn.collations.length - 1];
+      const r = recette(id) || choisi, quantites = {};
+      for (const i of r.ing || []) if (i.u !== "qs") quantites[i.n] = Math.round(i.q * fois * 100) / 100;
+      agir("/api/semaine/modifier", { operation: { type: "ajuster", jour: operation.jour, plat: id, quantites }, semaine: k, confirme: true },
+        `Changement enregistré, quantité ×${virgule(fois)}.`);
+    });
   });
   if (!d.open) d.showModal();
   d.scrollTop = 0;
@@ -1232,11 +1280,12 @@ const ROLE_VITAMINE = { A: "Vue, peau, défenses", B1: "Tire l'énergie des gluc
 // prevues : les apports si toute la journée prévue est mangée, en barre grisée derrière (Taha, 20/11/2026).
 function barresVitamines(apports, parJour, prevues = null) {
   const V = E.vitamines;
-  return `<ul class="barres">${Object.keys(V.noms).map(c => {
+  // « 12 / 80 mg » : ce que tu as / ce qu'il te faut par jour (Taha, 21/11/2026 : « pas clair combien je dois avoir par jour »).
+  return `<p class="petit discret barres-legende">${parJour ? "Ce que tu as eu" : "Ce qu'apporte une portion"} / ce qu'il te faut chaque jour.</p><ul class="barres">${Object.keys(V.noms).map(c => {
     const q = apports[c] || 0, pct = Math.round(100 * q / V.besoins[c]);
     const pctP = prevues ? Math.round(100 * Math.max(q, prevues[c] || 0) / V.besoins[c]) : null, plus = pctP != null && pctP > pct;
     return `<li class="${parJour && pct < 80 ? "bas" : ""}"><span>${esc(V.noms[c].nom)}${ROLE_VITAMINE[c] ? `<small class="role">${ROLE_VITAMINE[c]}</small>` : ""}</span>
-      <span class="v">${dose(q)} ${V.noms[c].unite}, ${nombre(pct)} %${plus ? `<small class="prevu"> → ${nombre(pctP)} %</small>` : ""}</span>
+      <span class="v"><b class="chiffres">${dose(q)}</b> / ${dose(V.besoins[c])} ${V.noms[c].unite} · ${nombre(pct)} %${plus ? `<small class="prevu"> → ${nombre(pctP)} %</small>` : ""}</span>
       <span class="piste" role="img" aria-label="${nombre(pct)} % du besoin d'un jour${plus ? `, ${nombre(pctP)} % si la journée prévue est mangée` : ""}">${plus ? `<b style="width:${Math.min(100, pctP)}%"></b>` : ""}<i style="width:${Math.min(100, pct)}%"></i></span></li>`; }).join("")}</ul>`;
 }
 function quandMange(s, id) {
@@ -1254,7 +1303,7 @@ function quandMange(s, id) {
 }
 function ficheRapide(id, ctx, depuis, vu = null) {
   // Toucher un plat (téléphone) : sa carte « ressort » du plat et grandit au milieu de l'écran, puis y retourne
-  // quand on la ferme (Taha, 19/11/2026). Pas d'ingrédients : la casserole les donne.
+  // quand on la ferme (Taha, 19/11/2026). Ses ingrédients, avec les quantités de CETTE assiette (Taha, 21/11/2026).
   const r0 = recette(id);
   if (!r0) return;
   const s = ctx ? planDe(ctx.k) : null, j = s ? s.jours[ctx.n] : null;
@@ -1270,6 +1319,11 @@ function ficheRapide(id, ctx, depuis, vu = null) {
   const mange = !!(ctx && courante && fait(s, ctx.n, id));
   const libre = ctx && (enSuivi() || !mange) && !(ctx.moment === "dej" && j.dej_reste);
   const reg = ctx && reglable(s, ctx.k, ctx.n, id, ctx.moment);
+  // Les ingrédients de l'assiette : le plat ce jour-là (quantités réglées comprises) × la taille de l'assiette.
+  // Depuis l'historique : la taille se déduit des calories notées ce jour-là.
+  const iciVu = vu && vu.date ? semainePourDate(vu.date) : null;
+  const rIng = ctx ? r : iciVu ? platDuJour(iciVu.s, iciVu.n, id, vu.moment || "") : r0;
+  const tIng = ctx ? t : vu && rIng.kcal ? vu.kcal / rIng.kcal : 1;
   fermerCarte(true);
   const fond = document.createElement("div");
   fond.className = "carte-fond";
@@ -1282,20 +1336,24 @@ function ficheRapide(id, ctx, depuis, vu = null) {
       <h2 id="cpTitre">${esc(r0.nom)}</h2>
       ${labels.length ? `<p class="cp-etiquettes">${labels.map(x => `<span>${esc(x)}</span>`).join("")}</p>` : ""}
       <div class="cp-chiffres">
-        <div><b>${nombre(val("kcal"))}</b><span>kcal</span></div><div><b>${nombre(val("prot"))} g</b><span>prot.</span></div>
-        <div><b>${nombre(val("gluc"))} g</b><span>gluc.</span></div><div><b>${nombre(val("lip"))} g</b><span>lip.</span></div>
+        <div><b data-cp-v="${val("kcal")}" data-u="">${nombre(val("kcal"))}</b><span>kcal</span></div><div><b data-cp-v="${val("prot")}" data-u=" g">${nombre(val("prot"))} g</b><span>prot.</span></div>
+        <div><b data-cp-v="${val("gluc")}" data-u=" g">${nombre(val("gluc"))} g</b><span>gluc.</span></div><div><b data-cp-v="${val("lip")}" data-u=" g">${nombre(val("lip"))} g</b><span>lip.</span></div>
       </div>
       ${ctx && enSuivi() && !(ctx.moment === "dej" && j.dej_reste) ? (() => {
         // Combien de fois l'assiette prévue (2 bananes, une demi-part…) : toutes les quantités du plat ce jour-là.
         // lu sur un ingrédient encore dans l'assiette : un ingrédient retiré (poubelle, 0) ne dit rien de la quantité
         const aj = (j.ajustes || {})[id] || {}, base = (r0.ing || []).find(x => x.u !== "qs" && x.q > 0 && aj[x.n] !== 0), ajuste = base && aj[base.n];
         const fois = base && typeof ajuste === "number" ? Math.max(0.5, Math.round(ajuste / base.q * 2) / 2) : 1;
-        return `<div class="cp-quantite"><span>Quantité</span>
-          <button type="button" data-action="quantite" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}" data-fois="${fois - 0.5}" data-avant="${fois}" ${fois <= 0.5 ? "disabled" : ""} aria-label="Moins">−</button>
+        // −/+ : les chiffres et les ingrédients changent tout de suite, la carte reste ouverte ; l'enregistrement
+        // part une fois les touches finies (Taha, 21/11/2026).
+        return `<div class="cp-quantite" data-fois="${fois}"><span>Quantité</span>
+          <button type="button" data-cp-fois="-0.5" ${fois <= 0.5 ? "disabled" : ""} aria-label="Moins">−</button>
           <b class="chiffres">×${virgule(fois)}</b>
-          <button type="button" data-action="quantite" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}" data-fois="${fois + 0.5}" data-avant="${fois}" ${fois >= 5 ? "disabled" : ""} aria-label="Plus">+</button></div>`; })() : ""}
+          <button type="button" data-cp-fois="0.5" ${fois >= 5 ? "disabled" : ""} aria-label="Plus">+</button></div>`; })() : ""}
       <p class="petit discret cp-info">${[vu ? "Ce que tu as mangé ce jour-là" : ctx ? (t !== 1 ? `Assiette à ${nombre(Math.round(t * 100))} % de la recette` : "Recette telle quelle") : "Une portion",
         r0.temps ? `${r0.temps} min` : "", r.ajusteeCeJour ? "ajustée ce jour" : ""].filter(Boolean).join(" · ")}</p>
+      ${(rIng.ing || []).length ? `<details class="cp-ingredients"${vu ? " open" : ""}><summary>Ingrédients${icone("caret-right")}</summary>
+        <div class="cp-ing-liste">${listeIngredients(rIng, tIng)}</div></details>` : ""}
       ${ctx && enSuivi() ? `<div class="cp-mange">${courante && ctx.n <= rangDuJour(s)
           ? `<button class="bouton${mange ? " second" : ""}" data-action="manger" data-jour="${ctx.n}" data-plat="${id}" data-annuler="${mange ? 1 : 0}">${icone("check")}${mange ? "Pas encore mangé" : "J'ai mangé"}</button>` : ""}
         <a class="bouton sobre" href="${courante ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Voir la recette</a></div>`
@@ -1333,6 +1391,35 @@ function ficheRapide(id, ctx, depuis, vu = null) {
     }));
   } else requestAnimationFrame(() => fond.classList.add("ouvert"));
   fermerCarte.etat = { fond, carte, rentrer: depart && !calme ? versDepart : null, avant: document.activeElement };
+  const qte = carte.querySelector(".cp-quantite");
+  if (qte) {
+    const fois0 = Number(qte.dataset.fois), aj0 = { ...((j.ajustes || {})[id] || {}) };
+    let fois = fois0, minuteur = null, enregistre = fois0;
+    const sauver = () => {
+      minuteur = null;
+      if (fois === enregistre) return;
+      enregistre = fois;
+      // Toutes les quantités de l'assiette ×(fois / fois de départ), ingrédients ajoutés par toi compris.
+      const f = fois / fois0, quantites = {}, x = q => Math.round(q * f * 100) / 100;
+      for (const i of r0.ing || []) if (i.u !== "qs") quantites[i.n] = x(typeof aj0[i.n] === "number" ? aj0[i.n] : i.q);
+      for (const [nom, q] of Object.entries(aj0)) if (!(nom in quantites))
+        quantites[nom] = typeof q === "number" ? x(q) : q && typeof q === "object" && typeof q.q === "number" ? { ...q, q: x(q.q) } : q;
+      agir("/api/semaine/modifier", { operation: { type: "ajuster", jour: ctx.n, plat: id, quantites }, semaine: ctx.k, confirme: true },
+        `« ${r0.nom} » : ×${virgule(fois)}.`);
+    };
+    qte.querySelectorAll("[data-cp-fois]").forEach(b => b.addEventListener("click", () => {
+      fois = Math.min(5, Math.max(0.5, fois + Number(b.dataset.cpFois)));
+      qte.querySelector("b").textContent = `×${virgule(fois)}`;
+      qte.querySelector('[data-cp-fois="-0.5"]').disabled = fois <= 0.5;
+      qte.querySelector('[data-cp-fois="0.5"]').disabled = fois >= 5;
+      carte.querySelectorAll("[data-cp-v]").forEach(v => { v.textContent = `${nombre(Math.round(Number(v.dataset.cpV) * fois / fois0))}${v.dataset.u}`; });
+      const l = carte.querySelector(".cp-ing-liste");
+      if (l) l.innerHTML = listeIngredients(rIng, tIng * fois / fois0);
+      clearTimeout(minuteur);
+      minuteur = setTimeout(sauver, 800);
+    }));
+    fermerCarte.etat.avantFermeture = () => { if (minuteur) { clearTimeout(minuteur); sauver(); } };
+  }
   fond.addEventListener("click", ev => { if (ev.target === fond) fermerCarte(); });
   carte.querySelector(".cp-fermer").addEventListener("click", () => fermerCarte());
   carte.querySelectorAll("[data-action]").forEach(x => x.addEventListener("click", () => fermerCarte(true)));   // l'action ouvre sa propre feuille
@@ -1342,6 +1429,7 @@ function fermerCarte(tout_de_suite = false) {
   const e = fermerCarte.etat;
   if (!e) return;
   fermerCarte.etat = null;
+  if (e.avantFermeture) e.avantFermeture();
   const fin = () => { e.fond.remove(); if (e.avant && e.avant.focus) e.avant.focus({ preventScroll: true }); };
   if (tout_de_suite || !e.rentrer) { if (tout_de_suite) return fin(); e.fond.classList.remove("ouvert"); return setTimeout(fin, 200); }
   e.fond.classList.remove("ouvert");
@@ -2219,8 +2307,9 @@ function vueJourSuivi(params) {
   barre("");
   // ?d=N : N jours après aujourd'hui, jusqu'au dernier jour d'une semaine composée (« › » à côté de « Demain »).
   // Le jour se calcule à J-1 (Taha, 20/11/2026) : plus de menus visibles au-delà de demain.
-  const J = E.journal_repas, dmax = 1;
-  const dec = params.get("d") === "demain" ? 1 : Math.min(dmax, Math.max(0, parseInt(params.get("d"), 10) || 0));
+  // ?d=-1, -2… : les jours d'avant, jusqu'à une semaine, pour changer un repas ou sa quantité (Taha, 21/11/2026).
+  const J = E.journal_repas, dmax = 1, dmin = -7;
+  const dec = params.get("d") === "demain" ? 1 : Math.min(dmax, Math.max(dmin, parseInt(params.get("d"), 10) || 0));
   const demain = dec === 1, date = dec ? isoPlus(dec) : J.aujourdhui;
   const nomJour = new Intl.DateTimeFormat("fr-FR", { weekday: "long" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
   const bulle = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
@@ -2249,14 +2338,15 @@ function vueJourSuivi(params) {
     apercuChangement(idees.semaine, { ...x.operation, regler_plat: true }, `Ajouter « ${x.nom} » ?`);
   })));
   return `<div class="rubrique-jour"><div class="m-tete">
-      <div><h1 tabindex="-1">${dec === 0 ? "Aujourd'hui" : demain ? "Demain" : esc(nomJour)}</h1><p class="petit discret">${esc(dateLongueCourte(date))}</p></div>
+      <div><h1 tabindex="-1">${dec === 0 ? "Aujourd'hui" : demain ? "Demain" : dec === -1 ? "Hier" : esc(nomJour)}</h1><p class="petit discret">${esc(dateLongueCourte(date))}</p></div>
       <div class="ligne-boutons"><a class="bouton sobre rond" href="#/historique" aria-label="Historique des repas">${icone("notebook")}</a>
 </div>
     </div>
-    <nav class="jours jours-suivi" aria-label="Jour"><a href="#/semaine"${dec ? "" : ' aria-current="true"'}>Aujourd'hui</a>
-      ${dec >= 2 ? `<a class="fleche" href="#/semaine?d=${dec - 1}" aria-label="Jour d'avant">${icone("caret-left")}</a><a href="#/semaine?d=${dec}" aria-current="true">${esc(bulle)}</a>`
-        : `<a href="#/semaine?d=1"${demain ? ' aria-current="true"' : ""}>Demain</a>`}
-      ${dec >= 1 && dec < dmax ? `<a class="fleche" href="#/semaine?d=${Math.max(2, dec + 1)}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}</nav>
+    <nav class="jours jours-suivi" aria-label="Jour">${dec > dmin ? `<a class="fleche" href="#/semaine?d=${Math.min(dec, 0) - 1}" aria-label="Jour d'avant">${icone("caret-left")}</a>` : ""}
+      ${dec < 0 ? `<a href="#/semaine?d=${dec}" aria-current="true">${dec === -1 ? "Hier" : esc(bulle)}</a>` : ""}
+      ${dec < -1 ? `<a class="fleche" href="#/semaine?d=${dec + 1}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}
+      <a href="#/semaine"${dec ? "" : ' aria-current="true"'}>Aujourd'hui</a>
+      <a href="#/semaine?d=1"${demain ? ' aria-current="true"' : ""}>Demain</a></nav>
     ${dec === 1 ? `<p class="petit discret" style="margin:-2px 0 12px">Provisoire : les quantités de demain se règlent demain matin, d'après ce que tu auras vraiment mangé aujourd'hui.</p>` : ""}
     ${jaugesDuJour(j, o, mangeJour)}
     <p class="reste-jour">${reste}</p>
@@ -2267,7 +2357,9 @@ function vueJourSuivi(params) {
       return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <small class="chiffres">${virgule(E.eau.litres)} L</small></span>
         <button type="button" class="eau-check" id="eauCheck" data-date="${date}" aria-pressed="${fait}" aria-label="${virgule(E.eau.litres)} L d'eau bus aujourd'hui">${icone("check")}</button></div>`; })() : ""}
     ${o.gluc || o.lip ? `<p class="petit discret chiffres" style="margin:-4px 0 12px">Glucides ${nombre(Math.round(j.gluc || 0))}${o.gluc ? ` / ${nombre(o.gluc)}` : ""} g · Lipides ${nombre(Math.round(j.lip || 0))}${o.lip ? ` / ${nombre(o.lip)}` : ""} g</p>` : ""}
-    ${ici ? `<section class="m-repas grille-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true)}</section>`
+    ${ici && (!m || ici.k >= m.rang) ? `<section class="m-repas grille-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true)}</section>`
+      : dec < 0 && (j.repas || []).length ? `<section class="grille-plats histo-plats" aria-label="Les plats de ce jour"><div class="exos">${j.repas.map(x => platDHistorique(x, date)).join("")}</div></section>`
+      : dec < 0 ? `<div class="dujour"><strong>Pas de menu ce jour-là.</strong> Ajoute ce que tu as mangé.</div>`
       : `<div class="dujour"><strong>Pas de menu prévu ce jour-là.</strong> Note ce que tu manges, ou compose la suite.
         <p style="margin-top:8px"><button class="bouton second" data-action="suivante">Composer la suite</button></p></div>`}
     ${j.entrees.length ? `<h2 class="titre-section">En plus</h2><div class="liste-notes">${j.entrees.map(ligneRepasNote).join("")}</div>` : ""}
@@ -2289,7 +2381,7 @@ function platDHistorique(x, date) {
   const texte = `<div class="exo-texte"><div class="quand">${quand}</div><h3>${esc(x.nom)}</h3>
     <div class="chiffres">${nombre(x.kcal)} kcal, ${nombre(x.prot)} g de protéines</div></div>`;
   if (!r) return `<div class="exo repas-ligne"><div class="repas">${photo({}, 480)}${texte}</div></div>`;     // plat supprimé depuis
-  return `<div class="exo repas-ligne"><a class="repas" href="#/plat/${x.id}" data-kcal="${x.kcal}" data-prot="${x.prot}" data-gluc="${x.gluc || 0}"
+  return `<div class="exo repas-ligne"><a class="repas" href="#/plat/${x.id}" data-date="${date}" data-moment-vu="${esc(x.moment)}" data-kcal="${x.kcal}" data-prot="${x.prot}" data-gluc="${x.gluc || 0}"
     data-lip="${x.lip || 0}" data-quand="${esc(`${quand} · ${dateLongueCourte(date)}`)}">${photo(r, 480)}${texte}</a></div>`;
 }
 const calVitamines = { ouvert: false, mois: "", date: "" };      // le calendrier des Vitamines, ouvert ou non
@@ -2354,7 +2446,8 @@ function noterRepas({ date, entree = null }) {
     if (!zone) return;
     zone.innerHTML = trouves.length ? `<p class="petit discret" style="margin:2px 0 6px">${mots.length ? "Un de ces plats ?" : "Tes plats"}</p>
       <ul class="candidats">${trouves.map(r => `<li><button type="button" class="candidat" data-plat-connu="${r.id}">${photo(r, 160, "carre")}
-        <span class="texte"><b>${esc(r.nom)}</b><span class="chiffres">${nombre(r.kcal)} kcal, ${nombre(r.prot)} g de protéines</span></span>${icone("caret-right")}</button></li>`).join("")}</ul>` : "";
+        <span class="texte"><b>${esc(r.nom)}</b><span class="chiffres">${nombre(r.kcal)} kcal, ${nombre(r.prot)} g de protéines</span>
+        <small class="discret ing-courts">${esc(ingredientsCourts(r))}</small></span>${icone("caret-right")}</button></li>`).join("")}</ul>` : "";
     zone.querySelectorAll("[data-plat-connu]").forEach(b => b.addEventListener("click", () => ajouterPlatConnu(recette(b.dataset.platConnu))));
   };
   const ajouterPlatConnu = r => {
@@ -3137,7 +3230,7 @@ document.addEventListener("click", ev => {
   if (plat && PETIT.matches && !ev.target.closest("#dialogue, .carte-fond")) {
     ev.preventDefault();
     const d = plat.dataset;
-    const vu = d.kcal != null ? { kcal: +d.kcal, prot: +d.prot, gluc: +d.gluc, lip: +d.lip, quand: d.quand } : null;    // historique
+    const vu = d.kcal != null ? { kcal: +d.kcal, prot: +d.prot, gluc: +d.gluc, lip: +d.lip, quand: d.quand, date: d.date, moment: d.momentVu } : null;    // historique
     return ficheRapide(decodeURIComponent(plat.getAttribute("href").slice(7)),
       d.jour != null ? { k: Number(d.semaine), n: Number(d.jour), moment: d.moment } : null, plat.closest(".exo") || plat, vu);
   }
