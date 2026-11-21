@@ -1062,3 +1062,16 @@ section.suivi-courbe{margin-top:22px}
 .histo-eau{display:inline-flex;align-items:center;gap:4px;margin-top:2px}
 .histo-eau .ic{width:12px;height:12px;color:#7cc4ff}
 .histo-eau.coche .ic:last-child{color:var(--accent)}
+/* Ingrédients d'un plat : sous son nom quand on le choisit, en liste sur sa carte, quantité réglable en direct (Taha, 21/11/2026) */
+.ing-courts{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:.78rem;line-height:1.3}
+.ing-assiette{margin:4px 0 0}
+.ing-assiette li{padding:7px 0;font-size:.9rem}
+.cp-ingredients{margin-top:12px;padding-top:6px}
+.cp-ingredients > summary{display:flex;align-items:center;justify-content:space-between;min-height:40px;cursor:pointer;color:var(--encre);font-weight:500;list-style:none}
+.cp-ingredients > summary::-webkit-details-marker{display:none}
+.ap-choisi{margin:0 0 14px}
+.ap-choisi .cp-quantite{margin-top:0}
+.ap-choisi h3{margin:14px 0 2px}
+.ap-macros{margin:8px 0 0;color:var(--encre)}
+.barres-legende{margin:0 0 10px}
+.barres .v b{color:var(--encre);font-weight:600}

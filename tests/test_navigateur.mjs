@@ -165,6 +165,69 @@ try {
     vrai(Math.abs(retour - avant) <= 3, `retour : ${retour} au lieu de ${avant} kcal`);
   });
 
+  // Taha, 21/11/2026 : revenir sur les jours d'avant, voir les ingrédients, régler la quantité en voyant les chiffres bouger.
+  await test('Jours d\'avant : Hier, puis retour', async () => {
+    await aller('#/semaine?d=-1');
+    vrai(await attendre(`(document.querySelector('main h1') || {}).textContent === 'Hier'`, 10000) >= 0, 'Hier ne s\'affiche pas');
+    vrai(await B.js(`!!document.querySelector('.jours-suivi a.fleche[aria-label^="Jour d"]')`), 'pas de flèche vers le jour d\'avant');
+    vrai(await B.js(`!!document.querySelector('.grille-plats, .dujour')`), 'ni plats ni message pour hier');
+    const d = await debordement();
+    vrai(d <= 1, `la page déborde de ${d} px`);
+    await B.photo('hier');
+    await aller('#/semaine?d=-3');
+    vrai(await attendre(`!!document.querySelector('.jours-suivi a.fleche[aria-label="Jour suivant"]')`, 10000) >= 0, 'pas de flèche vers le jour suivant');
+    await aller('#/semaine');
+  });
+
+  await test('Carte d\'un plat : ingrédients, quantité qui change tout de suite', async () => {
+    await aller('#/semaine');
+    await B.js(`document.querySelector('.grille-plats a.repas').click()`);
+    vrai(await attendre(`document.querySelectorAll('.carte-plat .cp-ingredients li').length > 0`, 10000) >= 0, 'pas d\'ingrédients sur la carte');
+    if (await B.js(`!!document.querySelector('.carte-plat .cp-quantite')`)) {
+      const avant = await B.js(`document.querySelector('.carte-plat [data-cp-v]').textContent`);
+      const ingAvant = await B.js(`document.querySelector('.carte-plat .cp-ing-liste').textContent`);
+      await B.js(`document.querySelector('.carte-plat .cp-quantite [aria-label=Plus]').click()`);
+      const apres = await B.js(`document.querySelector('.carte-plat [data-cp-v]').textContent`);
+      vrai(apres !== avant, `les kcal n'ont pas changé tout de suite (${avant})`);
+      vrai(await B.js(`document.querySelector('.carte-plat .cp-ing-liste').textContent`) !== ingAvant, 'les ingrédients n\'ont pas changé');
+      vrai(await B.js(`!!document.querySelector('.carte-plat')`), 'la carte s\'est fermée');
+      await B.photo('carte-quantite');
+      await B.js(`document.querySelector('.carte-plat .cp-quantite [aria-label=Moins]').click()`);   // retour : rien à enregistrer
+      vrai(await B.js(`document.querySelector('.carte-plat [data-cp-v]').textContent`) === avant, 'retour à la quantité de départ raté');
+    }
+    await fermerCarte();
+  });
+
+  await test('Choisir un plat : ingrédients et quantité avant de valider', async () => {
+    await aller('#/semaine');
+    await B.js(`document.querySelector('.grille-plats a.repas').click()`);
+    vrai(await attendre(`document.querySelector('.carte-plat [data-action=changer]')`, 10000) >= 0, 'pas de bouton Remplacer');
+    await B.js(`document.querySelector('.carte-plat [data-action=changer]').click()`);
+    vrai(await attendre(`document.querySelectorAll('#dialogue .candidat .ing-courts').length > 0`, 10000) >= 0, 'pas d\'ingrédients sous les plats proposés');
+    vrai((await B.js(`document.querySelector('#dialogue .candidat .ing-courts').textContent.trim()`)).length > 0, 'ingrédients vides');
+    await B.js(`document.querySelector('#dialogue .candidat').click()`);
+    vrai(await attendre(`document.querySelector('#dialogue [data-ensemble], #dialogue #apIng li')`, 20000) >= 0, 'pas d\'aperçu');
+    if (await B.js(`!!document.querySelector('#dialogue [data-ensemble]')`)) {
+      await B.js(`document.querySelector('#dialogue [data-ensemble="0"]').click()`);
+      vrai(await attendre(`document.querySelector('#dialogue #apIng li')`, 20000) >= 0, 'pas d\'ingrédients dans l\'aperçu');
+    }
+    const avant = await B.js(`document.getElementById('apEcarts').textContent + document.getElementById('apMacros').textContent`);
+    await B.js(`document.querySelector('#dialogue [data-ap-fois="0.5"]').click()`);
+    vrai(await B.js(`document.getElementById('apFois').textContent`) === '×1,5', 'la quantité ne passe pas à ×1,5');
+    vrai(await B.js(`document.getElementById('apEcarts').textContent + document.getElementById('apMacros').textContent`) !== avant, 'les chiffres ne bougent pas');
+    await B.photo('choisir-quantite');
+    await B.js(`document.getElementById('dialogue').close()`);                // rien n'est enregistré
+  });
+
+  await test('Vitamines : le besoin d\'un jour est écrit', async () => {
+    await aller('#/vitamines');
+    vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'pas de page');
+    if (await B.js(`!!document.querySelector('.barres .v')`)) {
+      vrai(await B.js(`document.querySelector('.barres .v').textContent.includes('/')`), 'le besoin par jour n\'est pas écrit');
+      vrai(await B.js(`!!document.querySelector('.barres-legende')`), 'pas de légende');
+    }
+  });
+
   await test('Modifier les ingrédients : poubelle et ↺', async () => {
     await aller('#/semaine');
     const i = await B.js(`[...document.querySelectorAll('.grille-plats a.repas')].findIndex(a => /smoothie/i.test(a.textContent))`);
