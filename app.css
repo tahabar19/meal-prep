@@ -1075,3 +1075,4 @@ section.suivi-courbe{margin-top:22px}
 .ap-macros{margin:8px 0 0;color:var(--encre)}
 .barres-legende{margin:0 0 10px}
 .barres .v b{color:var(--encre);font-weight:600}
+.cp-equilibrer .cp-saut{flex-basis:100%;height:0}

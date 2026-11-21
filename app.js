@@ -1370,7 +1370,9 @@ function ficheRapide(id, ctx, depuis, vu = null) {
         // Tout plat se fixe, à son repas (Taha, 20/11/2026).
         const fixable = !!ctx, fixe = fixable && estFixe(id, ctx.moment);
         const chaque = { pdj: "matin", dej: "midi", din: "soir" }[ctx && ctx.moment];
-        const boutons = [reg ? `<button type="button" class="bouton sobre" data-action="reequilibrer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}" data-plat="${id}">${icone("sliders-horizontal")}Équilibrer pour la journée</button>` : "",
+        // « Retirer ce repas » : petit bouton discret comme « Équilibrer », au-dessus de lui (Taha, 21/11/2026).
+        const boutons = [libre ? `<button type="button" class="bouton sobre" data-action="retirerRepas" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}" data-plat="${id}">${icone("x")}Retirer ce repas</button><span class="cp-saut" aria-hidden="true"></span>` : "",
+          reg ? `<button type="button" class="bouton sobre" data-action="reequilibrer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}" data-plat="${id}">${icone("sliders-horizontal")}Équilibrer pour la journée</button>` : "",
           fixable ? `<button type="button" class="bouton sobre" data-action="fixer" data-plat="${id}" data-moment="${ctx.moment}" data-fixe="${fixe ? 0 : 1}" title="${fixe ? "Il reste prévu, mais n'est plus imposé chaque jour" : `Il revient chaque ${chaque || "jour, en collation"}, toujours une portion`}">${icone("lock-simple")}${fixe ? "Ne plus fixer" : "Fixer ce plat"}</button>` : ""].filter(Boolean);
         return boutons.length ? `<p class="cp-equilibrer">${boutons.join("")}</p>` : ""; })()}
     </div></article>`;
@@ -3102,6 +3104,8 @@ const ACTIONS = {
     apercuChangement(k, { type: "reequilibrer", jour: n, moment: b.dataset.moment, plat: b.dataset.plat },
       `Équilibrer pour la journée`); },
   ajusterJour: b => demanderAjustement(b.dataset.plat, null, { k: Number(b.dataset.semaine), n: Number(b.dataset.jour) }),
+  retirerRepas: b => { const k = Number(b.dataset.semaine), n = Number(b.dataset.jour);
+    apercuChangement(k, { type: "retirer", jour: n, moment: b.dataset.moment }, `Retirer « ${(recette(b.dataset.plat) || { nom: "ce repas" }).nom} » ?`); },
   appoint: () => agir("/api/appoint", {}, "Stock mis à jour avec ces produits."),
   async oublierSuivi(b) {
     if (await confirmer({ titre: "Supprimer ces mesures ?", oui: "Supprimer", non: "Garder", texte: `Les mesures du ${dateCourte(b.dataset.date)} seront effacées.` }))
