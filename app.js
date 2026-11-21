@@ -653,24 +653,20 @@ function ecartLisible(valeur, unite, bonSiPlus) {
   const mieux = bonSiPlus === null ? "" : ((valeur > 0) === bonSiPlus ? " mieux" : " moins");
   return `<span class="ecart${mieux}">${valeur > 0 ? "+" : "−"}${nombre(Math.abs(valeur))} ${unite === "g" ? "g de protéines" : "kcal"}</span>`;
 }
-// « Remplacer par un autre plat », le cœur de l'appli (Taha, 21/11/2026 : « plus parfaite, visuellement, facile, beaucoup
-// d'options ») : le plat actuel et trois raccourcis en haut ; la recherche et les tris restent visibles en faisant défiler ;
-// des filtres en puces ; chaque plat en carte avec ses macros, l'écart avec le plat actuel, ta journée si tu le prends et
-// ses ingrédients. Les choix (tri, filtres, recherche, défilement) tiennent le temps de revenir de l'aperçu.
+// « Remplacer par un autre plat », le cœur de l'appli. Taha, 21/11/2026, deuxième version : « Retirer ce repas » est déjà sur
+// la carte du plat ; un seul champ IA qui cherche un plat ET crée le tien (« Mon propre plat ») ; pas de filtres ; des lignes
+// compactes. La journée montrée est celle de l'écran Jour (ce que tu as noté en plus compris).
 const REMPLACER = { cle: "" };
-const TRIS_REMPLACER = [["objectif", "Pour ton objectif"], ["proches", "Mêmes calories"], ["proteines", "Plus de protéines"], ["leger", "Plus léger"],
-  ["copieux", "Plus copieux"], ["rapide", "Plus rapide"], ["prix", "Moins cher"], ["aimes", "Tes préférés"], ["menu", "Déjà au menu"]];
-const NOTES_REMPLACER = { objectif: "Ceux qui amènent ta journée au plus près de ton objectif, calories et protéines.",
-  proches: "Les plus proches en calories du plat actuel.", proteines: "Le plus de protéines pour chaque calorie.",
-  leger: "Les moins caloriques d'abord.", copieux: "Les plus caloriques d'abord.", rapide: "Les plus rapides à préparer d'abord.",
-  prix: "Les moins chers d'abord.", aimes: "Ceux que tu veux tester, tes mieux notés et tes plats d'abord.",
-  menu: "Les plats déjà au menu : moins de produits différents à acheter." };
-const TYPES_REMPLACER = [["petitdej", "Petit-déj"], ["plat", "Plats"], ["collation", "Collations"], ["tous", "Tout"]];
-const FILTRES_REMPLACER = [["perso", "Mes plats"], ["tester", "À tester"], ["Riche en protéines", "Riche en protéines"], ["Végétarien", "Végétarien"],
-  ["Sans gluten", "Sans gluten"], ["Sans lactose", "Sans lactose"], ["Riche en fibres", "Riche en fibres"], ["20min", "Moins de 20 min"],
-  ["3e", "Moins de 3 €"], ["stock", "Avec mon stock"]];
-const PROTEINES_REMPLACER = [["poulet", "Poulet"], ["boeuf", "Bœuf"], ["poisson", "Poisson"], ["dinde", "Dinde"], ["agneau", "Agneau"], ["veau", "Veau"],
-  ["oeufs", "Œufs"], ["tofu", "Tofu"], ["legumineuses", "Légumineuses"]];
+const TRIS_REMPLACER = [["objectif", "Pour ton objectif"], ["proches", "Mêmes calories"], ["proteines", "Plus de protéines"],
+  ["leger", "Plus léger"], ["aimes", "Tes préférés"]];
+// La date d'un jour d'une semaine composée, et ce qui a été noté « en plus » ce jour-là (compté dans l'écran Jour).
+const dateDuPlan = (s, n) => { const d = new Date(s.debut + "T12:00"); d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+function enPlusDuJour(s, n) {
+  const jj = enSuivi() && s && s.debut ? (E.journal_repas.jours || []).find(x => x.date === dateDuPlan(s, n)) : null;
+  const e = jj ? jj.entrees || [] : [];
+  return { kcal: e.reduce((t, x) => t + (Number(x.kcal) || 0), 0), prot: e.reduce((t, x) => t + (Number(x.prot) || 0), 0) };
+}
 function demanderChangement(k, n, moment) {
   const s = planDe(k), j = s.jours[n], d = $("dialogue");
   const actuelId = moment === "pdj" ? j.pdj : moment === "dej" ? j.dej : moment === "din" ? j.din : j.collations[Number(moment.slice(3))] || "rien";
@@ -679,7 +675,7 @@ function demanderChangement(k, n, moment) {
   const operation = plat => nouvelle ? { type: "ajouter", jour: n, plat } : { type: "changer", jour: n, moment, plat };
   const fodmap = (s.modes || []).includes("fodmap");
   const permise = r => r.id !== actuelId && r.id !== "extrariz" && r.id !== "rien" && (!fodmap || (r.fodmap && !r.filtres.cru));
-  // N'importe quel plat à n'importe quel repas, un pancake à midi (Taha, 19/11/2026) : le type n'est qu'un filtre.
+  // N'importe quel plat à n'importe quel repas (Taha, 19/11/2026) : en cherchant, tous les types ; sinon ceux de ce repas.
   const tous = E.recettes.filter(r => ["collation", "plat", "petitdej"].includes(r.cat) && permise(r));
   const possibles = tous.filter(r => r.cat === cat);
   const milieu = cle => { const v = possibles.map(r => r[cle]).sort((a, b) => a - b); return v[Math.floor(v.length / 2)] || 0; };
@@ -688,11 +684,8 @@ function demanderChangement(k, n, moment) {
   const compte = sansRepas ? null : repasCompte(j, moment, actuelId);
   const avantK = sansRepas ? 0 : compte ? compte.kcal : actuel.kcal * f, avantP = sansRepas ? 0 : compte ? compte.prot : actuel.prot * f;
   const refK = sansRepas ? actuel.kcal * f : avantK, refP = sansRepas ? actuel.prot * f : avantP;
-  const obj = s.objectif || {}, jourK = j.kcal || 0, jourP = j.prot || 0;
-  const ensemble = (s.modes || []).includes("flemmard") && (moment === "dej" || moment === "din") && j.dej === j.din && j.dej !== "rien" && !j.dej_reste;
-  const dejaLa = new Set((E.mois ? E.mois.semaines : [s]).flatMap(p => Object.keys(p.choix || {})));
-  const couvre = E.stock_couvre || {};
-  // Les chiffres d'une assiette de ce plat ce jour-là, et ta journée si tu le prends à la place.
+  const plus = enPlusDuJour(s, n), obj = s.objectif || {};
+  const jourK = (j.kcal || 0) + plus.kcal, jourP = (j.prot || 0) + plus.prot;          // les mêmes chiffres que l'écran Jour
   const kc = r => r.kcal * tailleDe(j, r.id), pr = r => r.prot * tailleDe(j, r.id);
   const journee = r => ({ kcal: jourK - avantK + kc(r), prot: jourP - avantP + pr(r) });
   const loin = r => { const x = journee(r), ok = obj.kcal && obj.prot;
@@ -700,133 +693,102 @@ function demanderChangement(k, n, moment) {
       : Math.abs(kc(r) - refK) / Math.max(refK, 1); };
   const aime = r => (r.gout === "tester" ? 3 : 0) + (r.nb_notes ? r.note : 0) + (r.perso ? 1 : 0);
   const ORDRES = { objectif: (a, b) => loin(a) - loin(b), proches: (a, b) => Math.abs(kc(a) - refK) - Math.abs(kc(b) - refK) || pr(b) - pr(a),
-    proteines: (a, b) => pr(b) / Math.max(kc(b), 1) - pr(a) / Math.max(kc(a), 1), leger: (a, b) => kc(a) - kc(b), copieux: (a, b) => kc(b) - kc(a),
-    rapide: (a, b) => (a.temps || 999) - (b.temps || 999) || loin(a) - loin(b), prix: (a, b) => a.cout - b.cout, aimes: (a, b) => aime(b) - aime(a) || loin(a) - loin(b) };
-  ORDRES.menu = ORDRES.proches;
+    proteines: (a, b) => pr(b) / Math.max(kc(b), 1) - pr(a) / Math.max(kc(a), 1), leger: (a, b) => kc(a) - kc(b),
+    aimes: (a, b) => aime(b) - aime(a) || loin(a) - loin(b) };
 
   const cle = `${k}|${n}|${moment}|${actuelId}`, revient = REMPLACER.cle === cle;
-  if (!revient) Object.assign(REMPLACER, { cle, tri: obj.kcal ? "objectif" : "proches", type: cat, typeTouche: false, filtres: new Set(), proteine: "",
-    cherche: "", plus: false, nb: 20, defile: 0 });
+  if (!revient) Object.assign(REMPLACER, { cle, tri: obj.kcal ? "objectif" : "proches", cherche: "", nb: 20, defile: 0 });
   const R = REMPLACER;
-  const simple = t => String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/œ/g, "oe").toLowerCase();
+  const simple = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/œ/g, "oe").toLowerCase();
+  const mots = () => simple(R.cherche).split(/[\s,;+]+/).filter(m => m.length > 1 && !["de", "du", "des", "et", "avec", "au", "aux", "la", "le", "les", "un", "une"].includes(m));
   const passe = r => {
-    const mots = simple(R.cherche).split(/\s+/).filter(Boolean), fl = r.filtres || {}, etiquettes = (fl.regimes || []).concat(fl.atouts || []);
-    if (R.type !== "tous" && r.cat !== R.type) return false;
-    if (!mots.length && r.gout === "non") return false;              // ce que tu n'aimes pas : seulement si tu le cherches
-    for (const x of R.filtres) {
-      const ok = x === "perso" ? r.perso : x === "tester" ? r.gout === "tester" : x === "20min" ? r.temps && r.temps < 20
-        : x === "3e" ? r.cout * tailleDe(j, r.id) < 3 : x === "stock" ? couvre[r.id] === 1 : etiquettes.includes(x);
-      if (!ok) return false;
-    }
-    if (R.proteine && fl.proteine !== R.proteine) return false;
-    if (R.tri === "menu" && !dejaLa.has(r.id)) return false;
-    if (mots.length) { const t = simple(r.nom + " " + (r.ing || []).map(i => i.n).join(" ")); if (!mots.every(m => t.includes(m))) return false; }
-    return true;
+    const m = mots();
+    if (!m.length) return r.cat === cat && r.gout !== "non";       // ce que tu n'aimes pas : seulement si tu le cherches
+    const t = simple(r.nom + " " + (r.ing || []).map(i => i.n).join(" "));
+    return m.every(x => t.includes(x.length > 3 ? x.replace(/[sx]$/, "") : x));
   };
-  const puce = (attr, valeur, texte, actif) => `<button type="button" ${attr}="${esc(valeur)}" aria-pressed="${actif}">${texte}</button>`;
-  const proteines = PROTEINES_REMPLACER.filter(([id]) => tous.some(r => (r.filtres || {}).proteine === id));
-  const nbActifs = () => R.filtres.size + (R.proteine ? 1 : 0);
-  const pucesTypes = () => TYPES_REMPLACER.map(([id, nom]) => puce("data-type", id, nom, R.type === id)).join("");
-  const pucesTris = () => TRIS_REMPLACER.map(([id, nom]) => puce("data-tri", id, nom, R.tri === id)).join("");
-  const pucesFiltres = () => `${FILTRES_REMPLACER.filter(([id]) => id !== "stock" || (E.stock || []).length).map(([id, nom]) => puce("data-filtre", id, nom, R.filtres.has(id))).join("")}
-    ${proteines.length ? `<button type="button" class="rp-plus" data-plus aria-expanded="${R.plus}">${R.proteine ? esc(PROTEINES_REMPLACER.find(([id]) => id === R.proteine)[1]) : "Protéine"}${icone("caret-right")}</button>` : ""}
-    ${nbActifs() ? `<button type="button" class="rp-raz" data-raz>${icone("x")}Tout enlever</button>` : ""}`;
-  const pucesProteines = () => R.plus ? `<div class="rp-puces" role="group" aria-label="Protéine">${proteines.map(([id, nom]) => puce("data-proteine", id, nom, R.proteine === id)).join("")}</div>` : "";
-  const badges = r => [r.perso ? "Mon plat" : "", r.gout === "tester" ? "À tester" : "", r.gout === "non" ? "Tu n'aimes pas" : "",
-    dejaLa.has(r.id) ? "Au menu" : ""].filter(Boolean).map(x => `<span class="rp-badge">${x}</span>`).join("")
-    + (r.nb_notes ? `<span class="rp-badge note">${icone("star-fill")}${nombre(r.note, 1)}</span>` : "");
   const carte = r => {
     const x = journee(r), tient = obj.kcal && Math.abs(x.kcal - obj.kcal) <= obj.kcal * 0.05 && x.prot >= obj.prot * 0.95;
-    return `<li><button type="button" class="rp-plat" data-plat="${r.id}">
-      ${photo(r, 160, "carre")}
+    const dp = Math.round(pr(r) - avantP);
+    return `<li><button type="button" class="rp-plat" data-plat="${r.id}">${photo(r, 120, "carre")}
       <span class="rp-texte"><b>${esc(r.nom)}</b>
-        <span class="rp-macros chiffres"><span><strong>${nombre(Math.round(kc(r)))}</strong> kcal</span><span><strong>${nombre(Math.round(pr(r)))} g</strong> prot.</span>${r.temps ? `<span>${r.temps} min</span>` : ""}<span>${euros(r.cout * tailleDe(j, r.id))}</span></span>
-        ${sansRepas ? "" : `<span class="ecarts">${ecartLisible(pr(r) - avantP, "g", true)}${ecartLisible(kc(r) - avantK, "kcal", null)}</span>`}
-        ${obj.kcal ? `<small class="rp-journee chiffres${tient ? " tient" : ""}">${tient ? icone("check") : ""}Ta journée : ${nombre(Math.round(x.kcal))} kcal, ${nombre(Math.round(x.prot))} g</small>` : ""}
-        <small class="ing-courts">${esc(ingredientsCourts(r))}</small>
-        ${badges(r) ? `<span class="rp-badges">${badges(r)}</span>` : ""}</span>
-      ${icone("caret-right")}</button></li>`; };
-  const maj = (garderDefile = false) => {
+        <span class="rp-macros chiffres"><span><strong>${nombre(Math.round(kc(r)))}</strong> kcal</span><span><strong>${nombre(Math.round(pr(r)))} g</strong> prot.</span>${
+          sansRepas || !dp ? "" : `<span class="rp-ecart${dp > 0 ? " plus" : ""}">${dp > 0 ? "+" : "−"}${nombre(Math.abs(dp))} g</span>`}</span></span>
+      ${tient ? `<span class="rp-tient" title="Ta journée tient l'objectif">${icone("check")}</span>` : ""}</button></li>`; };
+  const maj = () => {
     const liste = tous.filter(passe).sort((a, b) => ORDRES[R.tri](a, b) || a.nom.localeCompare(b.nom, "fr"));
-    // Les rangées de puces se redessinent sans revenir au début ; le tri choisi reste en vue.
-    const rangees = ["rpTris", "rpTypes", "rpFiltres"].map(id => [id, $(id).scrollLeft]);
-    $("rpTris").innerHTML = pucesTris();
-    $("rpTypes").innerHTML = pucesTypes();
-    $("rpFiltres").innerHTML = pucesFiltres();
-    $("rpProteines").innerHTML = pucesProteines();
-    rangees.forEach(([id, x]) => { $(id).scrollLeft = x; });
-    const choisiTri = $("rpTris").querySelector('[aria-pressed="true"]'), rangee = $("rpTris");
-    if (choisiTri && (choisiTri.offsetLeft < rangee.scrollLeft || choisiTri.offsetLeft + choisiTri.offsetWidth > rangee.scrollLeft + rangee.clientWidth))
-      rangee.scrollLeft = choisiTri.offsetLeft - 20;
-    $("rpCompte").innerHTML = `<b>${liste.length} plat${liste.length > 1 ? "s" : ""}</b> · ${NOTES_REMPLACER[R.tri]}`;
+    const texte = R.cherche.trim();
+    $("rpEffacer").hidden = !texte;
+    $("rpBadge").hidden = !!texte;
+    // Le même champ crée ton plat : Claude, l'IA, trouve les aliments, les grammes et les macros de ce que tu as écrit.
+    $("rpIA").innerHTML = texte.length >= 2 ? `<button type="button" class="rp-ia" data-ia>${icone("sparkle")}<span>Créer « ${esc(texte.length > 48 ? texte.slice(0, 46) + "…" : texte)} » avec l'IA
+        <small>Jarvis en fait ton plat : aliments, grammes et macros</small></span>${icone("caret-right")}</button>` : "";
+    $("rpCompte").textContent = texte ? (liste.length ? `${liste.length} plat${liste.length > 1 ? "s" : ""} trouvé${liste.length > 1 ? "s" : ""}` : "Aucun plat de ta base")
+      : `${liste.length} ${cat === "petitdej" ? "petits-déjeuners" : cat === "plat" ? "plats" : "collations"}`;
     $("rpListe").innerHTML = liste.slice(0, R.nb).map(carte).join("")
-      || `<li class="rp-vide"><b>Aucun plat ne correspond.</b><span>Enlève un filtre, cherche un autre mot, ou crée ton propre plat.</span>
-        ${nbActifs() || R.type !== "tous" ? `<button type="button" class="bouton second" data-tout>Voir tous les plats</button>` : ""}</li>`;
-    $("rpSuite").innerHTML = liste.length > R.nb ? `<button type="button" class="bouton second rp-voir-plus" data-voir-plus>Voir ${Math.min(20, liste.length - R.nb)} plats de plus (${liste.length - R.nb} restants)</button>` : "";
-    $("rpEffacer").hidden = !R.cherche;
-    if (!garderDefile) d.scrollTop = Math.min(d.scrollTop, $("rpCollant").offsetTop);
+      || `<li class="rp-vide">${texte ? "Rien à ce nom : crée-le avec l'IA juste au-dessus." : "Aucun plat."}</li>`;
+    $("rpSuite").innerHTML = liste.length > R.nb ? `<button type="button" class="bouton second rp-voir-plus" data-voir-plus>Voir ${Math.min(20, liste.length - R.nb)} de plus</button>` : "";
   };
   const place = moment.startsWith("col") && !nouvelle ? ((j.au_repas || {})[actuelId] || "col") : moment;
   const leRepas = { pdj: "le petit-déjeuner", dej: "le déjeuner", din: "le dîner" }[place] || "la collation";
   const nomRepas = { pdj: "Petit-déjeuner", dej: "Déjeuner", din: "Dîner" }[place] || "Collation";
-  const suite = ensemble ? `Midi et soir ont le même plat : après ton choix, je te demande si le ${moment === "dej" ? "soir" : "midi"} change aussi.`
-    : moment === "din" && n < 6 && s.jours[n + 1].dej_reste ? `Le déjeuner de ${s.jours[n + 1].jour.toLowerCase()} changera aussi : c'est la seconde part de ce dîner.`
+  const suite = moment === "din" && n < 6 && s.jours[n + 1].dej_reste ? `Le déjeuner de ${s.jours[n + 1].jour.toLowerCase()} changera aussi : c'est la seconde part de ce dîner.`
     : moment === "dej" && j.dej_reste ? "Ce déjeuner ne sera plus le reste de la veille : il se cuisinera à midi." : "";
   const peutAjuster = !sansRepas && !(moment === "dej" && j.dej_reste);
   d.innerHTML = `<div class="feuille rp">
     <div class="rp-tete"><div><p class="rp-sur">${esc(j.jour)} · ${nomRepas}</p>
       <h2 id="dialogueTitre">${nouvelle ? "Ajouter une collation" : sansRepas ? `Choisir ${leRepas}` : `Remplacer ${leRepas}`}</h2></div>
       <button type="button" class="rp-fermer" data-fermer aria-label="Fermer">${icone("x")}</button></div>
-    ${sansRepas ? `<p class="petit discret rp-intro">${nouvelle ? "Une collation de plus ce jour-là." : "Rien n'est prévu pour ce repas."} Choisis un plat ci-dessous, ou crée le tien.</p>`
-      : `<div class="rp-actuel">${photo(actuel, 160, "carre")}<div><small>Actuellement</small><b>${esc(actuel.nom)}</b>
-        <span class="chiffres">${nombre(Math.round(avantK))} kcal · ${nombre(Math.round(avantP))} g de protéines</span></div></div>`}
-    <div class="rp-raccourcis">
-      <button type="button" data-perso>${icone("cooking-pot")}<span>Mon propre plat</span></button>
-      ${peutAjuster ? `<button type="button" data-ajuster>${icone("notebook")}<span>Modifier les ingrédients</span></button>` : ""}
-      ${sansRepas ? "" : `<button type="button" data-retirer>${icone("poubelle")}<span>Retirer ce repas</span></button>`}</div>
+    ${sansRepas ? "" : `<div class="rp-actuel">${photo(actuel, 120, "carre")}<div><b>${esc(actuel.nom)}</b>
+        <span class="chiffres">${nombre(Math.round(avantK))} kcal · ${nombre(Math.round(avantP))} g prot.</span></div>
+      ${peutAjuster ? `<button type="button" class="rp-modifier" data-ajuster>Modifier</button>` : ""}</div>`}
+    ${obj.kcal ? `<p class="rp-objectif chiffres">Ta journée : <b>${nombre(Math.round(jourK))}</b> / ${nombre(obj.kcal)} kcal · <b>${nombre(Math.round(jourP))}</b> / ${nombre(obj.prot)} g</p>` : ""}
     ${suite ? `<p class="petit discret rp-intro">${suite}</p>` : ""}
-    ${obj.kcal ? `<p class="rp-objectif chiffres">Ta journée prévue : <b>${nombre(Math.round(jourK))}</b> / ${nombre(obj.kcal)} kcal · <b>${nombre(Math.round(jourP))}</b> / ${nombre(obj.prot)} g de protéines</p>` : ""}
     <div class="rp-collant" id="rpCollant">
-      <div class="rp-recherche"><input id="chPlat" type="search" enterkeyhint="search" autocomplete="off" placeholder="Chercher un plat ou un ingrédient" aria-label="Chercher un plat ou un ingrédient" value="${esc(R.cherche)}">
-        <button type="button" id="rpEffacer" data-effacer aria-label="Effacer la recherche" hidden>${icone("x")}</button></div>
-      <div class="rp-puces rp-tris" id="rpTris" role="group" aria-label="Trier"></div></div>
-    <div class="rp-groupe"><span>Type</span><div class="rp-puces" id="rpTypes" role="group" aria-label="Type de plat"></div></div>
-    <div class="rp-groupe"><span>Filtres</span><div class="rp-puces" id="rpFiltres" role="group" aria-label="Filtres"></div></div>
-    <div id="rpProteines"></div>
-    <p class="rp-compte" id="rpCompte" role="status"></p>
+      <div class="rp-recherche champ-ia">${icone("sparkle")}<input id="chPlat" type="search" enterkeyhint="go" autocomplete="off"
+          placeholder="Un plat, ou ce que tu manges" aria-label="Chercher un plat, ou décrire ce que tu manges pour que l'IA crée le plat" value="${esc(R.cherche)}">
+        <span id="rpBadge" class="rp-badge-ia">IA</span>
+        <button type="button" id="rpEffacer" data-effacer aria-label="Effacer" hidden>${icone("x")}</button></div>
+      <div id="rpIA"></div></div>
+    <div class="rp-bandeau"><p class="rp-compte" id="rpCompte" role="status"></p>
+      <label class="rp-tri"><span class="sr">Trier</span><select id="rpTri">${TRIS_REMPLACER.filter(([id]) => id !== "objectif" || obj.kcal)
+        .map(([id, nom]) => `<option value="${id}"${R.tri === id ? " selected" : ""}>${nom}</option>`).join("")}</select>${icone("caret-right")}</label></div>
     <ul class="rp-liste" id="rpListe"></ul>
     <div id="rpSuite"></div></div>`;
   const retour = () => demanderChangement(k, n, moment);
   const sortir = () => { R.defile = d.scrollTop; };
-  const zone = d.querySelector(".rp");
-  zone.addEventListener("click", ev => {
+  const creerAvecIA = () => {
+    const texte = R.cherche.trim();
+    if (texte.length < 2) return;
+    sortir();
+    noterRepas({ date: dateDuPlan(s, n), remplacer: { texte, place: moment.startsWith("col") ? "col" : moment, retour,
+      k, operation, titre: nom => `${sansRepas ? "Mettre" : "Remplacer par"} « ${nom} » ?`,
+      main: () => demanderPlatPerso({ cat, k, n, moment, operation, remplace: sansRepas ? null : actuelId, retour },
+        { nom: "", ingredients: texte.split(/[,;\n+]|\s+et\s+/i).map(x => x.trim()).filter(Boolean), telQuel: true }) } });
+  };
+  d.querySelector(".rp").addEventListener("click", ev => {
     const b = ev.target.closest("button");
     if (!b) return;
     const x = b.dataset;
     if ("fermer" in x) return d.close("non");
-    if ("perso" in x) { sortir(); return demanderPlatPerso({ cat, k, n, moment, operation, remplace: sansRepas ? null : actuelId, retour }); }
     if ("ajuster" in x) { sortir(); return demanderAjustement(actuelId, null, { k, n, retour }); }
-    if ("retirer" in x) { sortir(); return apercuChangement(k, { type: "retirer", jour: n, moment }, `Retirer ${leRepas} de ${j.jour.toLowerCase()} ?`, retour); }
+    if ("ia" in x) return creerAvecIA();
     if (x.plat) { sortir(); return apercuChangement(k, operation(x.plat), `${sansRepas ? "Mettre" : "Remplacer par"} « ${recette(x.plat).nom} » ?`, retour); }
-    if (x.tri) { R.tri = x.tri; R.nb = 20; }
-    else if (x.type) { R.type = x.type; R.typeTouche = true; R.nb = 20; }
-    else if (x.filtre) { R.filtres.has(x.filtre) ? R.filtres.delete(x.filtre) : R.filtres.add(x.filtre); R.nb = 20; }
-    else if (x.proteine) { R.proteine = R.proteine === x.proteine ? "" : x.proteine; R.nb = 20; }
-    else if ("plus" in x) R.plus = !R.plus;
-    else if ("raz" in x) { R.filtres.clear(); R.proteine = ""; }
-    else if ("tout" in x) { R.filtres.clear(); R.proteine = ""; R.type = "tous"; R.typeTouche = true; }
-    else if ("voirPlus" in x) { R.nb += 20; return maj(true); }
-    else if ("effacer" in x) { R.cherche = ""; $("chPlat").value = ""; if (!R.typeTouche) R.type = cat; }
-    else return;
-    maj();
+    if ("voirPlus" in x) { R.nb += 20; return maj(); }
+    if ("effacer" in x) { R.cherche = ""; $("chPlat").value = ""; R.nb = 20; maj(); if (!TACTILE.matches) $("chPlat").focus(); }
   });
-  $("chPlat").addEventListener("input", ev => {
-    R.cherche = ev.target.value; R.nb = 20;
-    if (!R.typeTouche) R.type = R.cherche.trim() ? "tous" : cat;             // chercher : dans tous les plats
-    maj(true);
+  $("rpTri").addEventListener("change", ev => { R.tri = ev.target.value; R.nb = 20; maj(); });
+  $("chPlat").addEventListener("input", ev => { R.cherche = ev.target.value; R.nb = 20; maj(); });
+  // Entrée : le nom exact d'un plat l'ouvre ; sinon l'IA crée le plat.
+  $("chPlat").addEventListener("keydown", ev => {
+    if (ev.key !== "Enter") return;
+    ev.preventDefault();
+    const exact = tous.find(r => simple(r.nom) === simple(R.cherche.trim()));
+    if (exact) { sortir(); return apercuChangement(k, operation(exact.id), `${sansRepas ? "Mettre" : "Remplacer par"} « ${exact.nom} » ?`, retour); }
+    ev.target.blur();
+    creerAvecIA();
   });
-  $("chPlat").addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); ev.target.blur(); } });
-  maj(true);
+  maj();
   if (!d.open) d.showModal();
   d.scrollTop = revient ? R.defile || 0 : 0;
 }
@@ -890,8 +852,11 @@ async function apercuChangement(k, operation, titre, retour) {
   const ecartsHTML = () => {
     const plusK = choisi ? (fois - 1) * choisi.kcal * tChoisi : 0, plusP = choisi ? (fois - 1) * choisi.prot * tChoisi : 0;
     const base = a.ecarts.length ? a.ecarts : plusK || plusP ? [{ jour: a.jour, kcal: 0, prot: 0, kcal_total: a.jour_kcal, prot_total: a.jour_prot }] : [];
-    const liste = base.map(e => e.jour !== a.jour ? e : { ...e, kcal: Math.round(e.kcal + plusK), prot: Math.round(e.prot + plusP),
-      kcal_total: Math.round(e.kcal_total + plusK), prot_total: Math.round(e.prot_total + plusP) });
+    // Ce qui a été noté en plus ce jour-là compte aussi, comme sur l'écran Jour (Taha, 21/11/2026).
+    const sPlan = planDe(k), horsMenu = nom => { const i = sPlan.jours.findIndex(x => x.jour === nom); return i < 0 ? { kcal: 0, prot: 0 } : enPlusDuJour(sPlan, i); };
+    const liste = base.map(e => { const h = horsMenu(e.jour), ici = e.jour === a.jour;
+      return { ...e, kcal: Math.round(e.kcal + (ici ? plusK : 0)), prot: Math.round(e.prot + (ici ? plusP : 0)),
+        kcal_total: Math.round(e.kcal_total + h.kcal + (ici ? plusK : 0)), prot_total: Math.round(e.prot_total + h.prot + (ici ? plusP : 0)) }; });
     return liste.length ? `<h3>${operation.type === "reequilibrer" ? "Ta journée" : "Ce que ça change dans ta journée"}</h3>
       ${liste.map(e => { const mesure = (nom, avant, apres, unite, objectif, bonSiPlus) => {
           const delta = apres - avant, pct = Math.min(100, Math.round(100 * apres / objectif));
@@ -2514,12 +2479,14 @@ async function photoReduite(fichier) {
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.85);
 }
-function noterRepas({ date, entree = null }) {
+function noterRepas({ date, entree = null, remplacer = null }) {
   // 1. décrire (texte, photo, chiffres) ; 2. vérifier ce que Claude a compris, corriger, enregistrer.
+  // remplacer = { texte, place, k, operation(plat), titre(nom), retour(), main() } : le champ IA de « Remplacer un plat »
+  // (Taha, 21/11/2026) ; l'IA calcule tout de suite, puis le plat créé passe par l'aperçu du changement.
   const d = $("dialogue"), heure = new Date().getHours();
-  let moment = entree ? entree.moment : heure < 11 ? "pdj" : heure < 15 ? "dej" : heure < 18 ? "col" : "din";
-  let photoJointe = null, texte = "", photoPlat;      // photoPlat : la photo qui deviendra celle du plat
-  const puces = () => `<div class="gouts" role="group" aria-label="Repas">${MOMENTS_REPAS.map(([m, nom]) => `<button type="button" data-moment="${m}" aria-pressed="${m === moment}">${nom}</button>`).join("")}</div>`;
+  let moment = remplacer ? remplacer.place : entree ? entree.moment : heure < 11 ? "pdj" : heure < 15 ? "dej" : heure < 18 ? "col" : "din";
+  let photoJointe = null, texte = remplacer ? remplacer.texte : "", photoPlat;      // photoPlat : la photo qui deviendra celle du plat
+  const puces = () => remplacer ? "" : `<div class="gouts" role="group" aria-label="Repas">${MOMENTS_REPAS.map(([m, nom]) => `<button type="button" data-moment="${m}" aria-pressed="${m === moment}">${nom}</button>`).join("")}</div>`;
   const brancherPuces = () => d.querySelectorAll("[data-moment]").forEach(b => b.addEventListener("click", () => {
     moment = b.dataset.moment; d.querySelectorAll("[data-moment]").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
   // Taper le nom d'un plat de ta base le retrouve (Taha, 19/11/2026) : sans accents, « oe » pour « œ »,
@@ -2657,11 +2624,11 @@ function noterRepas({ date, entree = null }) {
       <small id="eNr" class="erreur" role="alert" style="display:block;margin-top:8px;color:var(--critique)"></small>
       ${entree && semainePourDate(date) ? `<p style="margin:10px 0 0"><button type="button" class="bouton second" id="nrAuMenu" style="width:100%">${icone("cooking-pot")}Mettre dans le menu du jour</button></p>` : ""}
       <div class="actions pied">${entree ? `<button class="bouton second" type="button" id="nrSuppr">Supprimer</button>` : `<button class="bouton second" type="button" id="nrRetour">Retour</button>`}
-        <button class="bouton" type="submit">${!entree && semainePourDate(date) ? "Ajouter au menu" : "Enregistrer"}</button></div></form>`;
+        <button class="bouton" type="submit">${remplacer ? "Continuer" : !entree && semainePourDate(date) ? "Ajouter au menu" : "Enregistrer"}</button></div></form>`;
     brancherPuces();
     rendreListe();
     $("nrAjout").addEventListener("click", () => { items.push({ nom: "Aliment", g: null, pour100: null, kcal: 0, prot: 0, gluc: 0, lip: 0, fib: 0, source: "donné par toi" }); rendreListe(); });
-    if ($("nrRetour")) $("nrRetour").addEventListener("click", saisie);
+    if ($("nrRetour")) $("nrRetour").addEventListener("click", () => remplacer ? remplacer.retour() : saisie());
     if ($("nrPhotoPlat")) $("nrPhotoPlat").addEventListener("change", async ev => {
       const f = ev.target.files[0]; if (!f) return;
       try { photoPlat = await photoReduite(f); } catch (e) { $("eNr").textContent = "Photo illisible."; return; }
@@ -2689,6 +2656,14 @@ function noterRepas({ date, entree = null }) {
     const auMenu = async bouton => {
       bouton.disabled = true;
       const nom = $("nrNom").value.trim();
+      if (remplacer) {                               // le plat est créé ; le menu change après l'aperçu
+        const rep = await appel("/api/repas/au_menu", { date, moment, nom, items, seulement_plat: true, ...(photoPlat ? { photo: photoPlat } : {}) });
+        bouton.disabled = false;
+        if (rep === true && E.au_menu && E.au_menu.plat) return apercuChangement(remplacer.k, remplacer.operation(E.au_menu.plat),
+          remplacer.titre((recette(E.au_menu.plat) || { nom }).nom), remplacer.retour);
+        if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
+        return;
+      }
       const rep = await appel("/api/repas/au_menu", { id: entree ? entree.id : "", date, moment, nom, items, ...(photoPlat ? { photo: photoPlat } : {}) });
       bouton.disabled = false;
       if (rep === true) { d.close("oui"); rendre(); dire(E.au_menu && E.au_menu.note ? "Repas noté." : `Ajouté au menu : « ${(recette(E.au_menu.plat) || { nom }).nom} ».`); }
@@ -2705,7 +2680,26 @@ function noterRepas({ date, entree = null }) {
     if (!d.open) d.showModal();
     d.scrollTop = 0;
   };
-  if (entree) verifier(entree); else saisie();
+  if (entree) return verifier(entree);
+  if (!remplacer) return saisie();
+  // Depuis « Remplacer un plat » : l'IA calcule ce qui a été écrit, sans repasser par la saisie.
+  // Sans compte Claude branché : les ingrédients à la main, comme « Mon propre plat ».
+  if (E.claude === false && remplacer.main) return remplacer.main();
+  d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">${icone("sparkle")} L'IA calcule…</h2>
+    <p class="discret" role="status">« ${esc(texte)} » : Claude cherche les aliments, les grammes et les macros.</p>
+    <p class="petit" style="margin-top:14px"><button type="button" class="lien" id="nrAnnulerIA">Annuler</button></p></div>`;
+  let annule = false;
+  $("nrAnnulerIA").addEventListener("click", () => { annule = true; remplacer.retour(); });
+  (async () => {
+    let rep, r;
+    try {
+      r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texte, moment, date }) });
+      rep = await r.json();
+    } catch (e) { if (!annule) { remplacer.retour(); dire("Jarvis ne répond pas."); } return; }
+    if (annule) return;
+    if (!r.ok) { remplacer.retour(); dire(rep.erreur || "Claude n'a pas pu calculer."); return; }
+    verifier(rep.proposition, false, true);
+  })();
 }
 
 /* ------------------------------------------------------------ mon suivi */
