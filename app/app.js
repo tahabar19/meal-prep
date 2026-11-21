@@ -1887,13 +1887,7 @@ function vueVitaminesMangees(params) {
     <section class="bloc" aria-labelledby="tApportsM"><h2 id="tApportsM">${p === "jour" ? (dec ? `Apport ${dec === 1 ? "d'hier" : "de ce jour"}` : "Apport du jour") : "Apport moyen par jour"}</h2>
       ${!dec && Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? `<p class="petit discret legende-prevu"><span><i class="consomme"></i>Consommé</span><span><i></i>Avec tout le prévu du jour</span></p>` : ""}
       ${barresVitamines(x.vitamines, true, dec ? null : x.vitamines_prevues)}
-      ${p !== "jour" ? `<p class="petit discret" style="margin-top:8px">${x.jours_suivis} jour${x.jours_suivis > 1 ? "s" : ""} compté${x.jours_suivis > 1 ? "s" : ""}.</p>` : ""}</section>`}
-  <section class="bloc" aria-labelledby="tLireV2"><details class="nu"><summary><h2 id="tLireV2">Comment lire ces chiffres</h2>${icone("caret-right")}</summary>
-    <ul class="definitions" style="margin-top:10px">
-      <li><strong>Tes besoins.</strong> Les références de l'ANSES pour un adulte, selon ton sexe. B1 et B2 suivent tes calories du moment.</li>
-      <li><strong>Les apports.</strong> Calculés sur les aliments crus : lis-les comme des ordres de grandeur. La cuisson fait perdre une partie de la vitamine C et des folates.</li>
-      <li><strong>La vitamine D.</strong> L'alimentation seule y arrive rarement : elle vient surtout du soleil et des poissons gras.</li>
-    </ul></details></section>`;
+      ${p !== "jour" ? `<p class="petit discret" style="margin-top:8px">${x.jours_suivis} jour${x.jours_suivis > 1 ? "s" : ""} compté${x.jours_suivis > 1 ? "s" : ""}.</p>` : ""}</section>`}`;
 }
 function vueVitamines({ params } = {}) {
   if (enSuivi()) { barre(""); return vueVitaminesMangees(params || new URLSearchParams()); }
@@ -1917,14 +1911,7 @@ function vueVitamines({ params } = {}) {
   <section class="bloc" aria-labelledby="tSources"><details class="nu"><summary><h2 id="tSources">D'où elles viennent cette semaine</h2>${icone("caret-right")}</summary>
     <ul class="lignes" style="margin-top:10px">${codes.map(c => `<li><span>${esc(V.noms[c].nom)}<small>${esc(sources(c).join(", ") || "Aucune source cette semaine")}</small></span>
       <span class="q">${dose(V.besoins[c])} ${V.noms[c].unite}</span></li>`).join("")}</ul>
-    <p class="petit discret" style="margin-top:8px">À droite, ton besoin par jour.</p></details></section>
-  <section class="bloc" aria-labelledby="tLireV"><details class="nu"><summary><h2 id="tLireV">Comment lire ces chiffres</h2>${icone("caret-right")}</summary>
-    <ul class="definitions" style="margin-top:10px">
-      <li><strong>Tes besoins.</strong> Les références de l'ANSES pour un adulte, selon ton sexe. B1 et B2 suivent tes calories du moment.</li>
-      <li><strong>Les apports.</strong> Calculés sur les aliments crus, à partir de tables de composition. La cuisson fait perdre une partie de la vitamine C et des folates : lis-les comme des ordres de grandeur.</li>
-      <li><strong>La vitamine D.</strong> L'alimentation seule y arrive rarement. Elle vient surtout du soleil et des poissons gras. Parles-en à ton médecin si tu veux un avis.</li>
-      <li><strong>Dans le choix des plats.</strong> Un plat gagne des points quand il apporte sa part de chaque vitamine, et en perd s'il en apporte peu.</li>
-    </ul></details></section>`;
+    <p class="petit discret" style="margin-top:8px">À droite, ton besoin par jour.</p></details></section>`;
 }
 function vueProfil() {
   barre("");
