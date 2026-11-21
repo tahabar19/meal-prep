@@ -2256,11 +2256,11 @@ function vueJourSuivi(params) {
     ${jaugesDuJour(j, o, mangeJour)}
     <p class="reste-jour">${reste}</p>
     ${(E.vitamines_a_completer || []).length && dec === 0 ? `<a class="rappel" href="#/vitamines">${icone("warning-circle")}<span>${E.vitamines_a_completer.length} aliment${E.vitamines_a_completer.length > 1 ? "s" : ""} sans vitamines : complète-les</span>${icone("caret-right")}</a>` : ""}
-    ${E.eau && dec === 0 ? (() => { const bu = (E.eau.bu || {})[date] || 0, pct = Math.min(100, Math.round(100 * bu / E.eau.litres));
-      const maxi = Math.ceil(E.eau.litres * 2) / 2 + 0.5;                 // un peu au-delà de l'objectif (2,7 L → 3,5 L)
-      return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <b class="chiffres" id="eauBu">${virgule(bu)}</b><small class="chiffres"> / ${virgule(E.eau.litres)} L</small></span>
-        <input type="range" class="eau-barre" id="eauBarre" min="0" max="${maxi}" step="0.25" value="${bu}" data-date="${date}" aria-label="Eau bue aujourd'hui, en litres"
-          style="--rempli:${Math.min(100, 100 * bu / maxi)}%;--but:${100 * E.eau.litres / maxi}%"></div>`; })() : ""}
+    ${E.eau && dec === 0 ? (() => {
+      // L'eau : un seul bouton, coché = l'objectif du jour est bu (Taha, 21/11/2026 : « juste un bouton check »).
+      const fait = eauCochee(date);
+      return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <small class="chiffres">${virgule(E.eau.litres)} L</small></span>
+        <button type="button" class="eau-check" id="eauCheck" data-date="${date}" aria-pressed="${fait}" aria-label="${virgule(E.eau.litres)} L d'eau bus aujourd'hui">${icone("check")}</button></div>`; })() : ""}
     ${o.gluc || o.lip ? `<p class="petit discret chiffres" style="margin:-4px 0 12px">Glucides ${nombre(Math.round(j.gluc || 0))}${o.gluc ? ` / ${nombre(o.gluc)}` : ""} g · Lipides ${nombre(Math.round(j.lip || 0))}${o.lip ? ` / ${nombre(o.lip)}` : ""} g</p>` : ""}
     ${ici ? `<section class="m-repas grille-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true)}</section>`
       : `<div class="dujour"><strong>Pas de menu prévu ce jour-là.</strong> Note ce que tu manges, ou compose la suite.
@@ -2287,6 +2287,7 @@ function platDHistorique(x, date) {
   return `<div class="exo repas-ligne"><a class="repas" href="#/plat/${x.id}" data-kcal="${x.kcal}" data-prot="${x.prot}" data-gluc="${x.gluc || 0}"
     data-lip="${x.lip || 0}" data-quand="${esc(`${quand} · ${dateLongueCourte(date)}`)}">${photo(r, 480)}${texte}</a></div>`;
 }
+const eauCochee = date => !!(E.eau && ((E.eau.bu || {})[date] || 0) >= E.eau.litres - 0.001);
 function vueHistorique() {
   barre("");
   const J = E.journal_repas, o = J.objectif;
@@ -2296,7 +2297,8 @@ function vueHistorique() {
   <div class="titre"><h1 tabindex="-1">Historique</h1><p>Ce que tu as mangé jour après jour, comparé à ton objectif de ${nombre(o.kcal)} kcal et ${o.prot} g de protéines.</p></div>
   ${passes.length ? `<div class="historique-jours">${passes.map(j => `<details class="jour-histo">
       <summary><span><b>${esc(new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" }).format(new Date(j.date + "T12:00")).replace(/^./, c => c.toUpperCase()))}</b>
-        <small>${[j.repas && j.repas.length ? `${j.repas.length} plat${j.repas.length > 1 ? "s" : ""} prévu${j.repas.length > 1 ? "s" : ""}` : "", j.entrees.length ? `${j.entrees.length} noté${j.entrees.length > 1 ? "s" : ""} en plus` : ""].filter(Boolean).join(" · ")}</small></span>
+        <small>${[j.repas && j.repas.length ? `${j.repas.length} plat${j.repas.length > 1 ? "s" : ""} prévu${j.repas.length > 1 ? "s" : ""}` : "", j.entrees.length ? `${j.entrees.length} noté${j.entrees.length > 1 ? "s" : ""} en plus` : ""].filter(Boolean).join(" · ")}</small>
+        ${E.eau ? `<small class="histo-eau${eauCochee(j.date) ? " coche" : ""}">${icone("goutte")}${virgule((E.eau.bu || {})[j.date] || 0)} L${eauCochee(j.date) ? ` ${icone("check")}` : " · pas coché"}</small>` : ""}</span>
         <span class="chiffres histo-chiffres"><span>${nombre(Math.round(j.kcal))} kcal <i class="mini-piste"><i style="width:${pct(j.kcal, o.kcal)}%"></i></i></span>
           <span>${nombre(Math.round(j.prot))} g <i class="mini-piste"><i style="width:${pct(j.prot, o.prot)}%"></i></i></span></span>${icone("caret-right")}</summary>
       ${(j.repas || []).length ? `<section class="grille-plats histo-plats" aria-label="Les plats de ce jour"><div class="exos">${j.repas.map(x => platDHistorique(x, j.date)).join("")}</div></section>` : ""}
@@ -2775,6 +2777,15 @@ document.addEventListener("submit", async ev => {
     const rep = await appel("/api/profil/modifier", corps);
     if (rep === true) { rendre(); dire("Informations enregistrées."); } else if (rep && rep.erreur) $("eMesInfos").textContent = rep.erreur;
   }
+});
+document.addEventListener("click", ev => {
+  const b = ev.target.closest && ev.target.closest("#eauCheck");
+  if (!b) return;
+  // Coché : l'objectif du jour est bu ; décoché : rien. Enregistré sans redessiner la page.
+  const fait = b.getAttribute("aria-pressed") !== "true", litres = fait ? E.eau.litres : 0, date = b.dataset.date;
+  b.setAttribute("aria-pressed", String(fait));
+  E.eau.bu = { ...(E.eau.bu || {}), [date]: litres };
+  appel("/api/eau", { date, litres }).then(ok => { if (ok !== true) { dire("L'eau n'a pas pu être enregistrée."); rendre(); } });
 });
 document.addEventListener("input", ev => {
   if (ev.target.id !== "eauBarre") return;

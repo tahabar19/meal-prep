@@ -187,15 +187,19 @@ try {
     await B.js(`document.querySelector('#dialogue [value=non]').click()`);
   });
 
-  await test('Eau : la barre enregistre et tient après rechargement', async () => {
+  await test('Eau : le bouton se coche et tient après rechargement', async () => {
     await aller('#/semaine');
-    vrai(await attendre(`document.getElementById('eauBarre')`, 10000) >= 0, 'pas de barre d\'eau');
-    await B.js(`(() => { const b = document.getElementById('eauBarre'); b.value = '1.75'; b.dispatchEvent(new Event('input', { bubbles: true })); b.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    vrai(await attendre(`document.getElementById('eauCheck')`, 10000) >= 0, 'pas de bouton d\'eau');
+    const avant = await B.js(`document.getElementById('eauCheck').getAttribute('aria-pressed')`);
+    await B.js(`document.getElementById('eauCheck').click()`);
     await att(800); await synchro();
     await B.cdp('Page.reload'); await pret(); await aller('#/semaine');
-    vrai(await attendre(`document.getElementById('eauBarre')`, 15000) >= 0, 'barre absente après rechargement');
-    const v = await B.js(`document.getElementById('eauBarre').value`);
-    vrai(Number(v) === 1.75, `après rechargement : ${v} L au lieu de 1,75`);
+    vrai(await attendre(`document.getElementById('eauCheck')`, 15000) >= 0, 'bouton absent après rechargement');
+    const apres = await B.js(`document.getElementById('eauCheck').getAttribute('aria-pressed')`);
+    vrai(apres !== avant, `après rechargement : ${apres} (avant le toucher : ${avant})`);
+    await aller('#/historique');
+    vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'pas d\'historique');
+    vrai(await B.js(`!document.querySelector('.jour-histo') || !!document.querySelector('.jour-histo .histo-eau')`), 'l\'eau n\'apparaît pas dans l\'historique');
   });
 
   await test('Vitamines : seulement aujourd\'hui, liste « À compléter »', async () => {

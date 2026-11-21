@@ -1054,3 +1054,11 @@ section.suivi-courbe{margin-top:22px}
 /* « Consommé » : vert, ou orange sous 80 % du besoin */
 .legende-prevu i.consomme{background:linear-gradient(90deg,var(--accent) 50%,var(--alerte) 50%)}
 .legende-avancement{display:flex;gap:12px;margin:12px 0 -4px;font-size:.68rem;color:var(--discret);opacity:.7}
+/* l'eau : un bouton à cocher (Taha, 21/11/2026) ; l'historique montre l'eau bue */
+.eau .eau-txt{flex:1}
+.eau-check{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;border:1.5px solid var(--filet);background:none;color:rgba(255,255,255,.22);cursor:pointer}
+.eau-check .ic{width:18px;height:18px}
+.eau-check[aria-pressed="true"]{background:#7cc4ff;border-color:#7cc4ff;color:#0b1a26}
+.histo-eau{display:inline-flex;align-items:center;gap:4px;margin-top:2px}
+.histo-eau .ic{width:12px;height:12px;color:#7cc4ff}
+.histo-eau.coche .ic:last-child{color:var(--accent)}
