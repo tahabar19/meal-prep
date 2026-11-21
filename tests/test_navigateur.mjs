@@ -203,8 +203,7 @@ try {
     await B.js(`document.querySelector('.grille-plats a.repas').click()`);
     vrai(await attendre(`document.querySelector('.carte-plat [data-action=changer]')`, 10000) >= 0, 'pas de bouton Remplacer');
     await B.js(`document.querySelector('.carte-plat [data-action=changer]').click()`);
-    vrai(await attendre(`document.querySelectorAll('#dialogue .rp-plat .ing-courts').length > 0`, 10000) >= 0, 'pas d\'ingrédients sous les plats proposés');
-    vrai((await B.js(`document.querySelector('#dialogue .rp-plat .ing-courts').textContent.trim()`)).length > 0, 'ingrédients vides');
+    vrai(await attendre(`document.querySelectorAll('#dialogue .rp-plat').length > 0`, 10000) >= 0, 'pas de plats proposés');
     await B.js(`document.querySelector('#dialogue .rp-plat').click()`);
     vrai(await attendre(`document.querySelector('#dialogue [data-ensemble], #dialogue #apIng li')`, 20000) >= 0, 'pas d\'aperçu');
     if (await B.js(`!!document.querySelector('#dialogue [data-ensemble]')`)) {
@@ -231,41 +230,41 @@ try {
     await B.js(`document.getElementById('dialogue').close()`);                // rien n'est enregistré
   });
 
-  await test('Remplacer un plat : tris, recherche, filtres, retour', async () => {
+  await test('Remplacer un plat : compact, un champ IA, pas de filtres, retour', async () => {
     await aller('#/semaine');
     await B.js(`document.querySelector('.grille-plats .repas-ligne:not(.cuisine-fait) a.repas').click()`);
     vrai(await attendre(`document.querySelector('.carte-plat [data-action=changer]')`, 10000) >= 0, 'pas de bouton Remplacer');
     await B.js(`document.querySelector('.carte-plat [data-action=changer]').click()`);
     vrai(await attendre(`document.querySelectorAll('#rpListe .rp-plat').length > 0`, 10000) >= 0, 'pas de plats proposés');
-    vrai(await B.js(`document.querySelectorAll('#rpTris button').length`) >= 8, 'tris manquants');
-    vrai(await B.js(`!!document.querySelector('.rp-actuel') && document.querySelectorAll('.rp-raccourcis button').length >= 2`), 'plat actuel ou raccourcis absents');
+    vrai(await B.js(`!document.querySelector('.rp [data-retirer], .rp [data-perso], .rp [data-filtre], .rp [data-type], .rp-raccourcis')`), 'il reste Retirer, Mon propre plat ou des filtres');
+    vrai(await B.js(`document.querySelector('#rpListe .rp-plat').getBoundingClientRect().height`) <= 80, 'les lignes de plats sont trop hautes');
     await B.photo('remplacer');
-    const premier = () => B.js(`document.querySelector('#rpListe .rp-plat b').textContent`);
-    const avant = await premier();
-    await B.js(`document.querySelector('#rpTris [data-tri=leger]').click()`);
-    const kcal = await B.js(`[...document.querySelectorAll('#rpListe .rp-macros strong')].filter((_, i) => i % 2 === 0).slice(0, 5).map(x => +x.textContent.replace(/\D/g, ''))`);
+    // le tri, dans un menu
+    await B.js(`(() => { const t = document.getElementById('rpTri'); t.value = 'leger'; t.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    const kcal = await B.js(`[...document.querySelectorAll('#rpListe .rp-macros strong')].filter((_, i) => i % 2 === 0).slice(0, 5).map(x => +x.textContent.replace(/\\D/g, ''))`);
     vrai(kcal.every((v, i) => !i || v >= kcal[i - 1]), `« Plus léger » mal trié : ${kcal}`);
-    // recherche : dans tous les types
+    // le champ IA : cherche dans tous les plats et propose de créer le plat
     await B.js(`(() => { const i = document.getElementById('chPlat'); i.value = 'poulet'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
-    vrai(await B.js(`document.querySelector('#rpTypes [data-type=tous]').getAttribute('aria-pressed')`) === 'true', 'la recherche ne passe pas à « Tout »');
-    const n = await B.js(`document.querySelectorAll('#rpListe .rp-plat').length`);
-    vrai(n > 0, 'aucun plat au poulet');
+    vrai(await B.js(`document.querySelectorAll('#rpListe .rp-plat').length`) > 0, 'aucun plat au poulet');
+    vrai(await B.js(`!!document.querySelector('#rpIA [data-ia]')`), 'pas de « Créer avec l\'IA »');
     vrai(await B.js(`!document.getElementById('rpEffacer').hidden`), 'pas de bouton pour effacer');
     await B.photo('remplacer-recherche');
-    await B.js(`document.querySelector('#rpFiltres [data-filtre="Riche en protéines"]').click()`);
-    vrai(await B.js(`document.querySelectorAll('#rpListe .rp-plat').length`) <= n, 'le filtre n\'a rien filtré');
-    vrai(await B.js(`!!document.querySelector('#rpFiltres [data-raz]')`), 'pas de « Tout enlever »');
-    // aperçu puis Retour : la recherche et le filtre sont gardés
-    await B.js(`document.querySelector('#rpListe .rp-plat, #rpListe [data-tout]').click()`);
+    // aperçu puis Retour : la recherche est gardée
+    await B.js(`document.querySelector('#rpListe .rp-plat').click()`);
     if (await attendre(`document.querySelector('#dialogue [data-ensemble], #dialogue [value=non]') && !document.getElementById('rpListe')`, 20000) >= 0) {
       await B.js(`document.querySelector('#dialogue [value=non]').click()`);
       vrai(await attendre(`document.getElementById('chPlat') && document.getElementById('chPlat').value === 'poulet'`, 10000) >= 0, 'la recherche est perdue au retour');
-      vrai(await B.js(`document.querySelector('#rpFiltres [data-filtre="Riche en protéines"]').getAttribute('aria-pressed')`) === 'true', 'le filtre est perdu au retour');
     }
-    vrai(typeof avant === 'string', 'premier plat');
+    // Créer avec l'IA : l'IA calcule (ou, sans Claude, les ingrédients à la main), et Retour revient ici
+    await B.js(`(() => { const i = document.getElementById('chPlat'); i.value = '2 oeufs et 70 g de pain pita'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await B.js(`document.querySelector('#rpIA [data-ia]').click()`);
+    vrai(await attendre(`!document.getElementById('rpListe')`, 5000) >= 0, '« Créer avec l\'IA » ne fait rien');
+    vrai(await attendre(`document.getElementById('nrItems') || document.getElementById('ppIng')`, 90000) >= 0, 'ni vérification de l\'IA ni saisie à la main');
+    const ia = await B.js(`document.getElementById('nrItems') ? 'IA' : 'à la main'`);
+    console.log('        créer avec l\'IA : ' + ia);
+    await B.photo('remplacer-ia');
     vrai(await B.js(`document.documentElement.scrollWidth - window.innerWidth`) <= 1, 'la page déborde');
-    await B.js(`document.querySelector('#dialogue [data-fermer]').click()`);
-    vrai(await attendre(`!document.getElementById('dialogue').open`, 5000) >= 0, 'la croix ne ferme pas');
+    await B.js(`document.getElementById('dialogue').close()`);                // rien n'est enregistré
   });
 
   await test('Vitamines : le besoin d\'un jour est écrit', async () => {
