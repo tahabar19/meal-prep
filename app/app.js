@@ -1851,13 +1851,18 @@ function vueVitaminesMangees(params) {
       <div class="cal-jours">${["L", "M", "M", "J", "V", "S", "D"].map(j => `<span>${j}</span>`).join("")}${cases.join("")}</div>`;
   };
   apresRendu.push(() => {
-    const bouton = $("vitDate"), cal = $("vitCal"); if (!bouton) return;
-    let mois = date.slice(0, 7);
-    const dessiner = () => { cal.innerHTML = calendrier(mois); };
-    bouton.addEventListener("click", () => { cal.hidden = !cal.hidden; bouton.setAttribute("aria-expanded", String(!cal.hidden)); if (!cal.hidden) dessiner(); });
+    const bouton = $("vitDate"), cal = $("vitCal");
+    if (!bouton || bouton.dataset.branche) return;          // une seule fois, même si la vue est posée deux fois
+    bouton.dataset.branche = "1";
+    // Ouvert, il le reste si la page se redessine (une photo ou une mise à jour arrivée en fond).
+    let mois = calVitamines.ouvert && calVitamines.date === date ? calVitamines.mois : date.slice(0, 7);
+    const dessiner = () => { cal.innerHTML = calendrier(mois); Object.assign(calVitamines, { mois, date }); };
+    const ouvrir = oui => { cal.hidden = !oui; calVitamines.ouvert = oui; bouton.setAttribute("aria-expanded", String(oui)); if (oui) dessiner(); };
+    if (calVitamines.ouvert && calVitamines.date === date) ouvrir(true);
+    bouton.addEventListener("click", () => ouvrir(cal.hidden));
     cal.addEventListener("click", ev => {
       const j = ev.target.closest("[data-jour]"), m = ev.target.closest("[data-mois]");
-      if (j && !j.disabled) location.hash = lien(j.dataset.jour);
+      if (j && !j.disabled) { calVitamines.ouvert = false; location.hash = lien(j.dataset.jour); }
       else if (m && !m.disabled) { const x = new Date(mois + "-15T12:00"); x.setMonth(x.getMonth() + Number(m.dataset.mois));
         mois = `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`; dessiner(); }
     });
@@ -2287,6 +2292,7 @@ function platDHistorique(x, date) {
   return `<div class="exo repas-ligne"><a class="repas" href="#/plat/${x.id}" data-kcal="${x.kcal}" data-prot="${x.prot}" data-gluc="${x.gluc || 0}"
     data-lip="${x.lip || 0}" data-quand="${esc(`${quand} · ${dateLongueCourte(date)}`)}">${photo(r, 480)}${texte}</a></div>`;
 }
+const calVitamines = { ouvert: false, mois: "", date: "" };      // le calendrier des Vitamines, ouvert ou non
 const eauCochee = date => !!(E.eau && ((E.eau.bu || {})[date] || 0) >= E.eau.litres - 0.001);
 function vueHistorique() {
   barre("");
