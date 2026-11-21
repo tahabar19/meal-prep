@@ -219,6 +219,18 @@ try {
     await B.js(`document.getElementById('dialogue').close()`);                // rien n'est enregistré
   });
 
+  await test('Carte d\'un plat : « Retirer ce repas » au-dessus d\'« Équilibrer »', async () => {
+    await aller('#/semaine');
+    await B.js(`document.querySelector('.grille-plats .repas-ligne:not(.cuisine-fait) a.repas').click()`);
+    vrai(await attendre(`document.querySelector('.carte-plat .cp-equilibrer [data-action=retirerRepas]')`, 10000) >= 0, 'pas de bouton Retirer ce repas');
+    vrai(await B.js(`(() => { const b = [...document.querySelectorAll('.carte-plat .cp-equilibrer .bouton')]; const r = b.find(x => x.dataset.action === 'retirerRepas');
+      return b.every(x => x === r || x.getBoundingClientRect().top > r.getBoundingClientRect().bottom - 1); })()`), 'Retirer n\'est pas au-dessus des autres boutons');
+    await B.photo('carte-retirer');
+    await B.js(`document.querySelector('.carte-plat [data-action=retirerRepas]').click()`);
+    vrai(await attendre(`/Retirer/.test((document.getElementById('dialogueTitre') || {}).textContent || '')`, 20000) >= 0, 'pas d\'aperçu du retrait');
+    await B.js(`document.getElementById('dialogue').close()`);                // rien n'est enregistré
+  });
+
   await test('Vitamines : le besoin d\'un jour est écrit', async () => {
     await aller('#/vitamines');
     vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'pas de page');
