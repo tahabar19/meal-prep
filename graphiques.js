@@ -108,7 +108,14 @@ const Graph = (() => {
     };
     zone.addEventListener("pointermove", voir);
     zone.addEventListener("pointerdown", voir);
-    zone.addEventListener("pointerleave", e => { if (e.pointerType === "mouse") { fil.setAttribute("visibility", "hidden"); bulle.hidden = true; } });
+    // Un toucher ailleurs (hors de la courbe) fait disparaître la bulle ; un toucher dans le graphique la déplace.
+    const cacher = () => { fil.setAttribute("visibility", "hidden"); bulle.hidden = true; };
+    const dehors = e => {
+      if (!hote.isConnected) return document.removeEventListener("pointerdown", dehors, true);     // graphique redessiné
+      if (!bulle.hidden && e.target !== zone) cacher();
+    };
+    document.addEventListener("pointerdown", dehors, true);
+    zone.addEventListener("pointerleave", e => { if (e.pointerType === "mouse") cacher(); });
   }
 
   // Barres. donnees = [{ etiquette, valeur, detail, couleur, choisi }] ; cible = trait pointillé (objectif).
