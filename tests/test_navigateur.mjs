@@ -203,9 +203,9 @@ try {
     await B.js(`document.querySelector('.grille-plats a.repas').click()`);
     vrai(await attendre(`document.querySelector('.carte-plat [data-action=changer]')`, 10000) >= 0, 'pas de bouton Remplacer');
     await B.js(`document.querySelector('.carte-plat [data-action=changer]').click()`);
-    vrai(await attendre(`document.querySelectorAll('#dialogue .candidat .ing-courts').length > 0`, 10000) >= 0, 'pas d\'ingrédients sous les plats proposés');
-    vrai((await B.js(`document.querySelector('#dialogue .candidat .ing-courts').textContent.trim()`)).length > 0, 'ingrédients vides');
-    await B.js(`document.querySelector('#dialogue .candidat').click()`);
+    vrai(await attendre(`document.querySelectorAll('#dialogue .rp-plat .ing-courts').length > 0`, 10000) >= 0, 'pas d\'ingrédients sous les plats proposés');
+    vrai((await B.js(`document.querySelector('#dialogue .rp-plat .ing-courts').textContent.trim()`)).length > 0, 'ingrédients vides');
+    await B.js(`document.querySelector('#dialogue .rp-plat').click()`);
     vrai(await attendre(`document.querySelector('#dialogue [data-ensemble], #dialogue #apIng li')`, 20000) >= 0, 'pas d\'aperçu');
     if (await B.js(`!!document.querySelector('#dialogue [data-ensemble]')`)) {
       await B.js(`document.querySelector('#dialogue [data-ensemble="0"]').click()`);
@@ -229,6 +229,43 @@ try {
     await B.js(`document.querySelector('.carte-plat [data-action=retirerRepas]').click()`);
     vrai(await attendre(`/Retirer/.test((document.getElementById('dialogueTitre') || {}).textContent || '')`, 20000) >= 0, 'pas d\'aperçu du retrait');
     await B.js(`document.getElementById('dialogue').close()`);                // rien n'est enregistré
+  });
+
+  await test('Remplacer un plat : tris, recherche, filtres, retour', async () => {
+    await aller('#/semaine');
+    await B.js(`document.querySelector('.grille-plats .repas-ligne:not(.cuisine-fait) a.repas').click()`);
+    vrai(await attendre(`document.querySelector('.carte-plat [data-action=changer]')`, 10000) >= 0, 'pas de bouton Remplacer');
+    await B.js(`document.querySelector('.carte-plat [data-action=changer]').click()`);
+    vrai(await attendre(`document.querySelectorAll('#rpListe .rp-plat').length > 0`, 10000) >= 0, 'pas de plats proposés');
+    vrai(await B.js(`document.querySelectorAll('#rpTris button').length`) >= 8, 'tris manquants');
+    vrai(await B.js(`!!document.querySelector('.rp-actuel') && document.querySelectorAll('.rp-raccourcis button').length >= 2`), 'plat actuel ou raccourcis absents');
+    await B.photo('remplacer');
+    const premier = () => B.js(`document.querySelector('#rpListe .rp-plat b').textContent`);
+    const avant = await premier();
+    await B.js(`document.querySelector('#rpTris [data-tri=leger]').click()`);
+    const kcal = await B.js(`[...document.querySelectorAll('#rpListe .rp-macros strong')].filter((_, i) => i % 2 === 0).slice(0, 5).map(x => +x.textContent.replace(/\D/g, ''))`);
+    vrai(kcal.every((v, i) => !i || v >= kcal[i - 1]), `« Plus léger » mal trié : ${kcal}`);
+    // recherche : dans tous les types
+    await B.js(`(() => { const i = document.getElementById('chPlat'); i.value = 'poulet'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    vrai(await B.js(`document.querySelector('#rpTypes [data-type=tous]').getAttribute('aria-pressed')`) === 'true', 'la recherche ne passe pas à « Tout »');
+    const n = await B.js(`document.querySelectorAll('#rpListe .rp-plat').length`);
+    vrai(n > 0, 'aucun plat au poulet');
+    vrai(await B.js(`!document.getElementById('rpEffacer').hidden`), 'pas de bouton pour effacer');
+    await B.photo('remplacer-recherche');
+    await B.js(`document.querySelector('#rpFiltres [data-filtre="Riche en protéines"]').click()`);
+    vrai(await B.js(`document.querySelectorAll('#rpListe .rp-plat').length`) <= n, 'le filtre n\'a rien filtré');
+    vrai(await B.js(`!!document.querySelector('#rpFiltres [data-raz]')`), 'pas de « Tout enlever »');
+    // aperçu puis Retour : la recherche et le filtre sont gardés
+    await B.js(`document.querySelector('#rpListe .rp-plat, #rpListe [data-tout]').click()`);
+    if (await attendre(`document.querySelector('#dialogue [data-ensemble], #dialogue [value=non]') && !document.getElementById('rpListe')`, 20000) >= 0) {
+      await B.js(`document.querySelector('#dialogue [value=non]').click()`);
+      vrai(await attendre(`document.getElementById('chPlat') && document.getElementById('chPlat').value === 'poulet'`, 10000) >= 0, 'la recherche est perdue au retour');
+      vrai(await B.js(`document.querySelector('#rpFiltres [data-filtre="Riche en protéines"]').getAttribute('aria-pressed')`) === 'true', 'le filtre est perdu au retour');
+    }
+    vrai(typeof avant === 'string', 'premier plat');
+    vrai(await B.js(`document.documentElement.scrollWidth - window.innerWidth`) <= 1, 'la page déborde');
+    await B.js(`document.querySelector('#dialogue [data-fermer]').click()`);
+    vrai(await attendre(`!document.getElementById('dialogue').open`, 5000) >= 0, 'la croix ne ferme pas');
   });
 
   await test('Vitamines : le besoin d\'un jour est écrit', async () => {
