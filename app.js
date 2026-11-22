@@ -762,7 +762,7 @@ function demanderChangement(k, n, moment) {
     const texte = R.cherche.trim();
     if (texte.length < 2) return;
     sortir();
-    noterRepas({ date: dateDuPlan(s, n), remplacer: { texte, place: moment.startsWith("col") ? "col" : moment, retour,
+    noterRepas({ date: dateDuPlan(s, n), remplacer: { texte, place: moment.startsWith("col") ? "col" : moment, retour, avant: { kcal: avantK, prot: avantP },
       k, operation, titre: nom => `${sansRepas ? "Mettre" : "Remplacer par"} « ${nom} » ?`,
       main: () => demanderPlatPerso({ cat, k, n, moment, operation, remplace: sansRepas ? null : actuelId, retour },
         { nom: "", ingredients: texte.split(/[,;\n+]|\s+et\s+/i).map(x => x.trim()).filter(Boolean), telQuel: true }) } });
@@ -1958,6 +1958,14 @@ function vueRecette({ arg, params }) {
   const k = E.mois ? E.mois.rang : 0;
   const goute = s && Object.keys(s.prepares || {}).some(k => k.endsWith("|" + arg));
   const combien = seance ? pourCombien(seance, s.jours[n]) : "pour 1 repas", facteur = seance ? tailleDe(s.jours[n], arg) : 1;
+  // Taha, 22/11/2026 : « dans Modifier les ingrédients des portions, dans Cuisine d'autres » → en mode flemmard, les
+  // quantités d'UNE assiette (comme Modifier) ; ce qui se cuisine pour plusieurs repas, à part, sur demande.
+  const listeRecette = mult => `<ul class="ingredients">${r.ing.map(i => `<li><span>${i.u === "qs" ? esc(i.n) : `<button type="button" class="lien" data-action="ingredient" data-nom="${esc(i.n)}"
+        aria-label="Valeurs de ${esc(i.n)}">${esc(i.n)}</button>`}</span>
+        <span>${quantite(i.u === "qs" ? 0 : Math.round(i.q * mult * 10) / 10, i.u)}</span></li>`).join("")}</ul>`;
+  apresRendu.push(() => { const b = document.querySelector("[data-ing-tout]"); if (b) b.addEventListener("click", () => {
+    const t = document.querySelector("[data-ing-total]"); t.hidden = !t.hidden;
+    b.textContent = t.hidden ? `Voir les quantités à cuisiner pour les ${seance.repas}` : "Cacher"; }); });
   barre(seance && !ok ? `<div><b>${s.jours[n].jour}, ${combien}</b><span>Les ingrédients sortiront du stock</span></div>
     <button class="bouton" data-action="cuisine" data-plat="${r.id}" data-jour="${n}">C'est cuisiné</button>` : "");
   // Mode flemmard : pas de page Cuisine ; « Retour » ramène là d'où tu viens (Jour, Catalogue…) (Taha, 22/11/2026).
@@ -1974,9 +1982,10 @@ function vueRecette({ arg, params }) {
           class="${r.note && i <= Math.round(r.note) ? "pleine" : ""}" aria-label="${i} étoile${i > 1 ? "s" : ""} sur 5">${icone(r.note && i <= Math.round(r.note) ? "star-fill" : "star")}</button>`).join("")}</div>` : ""}
         ${enSuivi() ? "" : `<p class="discret petit">${seance ? `${s.jours[n].jour}, ` : ""}${combien}${seance && seance.pour_demain ? " : ce soir et demain midi" : ""}.</p>`}</div></div>
     <section class="fc-bloc" aria-labelledby="tIng"><h2 id="tIng">Ingrédients</h2>
-      <ul class="ingredients">${r.ing.map(i => `<li><span>${i.u === "qs" ? esc(i.n) : `<button type="button" class="lien" data-action="ingredient" data-nom="${esc(i.n)}"
-        aria-label="Valeurs de ${esc(i.n)}">${esc(i.n)}</button>${(E.ingredients_perso || {})[i.n] ? ` <small class="discret">(${E.ingredients_perso[i.n].cree ? "créé" : "corrigé"} par toi)</small>` : ""}`}</span>
-        <span>${quantite(i.u === "qs" ? 0 : Math.round(i.q * portions * 10) / 10, i.u)}</span></li>`).join("")}</ul>
+      ${listeRecette(enSuivi() ? facteur : portions)}
+      ${enSuivi() && seance && seance.repas > 1 ? `<p class="petit discret fc-double">Tu cuisines pour ${seance.repas} repas${seance.pour_demain ? " (ce soir et demain midi)" : ""} : ci-dessus, UNE assiette.
+        <button type="button" class="lien" data-ing-tout>Voir les quantités à cuisiner pour les ${seance.repas}</button></p>
+        <div hidden data-ing-total>${listeRecette(portions)}</div>` : ""}
 </section>
     <section class="fc-bloc" aria-labelledby="tEtapes"><h2 id="tEtapes">Préparation</h2>
       <ol class="etapes">${r.etapes.map(e => `<li>${esc(e)}</li>`).join("")}</ol>
@@ -2617,11 +2626,12 @@ function platDHistorique(x, date) {
 function mangerAujourdhui(id, moment) {
   const ici = semainePourDate(E.journal_repas.aujourdhui), r = recette(id);
   if (!ici || !r) return dire("Pas de menu aujourd'hui.");
+  // Taha, 22/11/2026 : « ça a remplacé un repas » → le plat s'AJOUTE à la journée (au même repas), rien n'est retiré ;
+  // seulement un repas vide (« rien ») est rempli.
   const jp = ici.s.jours[ici.n], place = ["pdj", "dej", "din"].includes(moment) ? moment : null;
-  const libre = place && !(place === "dej" && jp.dej_reste) && (jp[place] === "rien" || !fait(ici.s, ici.n, jp[place]));
-  if (libre && jp[place] === id) return dire(`« ${r.nom} » est déjà au menu aujourd'hui.`);
-  const op = libre ? { type: "changer", jour: ici.n, moment: place, plat: id } : { type: "ajouter", jour: ici.n, plat: id, ...(place ? { moment: place } : {}) };
-  apercuChangement(ici.k, op, libre && jp[place] !== "rien" ? `Aujourd'hui, « ${r.nom} » à la place de « ${recette(jp[place]).nom} » ?` : `Ajouter « ${r.nom} » aujourd'hui ?`);
+  const vide = place && !(place === "dej" && jp.dej_reste) && jp[place] === "rien";
+  const op = vide ? { type: "changer", jour: ici.n, moment: place, plat: id } : { type: "ajouter", jour: ici.n, plat: id, ...(place ? { moment: place } : {}) };
+  apercuChangement(ici.k, op, `Ajouter « ${r.nom} » aujourd'hui ?`);
 }
 const calVitamines = { ouvert: false, mois: "", date: "" };      // le calendrier des Vitamines, ouvert ou non
 const eauCochee = date => !!(E.eau && ((E.eau.bu || {})[date] || 0) >= E.eau.litres - 0.001);
@@ -2767,6 +2777,16 @@ function noterRepas({ date, entree = null, remplacer = null }) {
     if (photoPlat === undefined) photoPlat = photoJointe && !items.some(i => /ticket|étiquette sur la photo/.test(i.source || "")) ? photoJointe : null;
     const deNouveau = () => verifier({ ...p, items, nom: $("nrNom").value }, aLaMain, parIA);
     const MAC = ["kcal", "prot", "gluc", "lip", "fib"];
+    const journee = (() => {
+      if (remplacer && remplacer.creer) return null;                  // un plat créé depuis le catalogue : pas un jour
+      const ici = semainePourDate(date);
+      if (!ici) return null;
+      const j = ici.s.jours[ici.n], plus = enPlusDuJour(ici.s, ici.n);
+      let kcal = (j.kcal || 0) + plus.kcal, prot = (j.prot || 0) + plus.prot;
+      if (entree) { kcal -= (entree.items || []).reduce((t, x) => t + (Number(x.kcal) || 0), 0); prot -= (entree.items || []).reduce((t, x) => t + (Number(x.prot) || 0), 0); }
+      if (remplacer && remplacer.avant) { kcal -= remplacer.avant.kcal; prot -= remplacer.avant.prot; }
+      return { kcal, prot, obj: ici.s.objectif || {} };
+    })();
     const recalc = i => { if (i.pour100 && i.g) MAC.forEach(m => { i[m] = Math.round(i.pour100[m] * i.g) / 100; }); };
     const somme = m => items.reduce((t, i) => t + (Number(i[m]) || 0), 0);
     const rendreListe = () => {
@@ -2776,6 +2796,13 @@ function noterRepas({ date, entree = null, remplacer = null }) {
         <span class="nr-chiffres">${["kcal", "prot", "gluc", "lip"].map(m => `<label><input type="text" inputmode="decimal" data-k="${k}" data-champ="${m}" value="${virgule(Math.round(i[m] * 10) / 10)}" ${i.pour100 && i.g ? "readonly" : ""}><span>${{ kcal: "kcal", prot: "prot.", gluc: "gluc.", lip: "lip." }[m]}</span></label>`).join("")}</span>
         <small class="discret">${esc(i.source || "")}${i.url ? ` · <a href="${esc(i.url)}" target="_blank" rel="noopener noreferrer">étiquette</a>` : ""}</small>
         <button type="button" class="effacer" data-retirer="${k}" aria-label="Retirer ${esc(i.nom)}">${icone("x")}</button></li>`).join("");
+      // La journée avec ce repas (Taha, 22/11/2026 : « voir les macros générales comme l'autre page ») : ce jour-là
+      // sans ce repas, plus ce qu'il apporte ; l'écart en petit dessous.
+      if (journee) {
+        const k = Math.round(somme("kcal")), pr = Math.round(somme("prot"));
+        const tuile = (nom, base, plus, but, unite, bonSiPlus) => `<div><span>${nom}</span><b class="chiffres">${nombre(Math.round(base + plus))}${but ? `<small> / ${nombre(but)}</small>` : ""} ${unite}</b>${plus ? `<small class="ecart ${bonSiPlus ? "aj-bon" : ""}">${plus > 0 ? "+" : "−"}${nombre(Math.abs(plus))} ${unite}</small>` : ""}</div>`;
+        $("nrJour").innerHTML = tuile("Calories du jour", journee.kcal, k, journee.obj.kcal, "kcal", false) + tuile("Protéines du jour", journee.prot, pr, journee.obj.prot, "g", true);
+      } else $("nrJour").hidden = true;
       // Les macros du plat, en grand, comme sur la carte d'un plat (Taha, 20/11/2026)
       $("nrTotal").innerHTML = [["kcal", "", "kcal"], ["prot", " g", "prot."], ["gluc", " g", "gluc."], ["lip", " g", "lip."]]
         .map(([m, u, nom]) => `<div><b>${nombre(Math.round(somme(m)))}${u}</b><span>${nom}</span></div>`).join("");
@@ -2795,6 +2822,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       ${puces()}
       ${p.remarque ? `<p class="dujour" style="margin-top:12px">${esc(p.remarque)}</p>` : ""}
       <div class="champ" style="margin-top:12px"><label for="nrNom">${remplacer && remplacer.creer ? "Nom du plat" : "Nom du repas"}</label><input id="nrNom" type="text" maxlength="80" value="${esc(p.nom || "")}"></div>
+      <div class="aj-jour" id="nrJour" role="status"></div>
       <p class="petit discret nr-titre-macros">Les macros du plat</p>
       <div class="cp-chiffres nr-macros" id="nrTotal" aria-live="polite"></div>
       ${!aLaMain && E.claude !== false ? `<div class="champ champ-ia nr-repondre"><label for="nrCorrection">Répondre à Claude ${BADGE_IA}</label>
