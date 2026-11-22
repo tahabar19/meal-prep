@@ -181,7 +181,7 @@ try {
     console.log(`        carte : ${await B.js(`document.querySelector('.carte-plat').scrollHeight`)} px de haut`);
     vrai(d <= 1, `la carte défile de ${d} px`);
     const ec = await B.js(`(() => { const r = document.querySelector('.carte-plat').getBoundingClientRect(); return Math.round(r.top - (innerHeight - r.bottom)); })()`);
-    vrai(Math.abs(ec) <= 2, `la carte n'est pas centrée (${ec} px d'écart haut/bas)`);
+    vrai(Math.abs(ec - 60) <= 2, `la carte n'est pas 0,8 cm sous le centre (${ec} px d'écart haut/bas au lieu de 60)`);   // Taha, 22/11/2026
     await B.photo('carte-plat');
     await fermerCarte();
   });
@@ -261,7 +261,7 @@ try {
     vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'pas de page');
     if (await B.js(`!!document.querySelector('.barres .v')`)) {
       vrai(await B.js(`document.querySelector('.barres .v').textContent.includes('/')`), 'le besoin par jour n\'est pas écrit');
-      vrai(await B.js(`!!document.querySelector('.barres-legende')`), 'pas de légende');
+      vrai(await B.js(`!!document.querySelector('.barres-legende') || /besoin par jour/.test(document.querySelector('.vit-jour').textContent)`), 'pas de légende');
     }
   });
 
@@ -359,6 +359,28 @@ try {
     }
     if (await B.js(`E.claude === false && E.vitamines_a_completer.length > 0`))
       vrai(await B.js(`!!document.querySelector('.a-completer')`), 'sans compte Claude, « À compléter » doit apparaître');
+    // Taha, 22/11/2026 : les 10 vitamines sur un écran, sans défiler
+    if (await B.js(`!document.getElementById('vitCal').hidden`)) { await B.js(`document.getElementById('vitDate').click()`); await att(200); }
+    if (await B.js(`!!document.querySelector('.barres li')`)) {
+      const bas = await B.js(`(() => { const l = [...document.querySelectorAll('.barres li')].pop().getBoundingClientRect(), n = document.querySelector('.nav-bas'); return Math.round(l.bottom - (n ? n.getBoundingClientRect().top : innerHeight)); })()`);
+      vrai(bas <= 0, `la dernière vitamine est ${bas} px sous l'écran`);
+    }
+    await B.photo('vitamines-jour');
+  });
+
+  await test('Vitamines : sur la durée (7 et 30 jours)', async () => {
+    await aller('#/vitamines?vue=suivi');
+    vrai(await attendre(`document.querySelector('.vit-periodes')`, 10000) >= 0, 'pas de choix de période');
+    vrai(await B.js(`!!document.querySelector('.vit-onglets a[aria-current][href*="suivi"]')`), 'l\'onglet « Sur la durée » n\'est pas actif');
+    if (await B.js(`document.querySelectorAll('.barres li').length`)) {
+      vrai(await B.js(`document.querySelectorAll('.barres li').length === Object.keys(E.vitamines.noms).length`), 'il manque des vitamines');
+      const moy = await B.js(`[...document.querySelectorAll('.barres .v b')].map(b => parseInt(b.textContent))`);
+      vrai(moy.every((v, i) => !i || v >= moy[i - 1]), `pas triées du plus bas au plus haut : ${moy}`);
+    }
+    await aller('#/vitamines?vue=suivi&p=30');
+    vrai(await B.js(`!!document.querySelector('.vit-periodes a[aria-current][href*="p=30"]')`), '30 jours pas choisi');
+    await B.photo('vitamines-duree');
+    await aller('#/vitamines');
   });
 
   await test('Avancement : courbe et périodes', async () => {
