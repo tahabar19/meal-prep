@@ -2725,7 +2725,7 @@ function vueJourSuivi(params) {
   }
   const idees = dec >= 2 ? E.ideesLoin[date] : (J.idees || {})[date];
   // « Ajouter un repas » : une case de la grille en pointillés, un + au centre, comme un repas retiré (Taha, 22/11/2026).
-  const tuileAjout = `<button type="button" class="exo ajout-tuile" data-action="noterRepas" data-date="${date}" aria-label="Ajouter un repas : un de tes plats, une description, une photo ou un ticket" title="Ajouter un repas">${icone("plus")}</button>`;
+  const tuileAjout = `<button type="button" class="exo ajout-tuile" data-action="noterRepas" data-date="${date}" aria-label="Ajouter un repas : un de tes plats, une description, une photo ou un ticket"><span class="at-rond">${icone("plus")}</span><b>Ajouter un repas</b><small>Plat, photo ou ticket</small></button>`;
   apresRendu.push(() => document.querySelectorAll("[data-idee]").forEach(b => b.addEventListener("click", () => {
     const x = idees.plats[Number(b.dataset.idee)];
     apercuChangement(idees.semaine, { ...x.operation, regler_plat: true }, `Ajouter « ${x.nom} » ?`);

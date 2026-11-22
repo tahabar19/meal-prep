@@ -1453,8 +1453,13 @@ html:has(.carte-fond.ouvert){background:#060706}
 .manque-jour.complet .ic{color:var(--stock-ok)}
 .manque-fond{align-items:center;justify-items:center;padding:16px}
 .manque-feuille{width:min(100%,380px);max-height:calc(var(--haut-visible,100dvh) - 32px);padding:20px 18px 16px;border-radius:22px}
-.exo.ajout-tuile{display:flex;align-items:center;justify-content:center;min-height:110px;padding:0;border:1.5px dashed var(--filet)!important;
-  background:transparent!important;color:var(--discret);font:inherit;cursor:pointer;border-radius:var(--r-carte)}
-.exo.ajout-tuile .ic{width:30px;height:30px;color:var(--accent)}
-.exo.ajout-tuile:hover,.exo.ajout-tuile:focus-visible{border-color:var(--accent)!important}
+.exos .exo.ajout-tuile,.grille-plats .exos:not(.catalogue) .exo.ajout-tuile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  min-height:150px;padding:14px 8px;border:1.5px dashed var(--filet)!important;border-radius:var(--r-carte);background:transparent!important;
+  color:var(--encre);font:inherit;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.exo.ajout-tuile .at-rond{display:grid;place-items:center;width:44px;height:44px;margin-bottom:4px;border-radius:50%;background:rgba(200,240,75,.12)}
+.exo.ajout-tuile .at-rond .ic{width:22px;height:22px;color:var(--accent)}
+.exo.ajout-tuile b{font-size:.85rem;line-height:1.2}
+.exo.ajout-tuile small{font-size:.7rem;line-height:1.25;color:var(--discret)}
+.exo.ajout-tuile:hover,.exo.ajout-tuile:focus-visible{border-color:var(--accent)!important;background:rgba(200,240,75,.04)!important}
+.exo.ajout-tuile:active{background:rgba(200,240,75,.08)!important}
 .stock-faisable + .stock-taper{margin-top:14px}
