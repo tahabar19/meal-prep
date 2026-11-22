@@ -1217,3 +1217,25 @@ details.a-completer[open] > summary > .ic{transform:rotate(90deg)}
 .fc-note button{width:30px;height:30px;color:var(--discret)}
 .fc-note button .ic{width:16px;height:16px}
 .fc-note button.pleine{color:var(--accent)}
+/* « Pour finir la journée » : une ligne qu'on ouvre (Taha, 22/11/2026) */
+details.idees-ligne{padding:4px 14px!important}
+details.idees-ligne > summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:52px;cursor:pointer;list-style:none}
+details.idees-ligne > summary::-webkit-details-marker{display:none}
+details.idees-ligne > summary > span{display:grid;gap:1px;min-width:0}
+details.idees-ligne > summary b{color:var(--encre);font-weight:600;font-size:.95rem}
+details.idees-ligne > summary small{color:var(--discret);font-size:.78rem}
+details.idees-ligne > summary > .ic{flex:none;color:var(--discret);transition:transform .2s}
+details.idees-ligne[open] > summary > .ic{transform:rotate(90deg)}
+details.idees-ligne .rp-liste{margin:2px 0 8px}
+/* Profil resserré (Taha, 22/11/2026) */
+.profil-phase{margin:-6px 0 12px}
+.profil-infos{padding:12px 14px!important}
+.profil-infos h2{margin:0 0 8px;font-size:.95rem}
+.profil-infos dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0}
+.profil-infos dl > div{padding:7px 10px;border-radius:10px;background:var(--surface-fort)}
+.profil-infos dt{font-size:.72rem;color:var(--discret)}
+.profil-infos dd{margin:1px 0 0;color:var(--encre);font-size:.92rem;font-weight:600}
+.profil-menu{margin-top:12px}
+.profil-menu a > span{display:grid;gap:1px}
+.profil-menu small{display:block;font-size:.76rem;font-weight:400;color:var(--discret)}
+.profil-sortie{margin-top:10px}
