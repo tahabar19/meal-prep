@@ -127,12 +127,19 @@ Deno.serve(async (req) => {
     if (!user) return json({ erreur: "Reconnecte-toi." }, 401);
     const corps = await req.json();
 
-    if (["web", "cle", "messages"].includes(corps.action) && !(await quota(admin, user.id, corps.action)))
+    if (["web", "web_lot", "cle", "messages"].includes(corps.action) && !(await quota(admin, user.id, corps.action === "web_lot" ? "web" : corps.action)))
       return json({ erreur: "Trop de demandes pour l'instant : réessaie dans un moment." }, 429);
 
     if (corps.action === "web") {
       try { return json(await lire(String(corps.url || ""), !!corps.binaire)); }
       catch (e) { return json({ erreur: (e as Error).message }, 400); }
+    }
+
+    // ---------- Plusieurs pages en même temps (étiquettes auchan.fr) : un seul aller-retour ----------
+    if (corps.action === "web_lot") {
+      const urls = (Array.isArray(corps.urls) ? corps.urls : []).slice(0, 8).map(String);
+      const pages = await Promise.all(urls.map((u: string) => lire(u, false).catch((e) => ({ erreur: (e as Error).message }))));
+      return json({ pages });
     }
 
     // ---------- Connecter son compte : on vérifie la clé avant de l'enregistrer ----------

@@ -140,6 +140,7 @@ def preparer() -> None:
     from repas import serveur as s, etiquettes, profil as mod_profil
     serveur = s
     etiquettes._lire = lambda url, delai=10, entetes=None: _lire_page(url)
+    etiquettes._lire_plusieurs = _lire_pages
     s._claude_json = _claude_json
     s._claude_avec_photo = _claude_avec_photo
     s._octets_photo_du_site = _photo_du_catalogue
@@ -190,6 +191,24 @@ def _lire_page(url: str) -> str:
     if d.get("erreur"):
         raise OSError(d["erreur"])
     return d.get("texte") or ""
+
+
+def _lire_pages(urls: list) -> list:
+    """Plusieurs pages en UN appel, lues en même temps par la fonction (21/11/2026 : les étiquettes
+    étaient lues une par une, plusieurs secondes chacune). [texte ou None], dans l'ordre."""
+    urls = [str(u) for u in urls][:8]
+    if not urls:
+        return []
+    d = _pont("web_lot", {"urls": urls})
+    if not isinstance(d.get("pages"), list):          # fonction pas encore à jour : une par une
+        lues = []
+        for u in urls:
+            try:
+                lues.append(_lire_page(u))
+            except OSError:
+                lues.append(None)
+        return lues
+    return [(x or {}).get("texte") if isinstance(x, dict) and not x.get("erreur") else None for x in d["pages"]][:len(urls)]
 
 
 def _claude(blocs: list, max_tokens: int = 4000, tache: str = "aide") -> dict | None:

@@ -142,29 +142,6 @@ try {
   // le smoothie d'essai a un ingrédient retiré (carotte à 0) : le cas qui divisait le plat par deux
   const kcalPlat = motif => B.js(`(() => { const l = [...document.querySelectorAll('.grille-plats .repas-ligne')].find(x => ${motif}.test(x.textContent)); return l ? parseInt(l.textContent.match(/(\\d+) kcal/)[1]) : null; })()`);
   const ouvrirPlat = motif => B.js(`[...document.querySelectorAll('.grille-plats a.repas')].find(a => ${motif}.test(a.textContent)).click()`);
-  await test('Quantité ×1,5 puis retour, ingrédient retiré compris', async () => {
-    await aller('#/semaine');
-    const avant = await kcalPlat('/smoothie/i');
-    vrai(avant > 0, 'pas de smoothie aujourd\'hui');
-    await ouvrirPlat('/smoothie/i');
-    vrai(await attendre(`document.querySelector('.cp-quantite b')`, 10000) >= 0, 'pas de réglage de quantité');
-    const x = await B.js(`document.querySelector('.cp-quantite b').textContent`);
-    vrai(x !== '×0', 'la quantité affiche ×0');
-    await viderToast();
-    await B.js(`document.querySelector('.cp-quantite [aria-label=Plus]').click()`);
-    await toast(); await att(500);
-    const plus = await kcalPlat('/smoothie/i');
-    const attendu = avant * (parseFloat(x.slice(1).replace(',', '.')) + 0.5) / parseFloat(x.slice(1).replace(',', '.'));
-    vrai(Math.abs(plus - attendu) <= 0.04 * attendu + 3, `${x} → +0,5 : ${avant} → ${plus} kcal (attendu ~${Math.round(attendu)})`);
-    await ouvrirPlat('/smoothie/i');
-    await attendre(`document.querySelector('.cp-quantite b')`, 10000);
-    await viderToast();
-    await B.js(`document.querySelector('.cp-quantite [aria-label=Moins]').click()`);
-    await toast(); await att(500);
-    const retour = await kcalPlat('/smoothie/i');
-    vrai(Math.abs(retour - avant) <= 3, `retour : ${retour} au lieu de ${avant} kcal`);
-  });
-
   // Taha, 21/11/2026 : revenir sur les jours d'avant, voir les ingrédients, régler la quantité en voyant les chiffres bouger.
   await test('Jours d\'avant : Hier, puis retour', async () => {
     await aller('#/semaine?d=-1');
@@ -179,22 +156,17 @@ try {
     await aller('#/semaine');
   });
 
-  await test('Carte d\'un plat : ingrédients, quantité qui change tout de suite', async () => {
+  // Taha, 22/11/2026 : plus de barre « Quantité » sur la carte (Modifier les ingrédients suffit), et pas de défilement.
+  await test('Carte d\'un plat : ingrédients, sans barre de quantité, sans défiler', async () => {
     await aller('#/semaine');
     await B.js(`document.querySelector('.grille-plats a.repas').click()`);
     vrai(await attendre(`document.querySelectorAll('.carte-plat .cp-ingredients li').length > 0`, 10000) >= 0, 'pas d\'ingrédients sur la carte');
-    if (await B.js(`!!document.querySelector('.carte-plat .cp-quantite')`)) {
-      const avant = await B.js(`document.querySelector('.carte-plat [data-cp-v]').textContent`);
-      const ingAvant = await B.js(`document.querySelector('.carte-plat .cp-ing-liste').textContent`);
-      await B.js(`document.querySelector('.carte-plat .cp-quantite [aria-label=Plus]').click()`);
-      const apres = await B.js(`document.querySelector('.carte-plat [data-cp-v]').textContent`);
-      vrai(apres !== avant, `les kcal n'ont pas changé tout de suite (${avant})`);
-      vrai(await B.js(`document.querySelector('.carte-plat .cp-ing-liste').textContent`) !== ingAvant, 'les ingrédients n\'ont pas changé');
-      vrai(await B.js(`!!document.querySelector('.carte-plat')`), 'la carte s\'est fermée');
-      await B.photo('carte-quantite');
-      await B.js(`document.querySelector('.carte-plat .cp-quantite [aria-label=Moins]').click()`);   // retour : rien à enregistrer
-      vrai(await B.js(`document.querySelector('.carte-plat [data-cp-v]').textContent`) === avant, 'retour à la quantité de départ raté');
-    }
+    vrai(await B.js(`!document.querySelector('.carte-plat .cp-quantite')`), 'la barre Quantité est encore là');
+    await att(500);
+    const d = await B.js(`(() => { const c = document.querySelector('.carte-plat'); return c.scrollHeight - c.clientHeight; })()`);
+    console.log(`        carte : ${await B.js(`document.querySelector('.carte-plat').scrollHeight`)} px de haut`);
+    vrai(d <= 1, `la carte défile de ${d} px`);
+    await B.photo('carte-plat');
     await fermerCarte();
   });
 
@@ -237,6 +209,7 @@ try {
     await B.js(`document.querySelector('.carte-plat [data-action=changer]').click()`);
     vrai(await attendre(`document.querySelectorAll('#rpListe .rp-plat').length > 0`, 10000) >= 0, 'pas de plats proposés');
     vrai(await B.js(`!document.querySelector('.rp [data-retirer], .rp [data-perso], .rp [data-filtre], .rp [data-type], .rp-raccourcis')`), 'il reste Retirer, Mon propre plat ou des filtres');
+    vrai(await B.js(`!document.querySelector('.rp [data-ajuster], .rp-modifier')`), 'il reste « Modifier » sur le plat');
     vrai(await B.js(`document.querySelector('#rpListe .rp-plat').getBoundingClientRect().height`) <= 80, 'les lignes de plats sont trop hautes');
     await B.photo('remplacer');
     // le tri, dans un menu
@@ -295,7 +268,48 @@ try {
     await B.js(`${ligne}.querySelector('.ing-remettre').click()`);
     vrai(await attendre(`${ligne} && !${ligne}.classList.contains('retire')`, 15000) >= 0, '↺ ne remet pas');
     vrai(await kcal() === avant, `les calories ne reviennent pas (${avant} → ${await kcal()})`);
+    // ajouter : tous les ingrédients connus se trouvent en tapant ; un inconnu se crée avec l'IA (21/11/2026)
+    vrai(!(await B.js(`!!document.querySelector('#dialogue datalist')`)), 'encore la liste limitée (datalist)');
+    const taper = t => B.js(`(() => { const i = document.getElementById('ajNouveau'); i.value = ${JSON.stringify(t)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    await taper('riz');
+    vrai(await B.js(`document.querySelectorAll('#ajSuggestions [data-ing]').length`) > 0, 'rien pour « riz »');
+    vrai(await B.js(`[...document.querySelectorAll('#ajSuggestions [data-ing]')].every(b => /riz/i.test(b.textContent))`), 'des ingrédients sans « riz »');
+    await taper('licorne des bois');
+    vrai(await B.js(`!!document.querySelector('#ajSuggestions [data-ing-ia]')`), 'pas de « Créer avec l\'IA » pour un inconnu');
+    await B.js(`document.getElementById('ajNouveau').scrollIntoView({ block: 'start' })`);
+    await B.photo('ingredients-recherche');
+    await taper('riz');
+    const ajoute = await B.js(`document.querySelector('#ajSuggestions [data-ing]').textContent.trim()`);
+    const nb = await B.js(`document.querySelectorAll('.reglables > li').length`);
+    await B.js(`document.querySelector('#ajSuggestions [data-ing]').click()`);
+    vrai(await attendre(`document.querySelectorAll('.reglables > li').length === ${nb + 1}`, 15000) >= 0, `« ${ajoute} » n'est pas ajouté`);
     await B.js(`document.querySelector('#dialogue [value=non]').click()`);
+  });
+
+  await test('Ajouter un repas : pas de Matin / Midi / Soir à choisir', async () => {
+    await aller('#/semaine');
+    await B.js(`document.querySelector('[data-action=noterRepas]').click()`);
+    vrai(await attendre(`document.getElementById('nrTexte')`, 10000) >= 0, 'pas de saisie');
+    vrai(!(await B.js(`!!document.querySelector('#dialogue [data-moment]')`)), 'les tags Matin / Midi / Soir sont encore là');
+    await B.js(`document.getElementById('dialogue').close()`);
+  });
+
+  await test('Historique : « Manger aujourd\'hui » sur les plats', async () => {
+    await aller('#/historique');
+    vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'pas d\'historique');
+    if (!(await B.js(`!!document.querySelector('.jour-histo .histo-plats')`))) return console.log('        (pas de plat dans l\'historique du compte d\'essai)');
+    await B.js(`document.querySelector('.jour-histo').open = true`);
+    vrai(await B.js(`!!document.querySelector('.jour-histo .histo-manger')`), 'pas de bouton « Manger aujourd\'hui »');
+    await B.photo('historique-manger');
+    // un plat qui n'est pas déjà au menu aujourd'hui (sinon l'appli le dit, sans aperçu)
+    const ok = await B.js(`(() => { const auj = new Set([...document.querySelectorAll('.jour-histo')].length && E.semaine ? (() => { const x = semainePourDate(E.journal_repas.aujourdhui); return x ? [x.s.jours[x.n].pdj, x.s.jours[x.n].dej, x.s.jours[x.n].din, ...x.s.jours[x.n].collations] : []; })() : []);
+      document.querySelectorAll('.jour-histo').forEach(d => d.open = true);
+      const b = [...document.querySelectorAll('.histo-manger')].find(b => !auj.has(b.dataset.plat));
+      if (b) b.click(); return !!b; })()`);
+    if (!ok) return console.log('        (tous les plats de l\'historique sont déjà au menu aujourd\'hui)');
+    const vu = await attendre(`/aujourd'hui/i.test((document.getElementById('dialogueTitre') || {}).textContent || '') || document.querySelector('#dialogue [data-ensemble]')`, 20000) >= 0;
+    vrai(vu, `pas d'aperçu (${await B.js(`(document.getElementById('toast') || {}).textContent + ' | ' + ((document.getElementById('dialogueTitre') || {}).textContent || '')`)})`);
+    await B.js(`document.getElementById('dialogue').close()`);                // rien n'est enregistré
   });
 
   await test('Eau : le bouton se coche et tient après rechargement', async () => {

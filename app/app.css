@@ -1087,7 +1087,6 @@ section.suivi-courbe{margin-top:22px}
 .rp-actuel .photo{width:44px;border-radius:9px}
 .rp-actuel b{display:block;overflow:hidden;color:var(--encre);font-weight:600;font-size:.92rem;line-height:1.25;white-space:nowrap;text-overflow:ellipsis}
 .rp-actuel .chiffres{display:block;font-size:.78rem;color:var(--discret)}
-.rp-modifier{min-height:34px;padding:0 12px;border:1.5px solid var(--filet);border-radius:var(--r-pilule);background:none;color:var(--texte);font:inherit;font-size:.8rem;cursor:pointer}
 .rp-intro{margin:8px 0 0}
 .rp-objectif{margin:10px 0 0;font-size:.8rem;color:var(--discret)}
 .rp-objectif b{color:var(--encre);font-weight:600}
@@ -1134,3 +1133,32 @@ section.suivi-courbe{margin-top:22px}
 @media (min-width:900px){
   .rp-collant{top:-14px;margin:0 -28px;padding:12px 28px 8px}
 }
+/* Modifier les ingrédients : les ingrédients trouvés en tapant, et « Créer avec l'IA » (Taha, 21/11/2026) */
+.ing-suggestions{list-style:none;margin:6px 0 4px;padding:0;display:flex;flex-direction:column;gap:4px}
+.ing-suggestions:empty{display:none}
+.ing-suggestions button[data-ing]{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:42px;padding:0 14px;border:1px solid var(--filet);border-radius:12px;background:none;color:var(--texte);font:inherit;font-size:.92rem;text-align:left;cursor:pointer}
+.ing-suggestions button[data-ing] .ic{width:15px;height:15px;color:var(--discret);flex:none}
+.ing-suggestions button[data-ing]:active{background:rgba(255,255,255,.06)}
+.ing-suggestions .rp-ia{margin-top:2px}
+.ing-cherche .rp-recherche:not(.champ-ia) > .ic{color:var(--discret)}
+.ing-cherche .rp-recherche:not(.champ-ia) input{border-color:var(--filet)}
+.histo-manger{display:flex;align-items:center;justify-content:center;gap:6px;width:calc(100% - 16px);min-height:34px;margin:auto 8px 8px;padding:4px 8px;line-height:1.15;text-align:center;font-size:.74rem!important;color:var(--discret)!important;border:1px solid var(--filet);border-radius:var(--r-pilule);background:none;color:var(--texte);font:inherit;font-size:.8rem;cursor:pointer}
+.histo-manger .ic{width:14px;height:14px}
+.histo-manger:active{background:rgba(255,255,255,.06)}
+/* carte d'un plat sans barre de quantité, resserrée pour tenir sur l'écran sans défiler (Taha, 22/11/2026) */
+.cp-photo .photo{aspect-ratio:16/7.5}
+.cp-corps{padding:12px 14px 12px}
+.cp-corps h2{margin:0 0 8px}
+.cp-etiquettes{flex-wrap:nowrap;overflow:hidden;margin:0 0 10px}
+.cp-etiquettes span{flex:none;white-space:nowrap}
+.cp-chiffres > div{padding:7px 4px}
+.cp-info{margin:8px 0 0}
+.cp-ingredients{margin-top:6px;padding-top:2px}
+.cp-mange{margin-top:8px}
+.cp-mange .bouton{min-height:44px}
+.cp-cuisiner{margin-top:10px}
+.cp-choix,.cp-cuisiner + .cp-choix{margin-top:8px}
+.cp-choix button{min-height:50px;padding:8px 12px 8px 14px}
+.cp-choix small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp-equilibrer{margin:8px 0 0;gap:0 6px}
+.cp-equilibrer .bouton{min-height:36px}
