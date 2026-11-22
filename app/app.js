@@ -2974,7 +2974,8 @@ function noterRepas({ date, entree = null, remplacer = null }) {
         const rep = await appel("/api/repas/au_menu", { date, moment: moment || "dej", nom, items, seulement_plat: true, ...(photoPlat ? { photo: photoPlat } : {}) });
         bouton.disabled = false;
         if (rep === true && remplacer.creer) { d.close("oui"); rendre(); return dire(`« ${(recette(E.au_menu && E.au_menu.plat) || { nom }).nom} » est dans tes plats.`); }
-        if (rep === true && E.au_menu && E.au_menu.plat) return apercuChangement(remplacer.k, remplacer.operation(E.au_menu.plat),
+        if (rep === true && E.au_menu && E.au_menu.plat) return apercuChangement(remplacer.k,
+          { ...remplacer.operation(E.au_menu.plat), ...(E.au_menu.quantites ? { quantites: E.au_menu.quantites } : {}) },
           remplacer.titre((recette(E.au_menu.plat) || { nom }).nom), remplacer.retour);
         if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
         return;

@@ -332,5 +332,24 @@ class L_DemandeIA(unittest.TestCase):
         self.assertLess(len(seule_photo), 4000)
 
 
+class N_AlimentSeul(unittest.TestCase):
+    """« 3 œufs » (Taha, 22/11/2026) : pas un plat « 3 œufs », mais l'aliment « Œuf » (une pièce) et 3 pour ce jour."""
+    def test_trois_oeufs(self):
+        from repas import journal_repas as J
+        S = M.serveur
+        connus = S.nutriments().get("macros") or {}
+        item = {**J.ligne("Œuf", 165, {m: connus["Œuf"][m] for m in J.MACROS}, None, "connu"), "aliment": "Œuf"}
+        s, c, _ = M.api("POST", "/api/repas/au_menu", {"date": AUJ, "moment": "col", "nom": "3 œufs", "items": [item]})
+        self.assertEqual(s, 200, c)
+        plat = c["au_menu"]["plat"]
+        r = next(x for x in S.donnees_site()["recettes"] if x["id"] == plat)
+        self.assertEqual(r["nom"], "Œuf")
+        self.assertEqual([(i["n"], i["q"], i["u"]) for i in r["ing"]], [("Œuf", 1, "pièce")])
+        jour = S._lire_p("semaine.json", None)["jours"][0]
+        self.assertEqual(jour.get("ajustes", {}).get(plat), {"Œuf": 3.0})
+        repas = next(x for x in jour0()["repas"] if x["id"] == plat)
+        self.assertAlmostEqual(repas["kcal"], 3 * connus["Œuf"]["kcal"] * 55 / 100, delta=25)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2 if "-v" in sys.argv else 1, argv=[sys.argv[0]])
