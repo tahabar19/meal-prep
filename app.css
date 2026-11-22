@@ -1230,5 +1230,28 @@ details.idees-ligne .rp-liste{margin:2px 0 8px}
 /* Modifier les ingrédients : les chiffres comme sur la carte d'un plat, l'écart en petit dessous (Taha, 22/11/2026) */
 .aj-chiffres{margin:4px 0 4px}
 .aj-chiffres small{font-size:.7rem;font-variant-numeric:tabular-nums;color:var(--discret)}
-.aj-chiffres small.mieux{color:var(--accent)}
-.aj-chiffres small.moins{color:var(--alerte)}
+.aj-chiffres small.aj-bon{color:var(--accent)}
+.aj-chiffres small.aj-mauvais{color:var(--alerte)}
+/* Modifier les ingrédients plus petit ; la journée au-dessus ; « Ajouter » à côté du champ (Taha, 22/11/2026) */
+.aj-jour{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:4px 0 6px}
+.aj-jour > div{display:grid;gap:1px;padding:8px 10px;border-radius:12px;background:var(--surface-fort)}
+.aj-jour span{font-size:.7rem;color:var(--discret)}
+.aj-jour b{color:var(--encre);font-size:1rem}
+.aj-jour b small{font-size:.72rem;font-weight:400;color:var(--discret)}
+.aj-jour .ecart{font-size:.72rem;color:var(--discret)}
+.aj-jour .ecart.aj-bon{color:var(--accent)}
+.aj-jour .ecart.aj-mauvais{color:var(--alerte)}
+.aj-form h3{margin:12px 0 2px;font-size:.9rem}
+.aj-form .reglables li{gap:8px;padding:4px 0}
+.aj-form .reglables label{font-size:.86rem;line-height:1.25}
+.aj-form .reglables label small{font-size:.7rem}
+.aj-form .reglables label .lien{font-size:.7rem}
+.aj-form .reglage{gap:4px}
+.aj-form .reglage button{width:32px;height:32px;font-size:1.05rem}
+.aj-form .reglage input{width:58px;min-height:32px;padding:0 6px;font-size:.86rem}
+.aj-form .reglage .unite{width:34px;font-size:.72rem}
+.aj-form .ing-poubelle,.aj-form .ing-remettre{width:30px;height:30px;flex:none}
+.aj-form .ing-poubelle .ic{width:15px;height:15px}
+.aj-ajout{display:flex;gap:8px;align-items:stretch}
+.aj-ajout .rp-recherche{flex:1;min-width:0}
+.aj-ajout .bouton{flex:none;min-height:44px;padding:0 14px}
