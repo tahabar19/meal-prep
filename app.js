@@ -3025,16 +3025,21 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       if (remplacer) {                               // le plat est créé ; le menu change après l'aperçu
         const rep = await appel("/api/repas/au_menu", { date, moment: moment || "dej", nom, items, seulement_plat: true, ...(photoPlat ? { photo: photoPlat } : {}) });
         bouton.disabled = false;
-        if (rep === true && remplacer.creer) { d.close("oui"); rendre(); return dire(`« ${(recette(E.au_menu && E.au_menu.plat) || { nom }).nom} » est dans tes plats.`); }
+        if (rep === true && remplacer.creer) {
+          d.close("oui"); rendre();
+          // Un plat qui existait déjà (mêmes ingrédients) : pas de doublon, on le montre (Taha, 22/11/2026).
+          if (E.au_menu && E.au_menu.existant) { dire(`Ce plat existe déjà : « ${recette(E.au_menu.plat).nom} ».`); return ficheRapide(E.au_menu.plat, null); }
+          return dire(`« ${(recette(E.au_menu && E.au_menu.plat) || { nom }).nom} » est dans tes plats.`);
+        }
         if (rep === true && E.au_menu && E.au_menu.plat) return apercuChangement(remplacer.k,
           { ...remplacer.operation(E.au_menu.plat), ...(E.au_menu.quantites ? { quantites: E.au_menu.quantites } : {}) },
-          remplacer.titre((recette(E.au_menu.plat) || { nom }).nom), remplacer.retour);
+          remplacer.titre((recette(E.au_menu.plat) || { nom }).nom + (E.au_menu.existant ? " (plat existant, à tes quantités)" : "")), remplacer.retour);
         if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
         return;
       }
       const rep = await appel("/api/repas/au_menu", { id: entree ? entree.id : "", date, moment, nom, items, ...(photoPlat ? { photo: photoPlat } : {}) });
       bouton.disabled = false;
-      if (rep === true) { d.close("oui"); rendre(); dire(E.au_menu && E.au_menu.note ? "Repas noté." : `Ajouté au menu : « ${(recette(E.au_menu.plat) || { nom }).nom} ».`); }
+      if (rep === true) { d.close("oui"); rendre(); dire(E.au_menu && E.au_menu.note ? "Repas noté." : `Ajouté au menu : « ${(recette(E.au_menu.plat) || { nom }).nom} »${E.au_menu.existant ? ", un plat qui existait déjà, à tes quantités" : ""}.`); }
       else if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
     };
     if ($("nrAuMenu")) $("nrAuMenu").addEventListener("click", ev => auMenu(ev.currentTarget));
