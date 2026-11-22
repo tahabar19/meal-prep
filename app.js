@@ -2273,7 +2273,7 @@ function vueProfilFlemmard() {
       ${i.sexe ? l("Sexe", esc(i.sexe)) : ""}${i.telephone ? l("Téléphone", esc(i.telephone)) : ""}
       ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul></section>
   <ul class="menu" style="margin-top:16px">
-    ${lien("#/reglages", "sliders-horizontal", "Réglages", "Objectif, date de début, alimentation, informations, compte Claude, mot de passe")}
+    ${lien("#/reglages", "sliders-horizontal", "Réglages", "")}
     ${E.utilisateur.admin ? lien("#/profils", "users", "Profils", "") : ""}
   </ul>
   ${lienAndroid()}
@@ -3155,9 +3155,9 @@ function lignePeriode(x = {}) {
     <div class="periode-dates"><label>Du<input class="p-du" type="date" value="${v("du")}"></label><label>Au<input class="p-au" type="date" value="${v("au")}"></label></div>
     <div class="periode-chiffres">
       <label>kcal<input class="p-kcal" type="text" inputmode="numeric" value="${v("kcal")}"></label>
-      <label>Protéines (g)<input class="p-prot" type="text" inputmode="numeric" value="${v("prot")}"></label>
-      <label>Glucides (g)<input class="p-glucides" type="text" inputmode="numeric" value="${v("glucides")}" placeholder="—"></label>
-      <label>Lipides (g)<input class="p-lipides" type="text" inputmode="numeric" value="${v("lipides")}" placeholder="—"></label></div>
+      <label>Prot. (g)<input class="p-prot" type="text" inputmode="numeric" value="${v("prot")}"></label>
+      <label>Gluc. (g)<input class="p-glucides" type="text" inputmode="numeric" value="${v("glucides")}" placeholder="—"></label>
+      <label>Lip. (g)<input class="p-lipides" type="text" inputmode="numeric" value="${v("lipides")}" placeholder="—"></label></div>
     <p class="p-vise" aria-live="polite"></p></div>`;
 }
 // Le poids visé à la fin de chaque période (Taha, 22/11/2026) : à partir du dernier poids, ce que les calories de la
@@ -3239,10 +3239,15 @@ function vueReglagesFlemmard() {
   const choix = (id, nom, v, options) => `<select id="${id}" name="${nom}">${options.map(([k, t]) => `<option value="${k}"${String(k) === String(v) ? " selected" : ""}>${t}</option>`).join("")}</select>`;
   const obj = { "Perte de poids": "perte", "Maintien": "maintien", "Prise de muscle": "prise" }[E.profil.programme] || "maintien";
   return `<a class="retour" href="#/profil">${icone("caret-left")}Profil</a>
-  <div class="titre"><h1 tabindex="-1">Réglages</h1><p>Mode flemmard : l'écran Jour suit ta journée. Les autres modes arrivent bientôt.</p></div>
+  <div class="titre"><h1 tabindex="-1">Réglages</h1></div>
   <div class="reglages">
-  <section class="bloc" aria-labelledby="tObj"><h2 id="tObj">Mon objectif</h2>
-    <div class="faits"><div class="fait"><b>${nombre(kcal)}</b><span>kcal par jour</span></div><div class="fait"><b>${choisie.prot} g</b><span>de protéines par jour</span></div></div>
+  <section class="bloc toujours" aria-labelledby="tRepas"><h2 id="tRepas">Mon alimentation</h2>
+    <div class="options">
+      <label class="option"><input type="checkbox" id="rMemePlat"${r.meme_plat !== false ? " checked" : ""}><span><b>Le même plat midi et soir</b><small>Un seul plat par jour, au déjeuner et au dîner. Décoche pour deux plats différents.</small></span></label>
+      <label class="option"><input type="checkbox" id="rFodmap"${fodmap ? " checked" : ""}><span><b>Pauvre en FODMAP</b><small>Seulement des plats pauvres en FODMAP.</small></span></label>
+    </div>
+  </section>
+  <section class="bloc" aria-labelledby="tObj" data-resume="${nombre(kcal)} kcal · ${choisie.prot} g"><h2 id="tObj">Mon objectif</h2>
     <form class="formulaire" id="fObjectif" novalidate>
       ${(E.phases || []).length > 1 && !E.phases_perso ? champ("rPhase", "Phase du programme", choix("rPhase", "phase", r.phase || "", [["", "Automatique, selon la date"], ...E.phases.map(p => [p.n, `${p.n}. ${esc(p.nom)}, ${nombre(p.kcal)} kcal`])])) : ""}
       ${champ("rAdj", "Ajustement des calories", choix("rAdj", "ajustement", r.ajustement || 0, [-300, -150, 0, 150, 300].map(v => [v, `${v > 0 ? "+" : ""}${v} kcal`])), "Par paliers de 150 kcal, si ton poids s'écarte de ce que tu vises.")}
@@ -3251,12 +3256,7 @@ function vueReglagesFlemmard() {
       <button class="bouton second" type="submit">Enregistrer</button>
     </form></section>
   ${blocObjectifs()}
-  <section class="bloc" aria-labelledby="tRepas"><h2 id="tRepas">Mon alimentation</h2>
-    <div class="options">
-      <label class="option"><input type="checkbox" id="rFodmap"${fodmap ? " checked" : ""}><span><b>Pauvre en FODMAP</b><small>Seulement des plats pauvres en FODMAP dans les semaines composées.</small></span></label>
-    </div>
-  </section>
-  <section class="bloc" aria-labelledby="tInfos"><h2 id="tInfos">Mes informations</h2>
+  <section class="bloc" aria-labelledby="tInfos" data-resume="${esc([i.nom || E.profil.nom, i.taille_cm ? i.taille_cm + " cm" : "", i.poids_kg ? virgule(i.poids_kg) + " kg" : ""].filter(Boolean).join(" · "))}"><h2 id="tInfos">Mes informations</h2>
     <p class="doux petit sous-titre">${E.profil.calcule ? "Change une valeur : tes calories, tes protéines et tes vitamines sont recalculées." : "Ton programme vient de ton fichier de profil : ces informations ne changent pas tes besoins."}</p>
     <form class="formulaire" id="fMesInfos" novalidate>
       <div class="champs2">${champ("iPrenom", "Prénom", saisie("iPrenom", "prenom", i.nom || E.profil.nom, "text", 'maxlength="40" autocomplete="given-name"'))}
@@ -3278,7 +3278,7 @@ function vueReglagesFlemmard() {
         if (m.erreur) throw 0; $("cEmail").value = m.email || ""; $("cTel").value = m.telephone || ""; }
       catch (e) { f.hidden = true; }                   // sur le PC : pas de compte en ligne
     }); return ""; })()}
-  <section class="bloc" aria-labelledby="tCompte"><h2 id="tCompte">Mon compte</h2>
+  <section class="bloc" aria-labelledby="tCompte" data-resume="Email, mot de passe"><h2 id="tCompte">Mon compte</h2>
     <form class="formulaire" id="fCoord" novalidate>
       <div class="champ"><label for="cEmail">Email</label><input id="cEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120" placeholder="prenom@gmail.com"></div>
       <div class="champ"><label for="cTel">Téléphone</label><input id="cTel" name="telephone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="06 12 34 56 78"></div>
@@ -3291,10 +3291,32 @@ function vueReglagesFlemmard() {
       <div class="champ"><label for="mNouveau">Nouveau mot de passe</label>${champMdp("mNouveau", "nouveau", "new-password")}
         <small id="eMdpN" class="erreur" role="alert" style="display:block;color:var(--critique)"></small></div>
       <button class="bouton second" type="submit">Changer le mot de passe</button></form>
-    <p style="margin-top:16px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>
   </section>
-  </div>`;
+  <p class="reg-fin"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>
+  </div>${(apresRendu.push(plierReglages), "")}`;
 }
+// Réglages en lignes repliables, comme les réglages du téléphone (Taha, 22/11/2026 : « pas belle, des trucs très
+// grands ») : le titre de chaque rubrique et un résumé ; toucher ouvre la rubrique. Ce qui est ouvert le reste.
+const REG_OUVERTS = new Set();
+function plierReglages() {
+  document.querySelectorAll(".reglages > section.bloc:not(.toujours)").forEach(s => {
+    const h = s.querySelector(":scope > h2");
+    if (!h || h.querySelector(".reg-tete")) return;
+    let resume = s.dataset.resume || "";
+    if (h.id === "tPeriodes") { const n = s.querySelectorAll(".periode").length; resume = n ? `${n} période${n > 1 ? "s" : ""}` : ""; }
+    if (h.id === "tClaude") resume = typeof M !== "undefined" && M.claude ? (M.claude.partage ? "IA partagée" : "Ta clé") : "À brancher";
+    const ouvert = REG_OUVERTS.has(h.id);
+    s.classList.add("pliable"); s.classList.toggle("ouvert", ouvert);
+    h.innerHTML = `<button type="button" class="reg-tete" aria-expanded="${ouvert}"><span>${esc(h.textContent)}</span>${resume ? `<small>${esc(resume)}</small>` : ""}${icone("caret-right")}</button>`;
+  });
+}
+document.addEventListener("click", ev => {
+  const b = ev.target.closest && ev.target.closest(".reg-tete");
+  if (!b) return;
+  const s = b.closest("section"), id = b.closest("h2").id, ouvert = !s.classList.contains("ouvert");
+  s.classList.toggle("ouvert", ouvert); b.setAttribute("aria-expanded", String(ouvert));
+  if (ouvert) REG_OUVERTS.add(id); else REG_OUVERTS.delete(id);
+});
 document.addEventListener("submit", async ev => {
   const f = ev.target;
   if (f.dataset && f.dataset.completer) {
@@ -3347,6 +3369,8 @@ document.addEventListener("change", async ev => {
     const b = ev.target;
     appel("/api/eau", { date: b.dataset.date, litres: Number(b.value) }).then(ok => { if (ok !== true) { dire("L'eau n'a pas pu être enregistrée."); rendre(); } });
   }
+  if (ev.target.id === "rMemePlat") agir("/api/reglages", { meme_plat: ev.target.checked }, ev.target.checked
+    ? "Le même plat midi et soir, dès aujourd'hui." : "Deux plats différents midi et soir, dès aujourd'hui.");
   if (ev.target.id === "rFodmap") agir("/api/profil/modifier", { fodmap: ev.target.checked }, ev.target.checked ? "Pauvre en FODMAP : pour les semaines composées." : "FODMAP retiré.");
 });
 function vueReglages() {
