@@ -1367,13 +1367,14 @@ const ROLE_VITAMINE = { A: "Vue, peau, défenses", B1: "Tire l'énergie des gluc
   B6: "Utilise les protéines, nerfs", B9: "Renouvelle les cellules, globules rouges", B12: "Globules rouges, nerfs",
   C: "Défenses, absorbe le fer, cicatrise", D: "Os, muscles, défenses", E: "Protège les cellules", K: "Coagulation, os" };
 // prevues : les apports si toute la journée prévue est mangée, en barre grisée derrière (Taha, 20/11/2026).
-function barresVitamines(apports, parJour, prevues = null) {
+function barresVitamines(apports, parJour, prevues = null, compact = false) {
   const V = E.vitamines;
   // « 12 / 80 mg » : ce que tu as / ce qu'il te faut par jour (Taha, 21/11/2026 : « pas clair combien je dois avoir par jour »).
-  return `<p class="petit discret barres-legende">${parJour ? "Ce que tu as eu" : "Ce qu'apporte une portion"} / ce qu'il te faut chaque jour.</p><ul class="barres">${Object.keys(V.noms).map(c => {
+  // compact : les 10 sur un écran, sans défiler (Taha, 22/11/2026) ; le rôle passe en bulle (title).
+  return `${compact ? "" : `<p class="petit discret barres-legende">${parJour ? "Ce que tu as eu" : "Ce qu'apporte une portion"} / ce qu'il te faut chaque jour.</p>`}<ul class="barres${compact ? " compactes" : ""}">${Object.keys(V.noms).map(c => {
     const q = apports[c] || 0, pct = Math.round(100 * q / V.besoins[c]);
     const pctP = prevues ? Math.round(100 * Math.max(q, prevues[c] || 0) / V.besoins[c]) : null, plus = pctP != null && pctP > pct;
-    return `<li class="${parJour && pct < 80 ? "bas" : ""}"><span>${esc(V.noms[c].nom)}${ROLE_VITAMINE[c] ? `<small class="role">${ROLE_VITAMINE[c]}</small>` : ""}</span>
+    return `<li class="${parJour && pct < 80 ? "bas" : ""}"${compact && ROLE_VITAMINE[c] ? ` title="${esc(ROLE_VITAMINE[c])}"` : ""}><span>${esc(V.noms[c].nom)}${ROLE_VITAMINE[c] && !compact ? `<small class="role">${ROLE_VITAMINE[c]}</small>` : ""}</span>
       <span class="v"><b class="chiffres">${dose(q)}</b> / ${dose(V.besoins[c])} ${V.noms[c].unite} · ${nombre(pct)} %${plus ? `<small class="prevu"> → ${nombre(pctP)} %</small>` : ""}</span>
       <span class="piste" role="img" aria-label="${nombre(pct)} % du besoin d'un jour${plus ? `, ${nombre(pctP)} % si la journée prévue est mangée` : ""}">${plus ? `<b style="width:${Math.min(100, pctP)}%"></b>` : ""}<i style="width:${Math.min(100, pct)}%"></i></span></li>`; }).join("")}</ul>`;
 }
@@ -2019,29 +2020,50 @@ function vueVitaminesMangees(params) {
   const codes = Object.keys(V.noms);
   const pct = c => V.besoins[c] ? Math.round(100 * (x.vitamines[c] || 0) / V.besoins[c]) : 0;
   const couvertes = codes.filter(c => pct(c) >= 100).length, basses = codes.filter(c => pct(c) < 80);
-  const manquent = E.vitamines_a_completer || [];
-  return `${manquent.length ? `<section class="bloc a-completer" aria-labelledby="tCompleter"><h2 id="tCompleter">À compléter : ${manquent.length} aliment${manquent.length > 1 ? "s" : ""} sans vitamines</h2>
+  const manquent = E.vitamines_a_completer || [], suivi = params.get("vue") === "suivi", completer = params.get("completer") === "1";
+  // Deux vues (Taha, 22/11/2026) : le jour, tout sur un écran ; « Sur la durée », ce qui te manque souvent.
+  const onglets = `<div class="vit-titre"><h1 tabindex="-1">Vitamines</h1><nav class="jours vit-onglets" aria-label="Vue">
+    <a href="#/vitamines"${suivi ? "" : ' aria-current="true"'}>Jour</a><a href="#/vitamines?vue=suivi"${suivi ? ' aria-current="true"' : ""}>Sur la durée</a></nav></div>`;
+  const aCompleter = manquent.length ? `<details class="bloc a-completer"${completer ? " open" : ""}><summary><span>${icone("warning-circle")}${manquent.length} aliment${manquent.length > 1 ? "s" : ""} sans vitamines : à compléter</span>${icone("caret-right")}</summary>
       <p class="petit discret">Tant qu'elles manquent, ces aliments comptent zéro vitamine. Branche ton compte Claude (Réglages) pour qu'il les estime, ou renseigne-les ici.</p>
       ${manquent.map((nom, i) => `<details class="completer"><summary>${esc(nom)}${icone("caret-right")}</summary>
         <form class="formulaire" data-completer="${esc(nom)}" data-i="${i}" novalidate>${champsVitamines(`cv${i}_`)}
           <small class="erreur" id="eCv${i}" style="display:block;color:var(--critique)"></small>
-          <button class="bouton second" type="submit">Enregistrer</button></form></details>`).join("")}</section>` : ""}
-  <div class="titre"><h1 tabindex="-1">Vitamines</h1>
-    <p>${p === "jour" ? (dec ? `Le total de ce que tu as marqué mangé ${dec === 1 ? "hier" : "ce jour-là"}, comparé à tes besoins d'une journée.`
-      : "Le total de ce que tu as marqué mangé aujourd'hui (la journée n'est pas finie), comparé à tes besoins d'une journée.")
-      : (() => { const jours = x.detail.filter(d => d.kcal != null && d.date < a.aujourdhui).map(d => new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric" }).format(new Date(d.date + "T12:00")).replace(".", ""));
-          return `La moyenne par jour de ${jours.length ? jours.join(", ") : "tes journées finies"}, comparée à tes besoins d'une journée. Aujourd'hui y entre demain.`; })()}</p></div>
+          <button class="bouton second" type="submit">Enregistrer</button></form></details>`).join("")}</details>` : "";
+  if (suivi) return onglets + vueVitaminesDuree(params, a, V, decaler) + aCompleter;
+  return `${completer ? aCompleter : ""}${onglets}
   ${nav}
-  ${!x.jours_suivis && !Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? vide(p === "jour" ? (dec ? "Rien de marqué mangé ce jour-là" : "Rien de mangé pour l'instant") : `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}`,
+  ${!x.jours_suivis && !Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? vide(dec ? "Rien de marqué mangé ce jour-là" : "Rien de mangé pour l'instant",
       "Les vitamines se remplissent avec les plats que tu marques « mangé ».", "#/semaine", "Aller au jour")
-    : `<dl class="kpis">
-      <div><dt>Besoins couverts</dt><dd>${couvertes} sur ${codes.length}</dd><p>Vitamines à 100 % ou plus de ton besoin.</p></div>
-      <div><dt>À surveiller</dt><dd>${basses.length ? basses.join(", ") : "Aucune"}</dd><p>Vitamines sous 80 % du besoin.</p></div>
-    </dl>
-    <section class="bloc" aria-labelledby="tApportsM"><h2 id="tApportsM">${p === "jour" ? (dec ? `Apport ${dec === 1 ? "d'hier" : "de ce jour"}` : "Apport du jour") : "Apport moyen par jour"}</h2>
-      ${!dec && Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? `<p class="petit discret legende-prevu"><span><i class="consomme"></i>Consommé</span><span><i></i>Avec tout le prévu du jour</span></p>` : ""}
-      ${barresVitamines(x.vitamines, true, dec ? null : x.vitamines_prevues)}
-      ${p !== "jour" ? `<p class="petit discret" style="margin-top:8px">${x.jours_suivis} jour${x.jours_suivis > 1 ? "s" : ""} compté${x.jours_suivis > 1 ? "s" : ""}.</p>` : ""}</section>`}`;
+    : `<section class="bloc vit-jour" aria-label="${dec ? `Apport ${dec === 1 ? "d'hier" : "de ce jour"}` : "Apport du jour"}">
+      <p class="vit-resume"><b>${couvertes} sur ${codes.length}</b> couvertes${basses.length ? ` · <span class="bas">${basses.length} sous 80 %</span>` : ""}</p>
+      <p class="petit discret legende-prevu">${!dec && Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? `<span><i class="consomme"></i>Mangé</span><span><i></i>Avec tout le prévu</span>` : ""}<span>Eu / besoin par jour</span></p>
+      ${barresVitamines(x.vitamines, true, dec ? null : x.vitamines_prevues, true)}</section>`}
+  ${completer ? "" : aCompleter}`;
+}
+// « Sur la durée » (Taha, 22/11/2026 : « voir les vitamines qui me manquent toujours, sans que ce soit trop sur les yeux ») :
+// les 7 ou 30 derniers jours finis où tu as marqué des plats mangés ; pour chaque vitamine, la moyenne et le nombre de
+// jours sous 80 % du besoin, les plus en manque en premier.
+function vueVitaminesDuree(params, a, V, decaler) {
+  const n = params.get("p") === "30" ? 30 : 7;
+  const dates = Array.from({ length: n }, (_, i) => decaler(a.aujourdhui, -1 - i)).filter(d => ((a.par_jour || {})[d] || {}).jours_suivis > 0);
+  const periodes = `<nav class="jours vit-periodes" aria-label="Période">${[[7, "7 derniers jours"], [30, "30 derniers jours"]].map(([v, t]) =>
+    `<a href="#/vitamines?vue=suivi${v === 30 ? "&p=30" : ""}"${v === n ? ' aria-current="true"' : ""}>${t}</a>`).join("")}</nav>`;
+  if (!dates.length) return periodes + vide("Pas encore de journée finie", "Marque tes plats « mangé » : demain, cette page te dira ce qui te manque souvent.", "#/semaine", "Aller au jour");
+  const codes = Object.keys(V.noms).filter(c => V.besoins[c]);
+  const ligne = c => { const p = dates.map(d => 100 * ((a.par_jour[d].vitamines || {})[c] || 0) / V.besoins[c]);
+    return { c, moy: Math.round(p.reduce((x, y) => x + y, 0) / p.length), bas: p.filter(x => x < 80).length }; };
+  const lignes = codes.map(ligne).sort((x, y) => x.moy - y.moy);
+  const souvent = lignes.filter(l => l.bas >= Math.max(1, Math.ceil(dates.length * 0.6)));
+  const court = c => V.noms[c].nom.replace(/^Vitamine /, "");
+  return `${periodes}
+  <section class="bloc vit-jour" aria-labelledby="tDuree">
+    <p class="vit-resume" id="tDuree">${souvent.length ? `Te manquent souvent : <b class="bas">${souvent.map(l => esc(court(l.c))).join(", ")}</b>` : "<b>Rien ne te manque souvent.</b>"}</p>
+    <p class="petit discret legende-prevu"><span>Moyenne par jour, sur ${dates.length} jour${dates.length > 1 ? "s" : ""} mangé${dates.length > 1 ? "s" : ""}</span></p>
+    <ul class="barres compactes">${lignes.map(l => `<li class="${l.moy < 80 ? "bas" : ""}"${ROLE_VITAMINE[l.c] ? ` title="${esc(ROLE_VITAMINE[l.c])}"` : ""}><span>${esc(V.noms[l.c].nom)}</span>
+      <span class="v"><b class="chiffres">${nombre(l.moy)} %</b>${l.bas ? ` · bas ${l.bas} j sur ${dates.length}` : ""}</span>
+      <span class="piste" role="img" aria-label="${nombre(l.moy)} % du besoin en moyenne"><i style="width:${Math.min(100, l.moy)}%"></i></span></li>`).join("")}</ul>
+  </section>`;
 }
 function vueVitamines({ params } = {}) {
   if (enSuivi()) { barre(""); return vueVitaminesMangees(params || new URLSearchParams()); }
@@ -2407,7 +2429,7 @@ function vueJourSuivi(params) {
     ${dec === 1 ? `<p class="petit discret" style="margin:-2px 0 12px">Provisoire : les quantités de demain se règlent demain matin, d'après ce que tu auras vraiment mangé aujourd'hui.</p>` : ""}
     ${jaugesDuJour(j, o, mangeJour)}
     <p class="reste-jour">${reste}</p>
-    ${(E.vitamines_a_completer || []).length && dec === 0 ? `<a class="rappel" href="#/vitamines">${icone("warning-circle")}<span>${E.vitamines_a_completer.length} aliment${E.vitamines_a_completer.length > 1 ? "s" : ""} sans vitamines : complète-les</span>${icone("caret-right")}</a>` : ""}
+    ${(E.vitamines_a_completer || []).length && dec === 0 ? `<a class="rappel" href="#/vitamines?completer=1">${icone("warning-circle")}<span>${E.vitamines_a_completer.length} aliment${E.vitamines_a_completer.length > 1 ? "s" : ""} sans vitamines : complète-les</span>${icone("caret-right")}</a>` : ""}
     ${E.eau && dec === 0 ? (() => {
       // L'eau : un seul bouton, coché = l'objectif du jour est bu (Taha, 21/11/2026 : « juste un bouton check »).
       const fait = eauCochee(date);
