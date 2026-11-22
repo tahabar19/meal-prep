@@ -163,6 +163,7 @@ async function agir(chemin, corps, message) {
 
 /* ------------------------------------------------------------ adresse */
 function route() {
+  if (/access_token=|error_description=/.test(location.hash)) return { vue: "semaine", arg: "", params: new URLSearchParams() };
   const [chemin, requete = ""] = (location.hash.replace(/^#\/?/, "") || "semaine").split("?");
   const [vue, arg] = chemin.split("/");
   return { vue, arg: arg ? decodeURIComponent(arg) : "", params: new URLSearchParams(requete) };
@@ -2265,6 +2266,32 @@ function vueProfils() {
     <p style="margin-top:6px">Sur la page de connexion, la personne choisit « Créer mon profil » et saisit ce code d'invitation.</p>
     <p class="calcul chiffres" translate="no">${esc(E.invitation)}</p></section>`;
 }
+// Un mot de passe solide (Taha, 22/11/2026) : les mêmes règles que le serveur, et une jauge pendant qu'on tape.
+const REGLE_MDP = "10 caractères au moins, avec une minuscule, une majuscule et un chiffre.";
+const mdpValide = m => m.length >= 10 && /[a-z]/.test(m) && /[A-Z]/.test(m) && /\d/.test(m);
+function forceMdp(m) {
+  if (!m) return [0, ""];
+  let p = (m.length >= 10) + (m.length >= 14) + (/[a-z]/.test(m) && /[A-Z]/.test(m)) + /\d/.test(m) + /[^A-Za-z0-9]/.test(m);
+  if (/^(.)\1+$|0123|1234|azerty|qwerty|password|motdepasse/i.test(m)) p = Math.min(p, 1);
+  if (!mdpValide(m)) p = Math.min(p, 2);
+  return [p, ["Trop faible", "Trop faible", "Faible", "Correct", "Solide", "Très solide"][p]];
+}
+const champMdp = (id, nom, auto) => `<div class="mdp-saisie"><input id="${id}" name="${nom}" type="password" autocomplete="${auto}" minlength="10" required aria-describedby="${id}Force">
+  <button type="button" class="mdp-voir" data-voir-mdp="${id}" aria-label="Afficher le mot de passe">${icone("eye")}</button></div>
+  <span class="mdp-jauge" aria-hidden="true"><i id="${id}Jauge"></i></span><small id="${id}Force">${REGLE_MDP}</small>`;
+document.addEventListener("input", ev => {
+  const j = ev.target.id && document.getElementById(ev.target.id + "Jauge");
+  if (!j) return;
+  const [p, nom] = forceMdp(ev.target.value);
+  j.style.width = `${p * 20}%`; j.dataset.niveau = p;
+  $(ev.target.id + "Force").textContent = ev.target.value ? `${nom}${mdpValide(ev.target.value) ? "" : " · " + REGLE_MDP}` : REGLE_MDP;
+});
+document.addEventListener("click", ev => {
+  const b = ev.target.closest("[data-voir-mdp]");
+  if (!b) return;
+  const i = $(b.dataset.voirMdp), voir = i.type === "password";
+  i.type = voir ? "text" : "password"; b.setAttribute("aria-label", voir ? "Cacher le mot de passe" : "Afficher le mot de passe");
+});
 function formulaireProfil(avecCode) {
   const champ = (id, libelle, corps, aide = "") => `<div class="champ"><label for="${id}">${libelle}</label>${corps}${aide ? `<small>${aide}</small>` : ""}</div>`;
   const nombreChamp = (id, min, max, pas, exemple) => `<input id="${id}" name="${id}" type="number" inputmode="decimal" min="${min}" max="${max}" step="${pas}" autocomplete="off" placeholder="${exemple}…" required>`;
@@ -2277,7 +2304,8 @@ function formulaireProfil(avecCode) {
     ${champ("pFamille", "Nom", `<input id="pFamille" name="nom_famille" type="text" autocomplete="family-name" maxlength="60" required>`)}
     </div>
     ${champ("pIdent", "Identifiant de connexion", `<input id="pIdent" name="identifiant" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" required>`, "3 à 20 lettres minuscules, chiffres ou tirets. Il ne pourra plus changer.")}
-    ${champ("pMdp", "Mot de passe", `<input id="pMdp" name="mot_de_passe" type="password" autocomplete="new-password" minlength="8" required>`, "8 caractères au moins.")}
+    ${avecCode ? champ("pEmail", "Email", `<input id="pEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120" required>`, "Pour te connecter et retrouver ton mot de passe.") : ""}
+    ${champ("pMdp", "Mot de passe", avecCode ? champMdp("pMdp", "mot_de_passe", "new-password") : `<input id="pMdp" name="mot_de_passe" type="password" autocomplete="new-password" minlength="10" required>`)}
     <div class="champs2">
     ${champ("date_naissance", "Date de naissance", `<input id="date_naissance" name="date_naissance" type="date" required>`)}
     ${champ("sexe", "Sexe", choix("sexe", [["femme", "Femme"], ["homme", "Homme"]]))}
@@ -3083,7 +3111,6 @@ function vueReglagesFlemmard() {
         ${champ("iNom", "Nom", saisie("iNom", "nom_famille", i.nom_famille, "text", 'maxlength="60" autocomplete="family-name"'))}</div>
       <div class="champs2">${champ("iNaissance", "Date de naissance", saisie("iNaissance", "date_naissance", i.date_naissance, "date"))}
         ${champ("iSexe", "Sexe", choix("iSexe", "sexe", i.sexe || "homme", [["femme", "Femme"], ["homme", "Homme"]]))}</div>
-      ${champ("iTel", "Téléphone", saisie("iTel", "telephone", i.telephone, "tel", 'inputmode="tel" maxlength="20" autocomplete="tel"'))}
       <div class="champs2">${champ("iTaille", "Taille, en cm", saisie("iTaille", "taille_cm", i.taille_cm, "text", 'inputmode="numeric"'))}
         ${champ("iPoids", "Poids, en kg", saisie("iPoids", "poids_kg", virgule(i.poids_kg), "text", 'inputmode="decimal"'))}</div>
       ${E.profil.calcule ? `<div class="champs2">${champ("iActivite", "Activité", choix("iActivite", "activite", i.activite, [["sedentaire", "Sédentaire"], ["leger", "Sport léger, 1 à 3 fois par semaine"], ["modere", "Sport modéré, 3 à 5 fois par semaine"], ["actif", "Sport intense, 6 à 7 fois par semaine"], ["intense", "Sport très intense ou métier physique"]]))}
@@ -3093,14 +3120,24 @@ function vueReglagesFlemmard() {
       <button class="bouton second" type="submit">Enregistrer mes informations</button>
     </form></section>
   ${typeof blocClaude === "function" ? blocClaude() : ""}
+  ${(() => { apresRendu.push(async () => {
+      const f = $("fCoord"); if (!f) return;
+      try { const r = await fetch("/api/compte/moi"); if (!r.ok) throw 0; const m = await r.json();
+        if (m.erreur) throw 0; $("cEmail").value = m.email || ""; $("cTel").value = m.telephone || ""; }
+      catch (e) { f.hidden = true; }                   // sur le PC : pas de compte en ligne
+    }); return ""; })()}
   <section class="bloc" aria-labelledby="tCompte"><h2 id="tCompte">Mon compte</h2>
-    <form class="formulaire" id="fMdp" novalidate>
+    <form class="formulaire" id="fCoord" novalidate>
+      <div class="champ"><label for="cEmail">Email</label><input id="cEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120" placeholder="prenom@gmail.com"></div>
+      <div class="champ"><label for="cTel">Téléphone</label><input id="cTel" name="telephone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="06 12 34 56 78"></div>
+      <small id="eCoord" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
+      <button class="bouton second" type="submit">Enregistrer email et téléphone</button></form>
+    <form class="formulaire" id="fMdp" novalidate style="margin-top:18px">
       <input type="text" name="username" autocomplete="username" value="${esc(E.profil.id)}" hidden>
       ${E.utilisateur.admin ? "" : `<div class="champ"><label for="mAncien">Mot de passe actuel</label>
         <input id="mAncien" name="ancien" type="password" autocomplete="current-password" required></div>`}
-      <div class="champ"><label for="mNouveau">Nouveau mot de passe</label>
-        <input id="mNouveau" name="nouveau" type="password" autocomplete="new-password" minlength="8" required aria-describedby="eMdpN">
-        <small id="eMdpN">8 caractères au moins.</small></div>
+      <div class="champ"><label for="mNouveau">Nouveau mot de passe</label>${champMdp("mNouveau", "nouveau", "new-password")}
+        <small id="eMdpN" class="erreur" role="alert" style="display:block;color:var(--critique)"></small></div>
       <button class="bouton second" type="submit">Changer le mot de passe</button></form>
     <p style="margin-top:16px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>
   </section>
@@ -3269,12 +3306,13 @@ function vueConnexion(erreur = "") {
   barre("");
   $("contenu").innerHTML = `<div class="titre" style="margin-top:24px"><h1 tabindex="-1">Connexion</h1><p>Chaque personne a son identifiant et ne voit que son profil.</p></div>
     <form class="formulaire" id="fConnexion" novalidate>
-      <div class="champ"><label for="ident">Identifiant</label>
+      <div class="champ"><label for="ident">Identifiant ou email</label>
         <input id="ident" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
       <div class="champ"><label for="mdp">Mot de passe</label>
         <input id="mdp" name="password" type="password" autocomplete="current-password" spellcheck="false" required aria-describedby="eMdp">
         <small id="eMdp" class="erreur" role="alert">${esc(erreur)}</small></div>
       <button class="bouton large" type="submit">Entrer</button>
+      <p style="margin-top:12px;text-align:center"><button type="button" class="lien" data-action="oubliMdp">Mot de passe oublié ?</button></p>
     </form>
     <p style="margin-top:22px"><button class="bouton sobre" data-action="versCreation">Créer mon profil</button></p>`;
 }
@@ -3432,6 +3470,14 @@ const ACTIONS = {
   },
   versCreation: vueCreation,
   versConnexion: () => vueConnexion(),
+  oubliMdp: () => {
+    $("contenu").innerHTML = `<button class="retour" data-action="versConnexion" style="border:0;background:none;cursor:pointer">${icone("caret-left")}Connexion</button>
+      <div class="titre"><h1 tabindex="-1">Mot de passe oublié</h1><p>Écris ton identifiant ou ton email : un lien pour choisir un nouveau mot de passe part sur ton email.</p></div>
+      <form class="formulaire" id="fOubli" novalidate>
+        <div class="champ"><label for="oQui">Identifiant ou email</label><input id="oQui" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+        <small id="eOubli" role="status" style="display:block;margin-bottom:10px"></small>
+        <button class="bouton large" type="submit">Envoyer le lien</button></form>`;
+  },
   filtreCat(b) {
     const F = filtresCat, v = b.dataset.valeur;
     const bascule = (ens, x) => ens.has(x) ? ens.delete(x) : ens.add(x);
@@ -3517,6 +3563,17 @@ document.addEventListener("click", ev => {
 document.addEventListener("submit", async ev => {
   ev.preventDefault();
   const bouton = ev.target.querySelector("[type=submit]");
+  if (ev.target.id === "fOubli") {
+    bouton.disabled = true;
+    try {
+      const r = await fetch("/api/compte/oubli", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ qui: $("oQui").value.trim() }) });
+      const rep = await r.json();
+      $("eOubli").textContent = rep.erreur || rep.message || "";
+      $("eOubli").style.color = rep.erreur ? "var(--critique)" : "var(--accent)";
+    } catch (e) { $("eOubli").textContent = "Le serveur ne répond pas, réessaie."; }
+    bouton.disabled = false;
+    return;
+  }
   if (ev.target.id === "fConnexion") {
     const libelle = bouton.textContent;
     bouton.textContent = "Connexion…";
@@ -3528,6 +3585,8 @@ document.addEventListener("submit", async ev => {
   }
   if (ev.target.id === "fProfil") {
     const f = new FormData(ev.target), corps = Object.fromEntries(f.entries());
+    if ($("pEmail") && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(String(corps.email || "").trim())) { $("eProfil").textContent = "Email : écris une adresse valide."; return $("pEmail").focus(); }
+    if ($("pEmail") && !mdpValide(String(corps.mot_de_passe || ""))) { $("eProfil").textContent = "Mot de passe : " + REGLE_MDP; return $("pMdp").focus(); }
     for (const cle of ["boucher", "fodmap"]) corps[cle] = f.has(cle);
     corps.identifiant = String(corps.identifiant || "").trim().toLowerCase();
     const libelle = bouton.textContent;
@@ -3548,8 +3607,21 @@ document.addEventListener("submit", async ev => {
   }
   if (ev.target.id === "fMdp") {
     const nouveau = $("mNouveau").value;
-    if (nouveau.length < 8) { $("eMdpN").textContent = "8 caractères au moins."; return $("mNouveau").focus(); }
-    if (await agir("/api/mot_de_passe", { ancien: $("mAncien") ? $("mAncien").value : "", nouveau }, "Mot de passe changé.")) ev.target.reset();
+    if (!mdpValide(nouveau)) { $("eMdpN").textContent = REGLE_MDP; return $("mNouveau").focus(); }
+    const rep = await appel("/api/mot_de_passe", { ancien: $("mAncien") ? $("mAncien").value : "", nouveau });
+    if (rep === true) { ev.target.reset(); rendre(); return dire("Mot de passe changé."); }
+    $("eMdpN").textContent = (rep && rep.erreur) || "";
+  }
+  if (ev.target.id === "fCoord") {
+    bouton.disabled = true;
+    try {
+      const r = await fetch("/api/compte/coordonnees", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: $("cEmail").value.trim(), telephone: $("cTel").value.trim() }) });
+      const rep = await r.json();
+      $("eCoord").textContent = rep.erreur || "";
+      if (!rep.erreur) { $("cEmail").value = rep.email || ""; $("cTel").value = rep.telephone || ""; dire("Email et téléphone enregistrés."); }
+    } catch (e) { $("eCoord").textContent = "Le serveur ne répond pas, réessaie."; }
+    bouton.disabled = false;
   }
   if (ev.target.id === "fReglages") {
     const budget = Number($("rBudget").value);

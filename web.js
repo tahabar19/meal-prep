@@ -3,11 +3,18 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-22-113743";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-22-115625";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
-const email = (ident) => `${ident}@meal-prep.invalid`;
 const reponse = (status, corps) => new Response(JSON.stringify(corps), { status, headers: { "Content-Type": "application/json" } });
+// Les comptes passent par la fonction « compte » (Taha, 22/11/2026) : inscription avec email, téléphone et mot de passe
+// solide ; connexion par identifiant ou email, bloquée après trop d'essais ; mot de passe oublié par email.
+async function compte(action, corps = {}) {
+  const { data, error } = await sb.functions.invoke("compte", { body: { action, ...corps } });
+  let erreur = data && data.erreur;
+  if (error && !erreur) { try { erreur = (await error.context.json()).erreur; } catch { erreur = "Le serveur ne répond pas, réessaie."; } }
+  return erreur ? { erreur } : data;
+}
 
 function urlPhoto(r, largeur) {
   const id = String(r.photo_de || r.id);              // une copie « Banane (2) » a la photo de l'original
@@ -54,9 +61,9 @@ async function demarrerMoteur(session) {
   const [{ data: fichiers }, { data: objets }, { data: infos }] = await Promise.all([
     sb.from("fichiers").select("nom, contenu").limit(5000),
     sb.storage.from("photos").list(M.uid, { limit: 1000 }),
-    sb.rpc("infos_claude"),
+    sb.functions.invoke("claude", { body: { action: "infos" } }).catch(() => ({ data: null })),
   ]);
-  M.claude = infos || null;
+  M.claude = infos && infos.propre ? infos.propre : infos && infos.partage ? { partage: true, modele: infos.modele } : null;
   M.temps = { supabase: Math.round(performance.now() - t0) };
   const ri = await envoyer({
     type: "init", version: VERSION, url: MP.url, anon: MP.anon, jeton: session.access_token, identifiant: M.ident,
@@ -85,7 +92,33 @@ async function moteurPret() {
 
 sb.auth.onAuthStateChange((ev, session) => {
   if (session && M.worker) M.worker.postMessage({ type: "jeton", jeton: session.access_token });
+  if (ev === "PASSWORD_RECOVERY") setTimeout(nouveauMotDePasse, 300);
 });
+
+// Le lien « mot de passe oublié » reçu par email ramène ici : choisir un nouveau mot de passe (Taha, 22/11/2026).
+function nouveauMotDePasse() {
+  const d = document.getElementById("dialogue");
+  if (!d) return;
+  history.replaceState(null, "", location.pathname + "#/semaine");
+  d.innerHTML = `<form class="feuille formulaire" id="fNouveauMdp" novalidate>
+    <h2 id="dialogueTitre">Nouveau mot de passe</h2>
+    <div class="champ"><label for="nmMdp">Nouveau mot de passe</label><input id="nmMdp" type="password" autocomplete="new-password" required>
+      <small>10 caractères au moins, avec une minuscule, une majuscule et un chiffre.</small></div>
+    <small id="eNm" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
+    <div class="actions pied"><button class="bouton" type="submit">Enregistrer</button></div></form>`;
+  d.querySelector("form").addEventListener("submit", async (ev) => {
+    ev.preventDefault(); ev.stopPropagation();
+    const mdp = document.getElementById("nmMdp").value;
+    if (mdp.length < 10 || !/[a-z]/.test(mdp) || !/[A-Z]/.test(mdp) || !/\d/.test(mdp)) {
+      document.getElementById("eNm").textContent = "10 caractères au moins, avec une minuscule, une majuscule et un chiffre."; return; }
+    const { error } = await sb.auth.updateUser({ password: mdp });
+    if (error) { document.getElementById("eNm").textContent = /weak|pwned|leaked/i.test(error.message) ? "Mot de passe trop facile, choisis-en un autre." : "Changement impossible, redemande un lien."; return; }
+    d.close("oui");
+    if (typeof dire === "function") dire("Mot de passe changé.");
+    if (typeof demarrer === "function") demarrer();
+  });
+  if (!d.open) d.showModal();
+}
 
 // Ce que le moteur a écrit ou effacé : renvoyé à Supabase avant de répondre à la page.
 async function sauver(ch) {
@@ -148,9 +181,10 @@ window.fetch = async (entree, options = {}) => {
   const champs = corps ? JSON.parse(corps) : {};
   try {
     if (url === "/api/connexion") {
-      const ident = String(champs.identifiant || "").trim().toLowerCase();
-      const { error } = await sb.auth.signInWithPassword({ email: email(ident), password: String(champs.mot_de_passe || "") });
-      if (error) return reponse(401, { erreur: /invalid/i.test(error.message) ? "Identifiant ou mot de passe faux." : error.message });
+      const r = await compte("connecter", { qui: String(champs.identifiant || "").trim().toLowerCase(), mot_de_passe: String(champs.mot_de_passe || "") });
+      if (r.erreur) return reponse(401, { erreur: r.erreur });
+      const { error } = await sb.auth.setSession({ access_token: r.access_token, refresh_token: r.refresh_token });
+      if (error) return reponse(401, { erreur: "Connexion impossible, réessaie." });
       await moteurPret();
       return versMoteur("GET", "/api/etat", "");
     }
@@ -159,15 +193,20 @@ window.fetch = async (entree, options = {}) => {
       const ident = String(infos.identifiant || "").trim().toLowerCase();
       const v = await envoyer({ type: "valider", version: VERSION, champs: { ...infos, identifiant: ident } });
       if (v.message) return reponse(400, { erreur: v.message });
-      const { data, error } = await sb.functions.invoke("inscription", { body: { code, identifiant: ident, mot_de_passe } });
-      let erreur = data && data.erreur;
-      if (error && !erreur) { try { erreur = (await error.context.json()).erreur; } catch { erreur = error.message; } }
-      if (erreur) return reponse(400, { erreur });
-      const { error: e2 } = await sb.auth.signInWithPassword({ email: email(ident), password: String(mot_de_passe || "") });
-      if (e2) return reponse(400, { erreur: e2.message });
+      const r = await compte("inscrire", { code, identifiant: ident, email: infos.email, telephone: infos.telephone, mot_de_passe });
+      if (r.erreur) return reponse(400, { erreur: r.erreur });
+      if (r.a_confirmer) return reponse(400, { erreur: "Compte créé : ouvre le lien reçu par email pour le confirmer, puis connecte-toi.", confirme: true });
+      const c = await compte("connecter", { qui: ident, mot_de_passe: String(mot_de_passe || "") });
+      if (c.erreur) return reponse(400, { erreur: c.erreur });
+      await sb.auth.setSession({ access_token: c.access_token, refresh_token: c.refresh_token });
       await moteurPret();
       return versMoteur("POST", "/api/web/creer_profil", JSON.stringify({ ...infos, identifiant: ident }));
     }
+    if (url === "/api/compte/oubli") {
+      const r = await compte("oubli", { qui: String(champs.qui || "") });
+      return r.erreur ? reponse(400, { erreur: r.erreur }) : reponse(200, { message: r.message });
+    }
+    if (url === "/api/compte/statut") return reponse(200, await compte("statut"));
     if (url === "/api/deconnexion") {
       await sb.auth.signOut();
       await oublier();
@@ -192,11 +231,14 @@ window.fetch = async (entree, options = {}) => {
     }
     if (!(await moteurPret())) return reponse(401, { erreur: "connexion" });
     if (url === "/api/mot_de_passe") {
-      const { error: e1 } = await sb.auth.signInWithPassword({ email: email(M.ident), password: String(champs.ancien || "") });
-      if (e1) return reponse(400, { erreur: "Ancien mot de passe faux." });
-      const { error: e2 } = await sb.auth.updateUser({ password: String(champs.nouveau || "") });
-      if (e2) return reponse(400, { erreur: e2.message });
+      const r = await compte("mot_de_passe", { ancien: String(champs.ancien || ""), nouveau: String(champs.nouveau || "") });
+      if (r.erreur) return reponse(400, { erreur: r.erreur });
       return versMoteur("GET", "/api/etat", "");
+    }
+    if (url === "/api/compte/moi") return reponse(200, await compte("moi"));
+    if (url === "/api/compte/coordonnees") {
+      const r = await compte("coordonnees", champs);
+      return r.erreur ? reponse(400, { erreur: r.erreur }) : reponse(200, r);
     }
     return versMoteur(methode, url, corps);
   } catch (e) {
@@ -207,19 +249,28 @@ window.fetch = async (entree, options = {}) => {
 
 // ------------------------------------------------------------------ Réglages : le compte Claude (comme Rafiq)
 function blocClaude() {
-  const c = M.claude;
-  return `<section class="bloc" aria-labelledby="tClaude"><h2 id="tClaude">Compte Claude</h2>
-    ${c ? `<p class="doux">Connecté · <b>${esc(c.modele && c.modele !== "claude-opus-5-5" ? c.modele : "claude-sonnet-5-5")}</b>${c.endpoint ? ` · ${esc(c.endpoint)}` : ""}</p>
-      <p class="actions" style="margin-top:10px"><button class="bouton second" type="button" data-claude="oublier">Déconnecter</button></p>`
-    : `<p class="doux">« Calculer » un repas, lire une étiquette ou trouver la photo d'un plat : l'appli le demande à Claude, avec ta clé.</p>
-      <form id="fClaude" class="formulaire" novalidate style="margin-top:12px">
+  // Taha, 22/11/2026 : par défaut, l'IA partagée (celle de Taha, Sonnet) ; chacun peut brancher sa propre clé ou un autre modèle.
+  const c = M.claude, propre = c && !c.partage;
+  const form = `<form id="fClaude" class="formulaire" novalidate style="margin-top:12px"${propre || !c ? "" : " hidden"}>
         <div class="champ"><label for="cleClaude">Clé API</label><input id="cleClaude" type="password" placeholder="sk-…" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
         <div class="champ"><label for="apiClaude">Adresse de l'API <small class="discret">(vide = Anthropic)</small></label><input id="apiClaude" inputmode="url" placeholder="https://api.anthropic.com" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
         <div class="champ"><label for="modeleClaude">Modèle</label><input id="modeleClaude" value="claude-sonnet-5-5" autocomplete="off" autocapitalize="none" spellcheck="false"></div>
         <small id="eClaude" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
         <p class="actions" style="margin-top:10px"><button class="bouton" type="submit">Connecter</button></p>
-      </form>`}</section>`;
+        <p class="petit discret" style="margin-top:6px">Ta clé est chiffrée dans la base et ne revient jamais sur ce téléphone.</p>
+      </form>`;
+  return `<section class="bloc" aria-labelledby="tClaude"><h2 id="tClaude">Intelligence artificielle</h2>
+    ${propre ? `<p class="doux">Ta propre clé · <b>${esc(c.modele && c.modele !== "claude-opus-5-5" ? c.modele : "claude-sonnet-5-5")}</b>${c.endpoint ? ` · ${esc(c.endpoint)}` : ""}</p>
+      <p class="actions" style="margin-top:10px"><button class="bouton second" type="button" data-claude="oublier">Revenir à l'IA partagée</button></p>`
+    : c ? `<p class="doux">IA partagée · <b>${esc(c.modele || "claude-sonnet-5-5")}</b>. Elle calcule tes repas, lit les étiquettes et trouve les photos.</p>
+      <p class="actions" style="margin-top:10px"><button class="bouton sobre" type="button" data-claude="propre">Utiliser ma propre clé</button></p>${form}`
+    : `<p class="doux">« Calculer » un repas, lire une étiquette ou trouver la photo d'un plat : l'appli le demande à Claude, avec ta clé.</p>${form}`}</section>`;
 }
+document.addEventListener("click", (ev) => {
+  if (!ev.target.closest("[data-claude=propre]")) return;
+  const f = document.getElementById("fClaude");
+  if (f) { f.hidden = false; ev.target.closest("[data-claude=propre]").hidden = true; }
+});
 document.addEventListener("submit", async (ev) => {
   if (ev.target.id !== "fClaude") return;
   ev.preventDefault();
@@ -241,8 +292,9 @@ document.addEventListener("click", async (ev) => {
   const b = ev.target.closest("[data-claude=oublier]");
   if (!b) return;
   await sb.rpc("oublier_cle_claude");
-  M.claude = null;
-  M.worker.postMessage({ type: "reglages", reglages: { "repas.plat_perso_ia": false } });
+  const { data: infos } = await sb.functions.invoke("claude", { body: { action: "infos" } }).catch(() => ({ data: null }));
+  M.claude = infos && infos.partage ? { partage: true, modele: infos.modele } : null;
+  M.worker.postMessage({ type: "reglages", reglages: { "repas.plat_perso_ia": !!M.claude } });
   if (typeof demarrer === "function") demarrer();
-  if (typeof dire === "function") dire("Compte Claude déconnecté.");
+  if (typeof dire === "function") dire(M.claude ? "Tu utilises de nouveau l'IA partagée." : "Clé déconnectée.");
 });
