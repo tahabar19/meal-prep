@@ -380,7 +380,7 @@ function carteSansRepas(quand, k, n, moment) {
 }
 // Les chiffres d'un plat en une ligne, comme dans « Remplacer par un autre plat » (Taha, 22/11/2026).
 const macrosLigne = (kcal, prot) => `<span class="rp-macros chiffres"><span><strong>${nombre(Math.round(kcal))}</strong> kcal</span><span><strong>${nombre(Math.round(prot))} g</strong> prot.</span></span>`;
-function repasDuJour(s, k, n, compact = false, sansCollation = false, avecCuire = false, sansIcones = false) {
+function repasDuJour(s, k, n, compact = false, sansCollation = false, avecCuire = false, sansIcones = false, fin = "") {
   // Les repas d'un jour (semaine k), en cartes, chacun avec son bouton « Changer » tant qu'il n'est pas cuisine.
   const j = s.jours[n], courante = !E.mois || k === E.mois.rang;
   const double = j.cuisine.some(c => c.id === j.din && c.pour_demain);
@@ -404,7 +404,7 @@ function repasDuJour(s, k, n, compact = false, sansCollation = false, avecCuire 
         <div class="chiffres">${nombre(compte ? compte.kcal : v.kcal * t)} kcal, ${nombre(compte ? compte.prot : v.prot * t)} g de protéines${v.ajusteeCeJour ? " · quantités ajustées ce jour" : ""}</div></div></a>
       ${sansIcones ? "" : `${libre(id, moment) ? `<button class="changer" data-action="changer" data-semaine="${k}" data-jour="${n}" data-moment="${moment}" aria-label="Changer le ${nomMoment(moment)} de ${j.jour.toLowerCase()}" title="Changer">${icone("swap")}</button>` : ""}
       ${avecCuire ? `<a class="changer cuire${reglable(s, k, n, id, moment) ? "" : " haut"}" href="${courante ? `#/cuisine/${id}?jour=${n}` : `#/plat/${id}`}" aria-label="Cuisiner ${esc(r.nom)}" title="Cuisiner">${icone("cooking-pot")}</a>` : ""}
-      ${reglable(s, k, n, id, moment) ? `<button class="changer regler" data-action="reequilibrer" data-semaine="${k}" data-jour="${n}" data-moment="${moment}" data-plat="${id}" aria-label="Rééquilibrer ${esc(r.nom)} pour viser l'objectif" title="Rééquilibrer ce plat">${icone("sliders-horizontal")}</button>` : ""}`}</div>`; }).join("")}</div>
+      ${reglable(s, k, n, id, moment) ? `<button class="changer regler" data-action="reequilibrer" data-semaine="${k}" data-jour="${n}" data-moment="${moment}" data-plat="${id}" aria-label="Rééquilibrer ${esc(r.nom)} pour viser l'objectif" title="Rééquilibrer ce plat">${icone("sliders-horizontal")}</button>` : ""}`}</div>`; }).join("")}${fin}</div>
     ${compact && !j.retire && !sansCollation ? `<button class="ajout-ligne" data-action="changer" data-semaine="${k}" data-jour="${n}" data-moment="col${j.collations.length}">${icone("cooking-pot")}Ajouter une collation</button>` : ""}
     ${fruits.length ? `<p class="dujour"><strong>Fruits du jour.</strong> ${esc(fruits.join(", ").replace(/^./, c => c.toUpperCase()))}.</p>` : ""}
     ${compact ? "" : `<p class="actions" style="margin-top:14px">
@@ -2534,6 +2534,8 @@ function marquerStock(racine) {
     const id = a.dataset.plat || decodeURIComponent((a.getAttribute("href") || "").slice(7));
     if (!recette(id) || !estRepas(recette(id))) return;
     const m = E.stock_manque[id] || [], carte = a.closest(".exo, li") || a;
+    // Ni dans « Faisable avec ton stock » (déjà dit), ni sur ce qui est déjà mangé (Taha, 22/11/2026).
+    if (a.closest(".stock-faisable, .histo-plats") || carte.classList.contains("cuisine-fait")) return;
     carte.classList.add("stock-cadre", !m.length ? "stock-ok" : m.length <= 2 ? "stock-peu" : "stock-loin");
     if (m.length) a.insertAdjacentHTML("beforeend", `<span class="manque" role="button" tabindex="0" data-manque="${esc(id)}"
       aria-label="${m.length} ingrédient${m.length > 1 ? "s" : ""} manquant${m.length > 1 ? "s" : ""}">${m.length} manque${m.length > 1 ? "nt" : ""}</span>`);
@@ -2545,7 +2547,7 @@ new MutationObserver(() => { if (!marquage) marquage = requestAnimationFrame(() 
 function montrerManque(titre, lignes) {
   document.querySelector(".manque-fond")?.remove();
   const hote = document.querySelector("dialog[open]") || document.body;
-  hote.insertAdjacentHTML("beforeend", `<div class="manque-fond"><div class="manque-feuille" role="dialog" aria-label="${esc(titre)}">
+  hote.insertAdjacentHTML("beforeend", `<div class="manque-fond"><div class="manque-feuille" role="dialog" aria-modal="true" aria-label="${esc(titre)}">
     <h3>${esc(titre)}</h3><ul class="lignes">${lignes.map(([n, q, u]) => `<li><span>${esc(n)}</span><span class="q">${quantite(q, u)}</span></li>`).join("")}</ul>
     <button type="button" class="bouton second" data-manque-fermer>Fermer</button></div></div>`);
 }
@@ -2575,8 +2577,9 @@ function vueStockMaison() {
   const ajout = `<div class="stock-ajout">
       <label class="stock-bouton">${icone("image")}<span>Photo</span><small>frigo, placard</small><input type="file" accept="image/*" hidden data-stock-photo="photo"></label>
       <label class="stock-bouton">${icone("receipt")}<span>Ticket</span><small>de caisse</small><input type="file" accept="image/*" hidden data-stock-photo="ticket"></label>
-      </div>
-    <form class="rp-recherche champ-ia stock-taper" id="fStockTaper" novalidate>${icone("sparkle")}
+      </div>`;
+  // La barre chercher / ajouter vient sous « Refaire mes repas avec mon stock » (Taha, 22/11/2026).
+  const barreStock = `<form class="rp-recherche champ-ia stock-taper" id="fStockTaper" novalidate>${icone("sparkle")}
       <input id="filtre" name="filtre" type="search" enterkeyhint="go" autocomplete="off" maxlength="600" value="${esc(filtreStock)}"
         placeholder="Chercher ou ajouter : riz, 6 œufs…" aria-label="Chercher dans ton stock, ou ajouter ce que tu as acheté" aria-describedby="stockAide">
       <button type="submit" class="stock-taper-ok" aria-label="Ajouter au stock">${icone("plus")}</button></form>
@@ -2592,6 +2595,7 @@ function vueStockMaison() {
         return `<li><a class="rp-plat" href="#/plat/${id}">${photo(r, 120, "carre")}<span class="rp-texte"><b>${esc(r.nom)}</b>${macrosLigne(r.kcal, r.prot)}</span>
           <span class="stock-part">${nombre(Math.round(part * 100))} %</span></a></li>`; }).join("")}</ul>
       <button type="button" class="bouton large" data-action="stockProposer" style="margin-top:10px">${icone("arrows-clockwise")}Refaire mes repas avec mon stock</button></section>` : ""}
+    ${barreStock}
     ${st.length ? `
       ${[...groupes.entries()].map(([g, lignes]) => `<section class="bloc stock-groupe"><h2>${esc(g)}</h2><ul class="stock-liste">${lignes.map(l =>
         `<li><span class="stock-nom">${esc(l.nom)}</span><span class="stock-q">
@@ -2720,6 +2724,8 @@ function vueJourSuivi(params) {
     }).catch(() => {});
   }
   const idees = dec >= 2 ? E.ideesLoin[date] : (J.idees || {})[date];
+  // « Ajouter un repas » : une case de la grille en pointillés, un + au centre, comme un repas retiré (Taha, 22/11/2026).
+  const tuileAjout = `<button type="button" class="exo ajout-tuile" data-action="noterRepas" data-date="${date}" aria-label="Ajouter un repas : un de tes plats, une description, une photo ou un ticket" title="Ajouter un repas">${icone("plus")}</button>`;
   apresRendu.push(() => document.querySelectorAll("[data-idee]").forEach(b => b.addEventListener("click", () => {
     const x = idees.plats[Number(b.dataset.idee)];
     apercuChangement(idees.semaine, { ...x.operation, regler_plat: true }, `Ajouter « ${x.nom} » ?`);
@@ -2744,16 +2750,17 @@ function vueJourSuivi(params) {
       return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <small class="chiffres">${virgule(E.eau.litres)} L</small></span>
         <button type="button" class="eau-check" id="eauCheck" data-date="${date}" aria-pressed="${fait}" aria-label="${virgule(E.eau.litres)} L d'eau bus aujourd'hui">${icone("check")}</button></div>`; })() : ""}
     ${o.gluc || o.lip ? `<p class="petit discret chiffres" style="margin:-4px 0 12px">Glucides ${nombre(Math.round(j.gluc || 0))}${o.gluc ? ` / ${nombre(o.gluc)}` : ""} g · Lipides ${nombre(Math.round(j.lip || 0))}${o.lip ? ` / ${nombre(o.lip)}` : ""} g</p>` : ""}
-    ${ici && (!m || ici.k >= m.rang) ? `<section class="m-repas grille-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true)}</section>`
-      : dec < 0 && (j.repas || []).length ? `<section class="grille-plats histo-plats" aria-label="Les plats de ce jour"><div class="exos">${j.repas.map(x => platDHistorique(x, date)).join("")}</div></section>`
-      : dec < 0 ? `<div class="dujour"><strong>Pas de menu ce jour-là.</strong> Ajoute ce que tu as mangé.</div>`
+    ${ici && (!m || ici.k >= m.rang) ? `<section class="m-repas grille-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true, tuileAjout)}</section>`
+      : dec < 0 && (j.repas || []).length ? `<section class="grille-plats histo-plats" aria-label="Les plats de ce jour"><div class="exos">${j.repas.map(x => platDHistorique(x, date)).join("")}${tuileAjout}</div></section>`
+      : `${dec < 0 ? `<div class="dujour"><strong>Pas de menu ce jour-là.</strong> Ajoute ce que tu as mangé.</div>`
       : `<div class="dujour"><strong>Pas de menu prévu ce jour-là.</strong> Note ce que tu manges, ou compose la suite.
         <p style="margin-top:8px"><button class="bouton second" data-action="suivante">Composer la suite</button></p></div>`}
+        <section class="grille-plats" aria-label="Ajouter"><div class="exos">${tuileAjout}</div></section>`}
     ${(E.stock || []).length && E.manque_jours && E.manque_jours[date] ? (E.manque_jours[date].length
-      ? `<button type="button" class="manque-jour" data-manque-jour="${date}">${icone("shopping-cart-simple")}<span><b>${E.manque_jours[date].length} ingrédient${E.manque_jours[date].length > 1 ? "s" : ""} manquant${E.manque_jours[date].length > 1 ? "s" : ""}</b><small>Pour les repas de ce jour : la liste à acheter</small></span>${icone("caret-right")}</button>`
+      ? `<button type="button" class="manque-jour" data-manque-jour="${date}">${icone("shopping-cart-simple")}<span>${E.manque_jours[date].length} ingrédient${E.manque_jours[date].length > 1 ? "s" : ""} manquant${E.manque_jours[date].length > 1 ? "s" : ""}</span>${icone("caret-right")}</button>`
       : `<p class="manque-jour complet">${icone("check")}Tu as tout en stock pour les repas de ce jour.</p>`) : ""}
     ${j.entrees.length ? `<h2 class="titre-section">En plus</h2><div class="liste-notes">${j.entrees.map(ligneRepasNote).join("")}</div>` : ""}
-    <button class="ajout-ligne" data-action="noterRepas" data-date="${date}">${icone("cooking-pot")}<span><b>Ajouter un repas</b><small>Un de tes plats, une description, une photo ou un ticket</small></span></button></div>
+    </div>
     <div class="rubrique-fin">
     ${idees && idees.plats.length ? `<details class="bloc idees idees-ligne"><summary><span><b>Pour finir la journée</b><small>${idees.plats.length} idée${idees.plats.length > 1 ? "s" : ""} ${idees.moment.startsWith("col") ? "en collation" : `pour le ${nomMoment(idees.moment)}`}, réglée${idees.plats.length > 1 ? "s" : ""} sur ton objectif</small></span>${icone("caret-right")}</summary>
       <ul class="rp-liste">${idees.plats.map((x, i) => `<li><button type="button" class="rp-plat" data-idee="${i}">${photo(recette(x.id), 120, "carre")}
