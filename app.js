@@ -2252,6 +2252,7 @@ function vueProfilFlemmard() {
     ${lien("#/reglages", "sliders-horizontal", "Réglages", "Objectif, date de début, alimentation, informations, compte Claude, mot de passe")}
     ${E.utilisateur.admin ? lien("#/profils", "users", "Profils", "") : ""}
   </ul>
+  ${lienAndroid()}
   <p style="margin-top:18px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>`;
 }
 function vueProfils() {
@@ -3300,6 +3301,10 @@ function vuePanne() {
     <p>Vérifie ta connexion à internet, puis réessaie.</p>
     <button class="bouton" data-action="reessayer">Réessayer</button></div>`;
 }
+// Sur un téléphone Android, dans le navigateur (pas dans l'appli) : le lien pour installer l'appli (Taha, 22/11/2026).
+const lienAndroid = () => /Android/i.test(navigator.userAgent) && !window.Capacitor
+  ? `<p style="margin-top:18px"><a class="bouton second" href="telecharger/mon-meal-prep.apk" download>${icone("arrows-clockwise")}Installer l'appli Android</a></p>
+     <p class="petit discret">Android te demandera d'autoriser l'installation depuis ton navigateur, une seule fois.</p>` : "";
 function vueConnexion(erreur = "") {
   clearTimeout(minuteur);
   rendreNavigation("");
@@ -3314,7 +3319,8 @@ function vueConnexion(erreur = "") {
       <button class="bouton large" type="submit">Entrer</button>
       <p style="margin-top:12px;text-align:center"><button type="button" class="lien" data-action="oubliMdp">Mot de passe oublié ?</button></p>
     </form>
-    <p style="margin-top:22px"><button class="bouton sobre" data-action="versCreation">Créer mon profil</button></p>`;
+    <p style="margin-top:22px"><button class="bouton sobre" data-action="versCreation">Créer mon profil</button></p>
+    ${lienAndroid()}`;
 }
 
 /* ------------------------------------------------------------ rendu */

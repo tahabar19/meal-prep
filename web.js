@@ -3,7 +3,7 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-22-115625";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-22-123304";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const reponse = (status, corps) => new Response(JSON.stringify(corps), { status, headers: { "Content-Type": "application/json" } });
@@ -93,6 +93,17 @@ async function moteurPret() {
 sb.auth.onAuthStateChange((ev, session) => {
   if (session && M.worker) M.worker.postMessage({ type: "jeton", jeton: session.access_token });
   if (ev === "PASSWORD_RECOVERY") setTimeout(nouveauMotDePasse, 300);
+});
+
+// L'appli Android (Capacitor, qui ouvre ce site) : le bouton retour ferme d'abord la fenêtre ou la carte ouverte,
+// puis revient d'une page, et quitte l'appli depuis l'écran Jour (Taha, 22/11/2026).
+const ANDROID = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+if (ANDROID) ANDROID.addListener("backButton", ({ canGoBack }) => {
+  const d = document.getElementById("dialogue");
+  if (d && d.open) return d.close("non");
+  if (document.querySelector(".carte-fond") && typeof fermerCarte === "function") return fermerCarte();
+  if (canGoBack && location.hash && !/^#\/?(semaine)?$/.test(location.hash)) return history.back();
+  ANDROID.exitApp();
 });
 
 // Le lien « mot de passe oublié » reçu par email ramène ici : choisir un nouveau mot de passe (Taha, 22/11/2026).
