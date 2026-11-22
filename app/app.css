@@ -1199,3 +1199,16 @@ details.a-completer > summary::-webkit-details-marker{display:none}
 details.a-completer > summary > span{display:inline-flex;align-items:center;gap:8px}
 details.a-completer > summary > span .ic{color:var(--alerte);width:18px;height:18px}
 details.a-completer[open] > summary > .ic{transform:rotate(90deg)}
+/* page recette : sur un écran, discrète (Taha, 22/11/2026) */
+.fiche-compacte{gap:14px}
+.fc-tete{display:grid;grid-template-columns:76px minmax(0,1fr);gap:14px;align-items:center}
+.fc-tete .photo{width:76px;height:76px;border-radius:14px;overflow:hidden}
+.fc-tete .photo img{width:100%;height:100%;object-fit:cover}
+.fc-tete h1{margin:0;font-size:1.2rem!important;line-height:1.25}
+.fc-tete p{margin:4px 0 0;font-size:.85rem}
+.fiche-compacte > .fc-bloc{margin:0!important;padding:0!important;background:none!important;border:0!important;box-shadow:none!important}
+.fc-bloc h2{margin:0 0 6px;font-size:.78rem!important;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--discret)}
+.fc-bloc .ingredients li{padding:5px 0;font-size:.9rem}
+.fc-bloc .ingredients .lien{color:var(--encre);text-decoration:none;font-weight:400}
+.fc-bloc .etapes{gap:6px;padding-left:20px;font-size:.88rem;line-height:1.4}
+@media (min-width:900px){.fiche-compacte{grid-template-columns:minmax(0,1fr);max-width:640px}.fiche-compacte > *{grid-column:1}}

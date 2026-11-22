@@ -197,6 +197,24 @@ try {
     vrai(p <= 1, `petit écran : la carte défile de ${p} px`);
   });
 
+  // Taha, 22/11/2026 : « Voir la recette » sur un écran, sans « Ajuster » ; « Ajuster la recette » depuis le catalogue
+  await test('Recette : sur un écran, sans Ajuster ; Ajuster depuis le catalogue', async () => {
+    await aller('#/semaine');
+    const id = await B.js(`document.querySelector('.grille-plats a.repas').getAttribute('href').slice(7)`);
+    await aller(`#/cuisine/${id}`);
+    vrai(await attendre(`document.querySelector('.fiche-compacte')`, 10000) >= 0, 'pas de page recette');
+    vrai(await B.js(`!document.querySelector('.fiche [data-action=ajuster], .fiche [data-action=ajusterJour]')`), 'il reste « Ajuster » sur la recette');
+    await B.photo('recette');
+    await aller('#/catalogue');
+    await B.js(`document.querySelector('.cat-liste a.rp-plat').click()`);
+    vrai(await attendre(`document.querySelector('.carte-plat [data-action=ajuster]')`, 10000) >= 0, 'pas de « Ajuster la recette » dans la carte du catalogue');
+    vrai(await B.js(`(() => { const c = document.querySelector('.carte-plat'); return c.scrollHeight - c.clientHeight <= 1; })()`), 'la carte du catalogue défile');
+    await B.photo('catalogue-carte-ajuster');
+    await B.js(`document.querySelector('.carte-plat [data-action=ajuster]').click()`);
+    vrai(await attendre(`document.querySelector('#dialogue[open] #ajNouveau')`, 10000) >= 0, '« Ajuster la recette » n\'ouvre rien');
+    await B.js(`document.getElementById('dialogue').close()`);
+  });
+
   // Taha, 22/11/2026 : « Créer mon propre plat » comme « Remplacer » (champ IA), et plus de « Jarvis » à l'écran
   await test('Catalogue : créer un plat avec l\'IA, sans « Jarvis »', async () => {
     await aller('#/catalogue');
