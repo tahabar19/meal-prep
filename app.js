@@ -994,7 +994,8 @@ function ingredientsConnus() {
 function lireQuantite(texte) {
   // « poulet 150 g », « 150g de poulet », « riz 0,2 kg » -> { nom, q, u } ; sans quantite : { nom }.
   const t = texte.trim(), nb = x => Number(x.replace(",", "."));
-  const unites = "kg|g|gr|grammes?|cl|ml|l|pi[eè]ces?|pcs?";
+  // les cuillères aussi (Taha, 22/11/2026 : « 2 c thé fromage cottage » devenait un aliment nommé « 2 c thé … »)
+  const unites = "kg|g|gr|grammes?|cl|ml|l|pi[eè]ces?|pcs?|c\\.? ?[àa]\\.? ?c\\.?|c\\.? ?[àa]\\.? ?s\\.?|cuill[eè]res? [àa] (?:caf[eé]|soupe)|c\\.? (?:th[eé]|caf[eé]|soupe)|cc|cs";
   let m = t.match(new RegExp(`^(.+?)\\s+(\\d+(?:[.,]\\d+)?)\\s*(${unites})?\\.?$`, "i"));
   if (m) return mesure(m[1], nb(m[2]), m[3]);
   m = t.match(new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${unites})?\\s+(?:de\\s+|d['’]\\s*)?(.+)$`, "i"));
@@ -1004,7 +1005,8 @@ function lireQuantite(texte) {
     u = (u || "").toLowerCase();
     if (u === "kg" || u === "l") q *= 1000;
     if (u === "cl") q *= 10;
-    const unite = /^(kg|g|gr|gramme|grammes)$/.test(u) ? "g" : /^(l|cl|ml)$/.test(u) ? "ml" : u ? "pièce" : "";
+    const unite = /^(kg|g|gr|gramme|grammes)$/.test(u) ? "g" : /^(l|cl|ml)$/.test(u) ? "ml"
+      : /soupe|^cs$|s\.?$/.test(u) && /^c/.test(u) ? "c.à.s" : /th[eé]|caf[eé]|^cc$|[àa]\.? ?c\.?$/.test(u) ? "c.à.c" : u ? "pièce" : "";
     return { nom: nom.trim(), q: Math.round(q * 100) / 100, u: unite };
   }
 }
