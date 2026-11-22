@@ -11,6 +11,7 @@ import json
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
 
 JARVIS = Path.home() / "jarvis/jarvis-assistant-vocal"
@@ -145,7 +146,14 @@ if __name__ == "__main__":
     repas, avec_photo = catalogue()
     print("catalogue :", len(repas["repas"]), "fiches,", len(avec_photo), "avec photo")
     if "--sans-photos" not in sys.argv:
-        print("photos :", photos(repas), "images faites")
+        faites = photos(repas)
+        print("photos :", faites, "images faites")
+        if faites:                                       # l'iPhone garde les photos en cache : une nouvelle version les recharge
+            f = APP / "web.js"
+            texte, n = re.subn(r'const PHOTOS_V = "[^"]*";', f'const PHOTOS_V = "{time.strftime("%Y%m%d%H%M")}";', f.read_text(encoding="utf-8"), count=1)
+            if n != 1:
+                sys.exit("web.js : PHOTOS_V introuvable")
+            f.write_text(texte, encoding="utf-8")
     icones()
     page()
     print("page : faite, version", versions())
