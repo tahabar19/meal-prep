@@ -40,6 +40,19 @@
 </style>
 </head>
 <body>
+<script>
+// iPhone, appli installée (Taha, 22/11/2026, capture) : iOS remonte la page sous la barre d'état sans la rallonger en
+// bas ; tout ce qui est collé en bas s'arrête alors 59 points trop haut et laisse un rectangle vide. On mesure ce trou
+// (hauteur de l'écran − hauteur de la page) et on recolle en bas ce qui doit y être (variable --trou-bas).
+(() => {
+  const ios = /iPhone|iPod/.test(navigator.userAgent) && (navigator.standalone === true || matchMedia("(display-mode: standalone)").matches);
+  const regle = () => {
+    const trou = ios && innerHeight > innerWidth ? Math.round(screen.height - innerHeight) : 0;
+    document.documentElement.style.setProperty("--trou-bas", `${trou > 0 && trou < 120 ? trou : 0}px`);
+  };
+  regle(); addEventListener("resize", regle); addEventListener("orientationchange", () => setTimeout(regle, 300));
+})();
+</script>
 <div class="ouverture" id="ouverture" aria-hidden="true">
   <svg class="ouv-bol" viewBox="0 0 512 512" role="presentation">
     <defs><clipPath id="ouvRemplir"><rect x="0" y="430" width="512" height="200"><animate attributeName="y" from="430" to="262" begin="0.45s" dur="0.7s" fill="freeze" calcMode="spline" keySplines=".3 0 .2 1"/></rect></clipPath></defs>
