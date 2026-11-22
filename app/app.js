@@ -1842,6 +1842,8 @@ function vueCourses() {
 
 /* ------------------------------------------------------------ cuisine, jour par jour */
 function vueCuisine({ params }) {
+  // Mode flemmard : la page Cuisine n'existe pas (Taha, 22/11/2026) ; on retombe sur le Jour.
+  if (enSuivi()) { location.replace("#/semaine"); return ""; }
   const s = E.semaine;
   if (!s) { barre(""); return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}<div class="titre"><h1 tabindex="-1">Cuisine</h1></div>${vide("Rien à cuisiner", "Compose d'abord ta semaine.", "#/semaine", "Aller à la semaine")}`; }
   const n = jourDemande(params), j = s.jours[n];
@@ -1886,7 +1888,11 @@ function vueRecette({ arg, params }) {
   const combien = seance ? pourCombien(seance, s.jours[n]) : "pour 1 repas", facteur = seance ? tailleDe(s.jours[n], arg) : 1;
   barre(seance && !ok ? `<div><b>${s.jours[n].jour}, ${combien}</b><span>Les ingrédients sortiront du stock</span></div>
     <button class="bouton" data-action="cuisine" data-plat="${r.id}" data-jour="${n}">C'est cuisiné</button>` : "");
-  return `<a class="retour" href="#/cuisine${n >= 0 ? `?jour=${n}` : ""}">${icone("caret-left")}Cuisine</a>
+  // Mode flemmard : pas de page Cuisine ; « Retour » ramène là d'où tu viens (Jour, Catalogue…) (Taha, 22/11/2026).
+  if (enSuivi()) apresRendu.push(() => { const a = document.querySelector("a.retour[data-precedent]");
+    if (a && adressePrecedente) a.addEventListener("click", ev => { ev.preventDefault(); history.back(); }); });
+  return `${enSuivi() ? `<a class="retour" href="#/semaine" data-precedent>${icone("caret-left")}Retour</a>`
+    : `<a class="retour" href="#/cuisine${n >= 0 ? `?jour=${n}` : ""}">${icone("caret-left")}Cuisine</a>`}
   <article class="fiche fiche-compacte">
     <div class="fc-tete">${photo(r, 240, "carre", r.nom)}
       <div><h1 tabindex="-1">${esc(r.nom)}</h1>
@@ -3209,7 +3215,7 @@ const VUES = { semaine: vueSemaine, plat: vuePlat, courses: vueCourses, cuisine:
                plus: vuePlus, avancement: vueAvancement, budget: vueBudget, vitamines: vueVitamines, profil: vueProfil, profils: vueProfils,
                nouveau: vueNouveau, stock: vueStock, catalogue: vueCatalogue, journal: vueJournal, reglages: vueReglages, suivi: vueSuivi,
                historique: vueHistorique };
-let derniereAdresse = "";
+let derniereAdresse = "", adressePrecedente = "";
 
 function rendre() {
   if (!E) return;
@@ -3230,6 +3236,7 @@ function rendre() {
   const titre = $("contenu").querySelector("h1");
   document.title = (titre ? titre.textContent + " - " : "") + "Mon Meal Prep";
   if (changement) {
+    adressePrecedente = derniereAdresse;
     derniereAdresse = location.hash;
     if (!((r.vue === "semaine" || (r.vue === "cuisine" && !r.arg)) && r.params.has("jour"))) window.scrollTo(0, 0);
     if (titre && matchMedia("(pointer: fine)").matches) titre.focus({ preventScroll: true });

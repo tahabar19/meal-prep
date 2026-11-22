@@ -205,6 +205,14 @@ try {
     vrai(await attendre(`document.querySelector('.fiche-compacte')`, 10000) >= 0, 'pas de page recette');
     vrai(await B.js(`!document.querySelector('.fiche [data-action=ajuster], .fiche [data-action=ajusterJour]')`), 'il reste « Ajuster » sur la recette');
     await B.photo('recette');
+    // Taha, 22/11/2026 : pas de page Cuisine en mode flemmard ; « Retour » ramène d'où on vient
+    if (await B.js(`enSuivi()`)) {
+      vrai(await B.js(`!/Cuisine/.test(document.querySelector('a.retour').textContent)`), 'le retour mène encore à « Cuisine »');
+      await B.js(`document.querySelector('a.retour').click()`); await att(800);
+      vrai(await B.js(`location.hash === '#/semaine'`), `retour vers ${await B.js('location.hash')} au lieu du Jour`);
+      await aller('#/cuisine'); await att(500);
+      vrai(await B.js(`location.hash === '#/semaine'`), 'la page Cuisine existe encore');
+    }
     await aller('#/catalogue');
     await B.js(`document.querySelector('.cat-liste a.rp-plat').click()`);
     vrai(await attendre(`document.querySelector('.carte-plat [data-action=ajuster]')`, 10000) >= 0, 'pas de « Ajuster la recette » dans la carte du catalogue');
