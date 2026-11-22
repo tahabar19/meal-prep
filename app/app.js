@@ -3184,9 +3184,12 @@ function majPoidsVises() {
   }
 }
 document.addEventListener("input", ev => { if (ev.target.closest(".periode")) majPoidsVises(); });
-function blocObjectifs() {
+// `reglages` : l'ajustement des calories et le début du suivi, enregistrés avec les périodes (Taha, 22/11/2026 :
+// « Mon objectif » fusionné dans « Mes objectifs »).
+function blocObjectifs(reglages = "", resume = "") {
   apresRendu.push(majPoidsVises);
-  return `<section class="bloc" aria-labelledby="tPeriodes"><h2 id="tPeriodes">Mes objectifs</h2>
+  return `<section class="bloc" aria-labelledby="tPeriodes"${resume ? ` data-resume="${esc(resume)}"` : ""}><h2 id="tPeriodes">Mes objectifs</h2>
+    ${reglages}
     <p class="doux petit sous-titre">${E.phases_perso ? "Tes périodes : l'appli prend celle du jour." : "Ton programme actuel, en périodes : change ce que tu veux, puis enregistre."} Les vitamines suivent tes calories.</p>
     <div id="periodes">${periodesActuelles().map(lignePeriode).join("")}</div>
     <p style="margin:8px 0 14px"><button type="button" class="lien" id="ajoutPeriode">+ Ajouter une période</button></p>
@@ -3224,6 +3227,12 @@ document.addEventListener("click", async ev => {
   }
   const phases = t.id === "oAutomatique" ? [] : [...document.querySelectorAll(".periode")].map(d => Object.fromEntries(
     ["nom", "du", "au", "kcal", "prot", "glucides", "lipides"].map(c => [c, d.querySelector(".p-" + c).value.trim()])));
+  const fr = $("rAdj");                                 // les réglages de l'objectif, s'ils sont sur la page
+  if (fr && t.id === "oEnregistrer") {
+    const r = await appel("/api/reglages", { ...($("rPhase") ? { phase: $("rPhase").value ? Number($("rPhase").value) : null } : {}),
+      ajustement: Number(fr.value), date_debut: $("rDebut").value || null });
+    if (r !== true) { $("ePeriodes").textContent = (r && r.erreur) || "Réglages non enregistrés."; return; }
+  }
   const rep = await appel("/api/objectifs", { phases });
   if (rep === true) { rendre(); dire(phases.length ? "Objectifs enregistrés." : "Retour à ton programme de départ."); }
   else if (rep && rep.erreur) $("ePeriodes").textContent = rep.erreur;
@@ -3247,15 +3256,11 @@ function vueReglagesFlemmard() {
       <label class="option"><input type="checkbox" id="rFodmap"${fodmap ? " checked" : ""}><span><b>Pauvre en FODMAP</b><small>Seulement des plats pauvres en FODMAP.</small></span></label>
     </div>
   </section>
-  <section class="bloc" aria-labelledby="tObj" data-resume="${nombre(kcal)} kcal · ${choisie.prot} g"><h2 id="tObj">Mon objectif</h2>
-    <form class="formulaire" id="fObjectif" novalidate>
+  ${blocObjectifs(`<div class="objectif-reglages">
       ${(E.phases || []).length > 1 && !E.phases_perso ? champ("rPhase", "Phase du programme", choix("rPhase", "phase", r.phase || "", [["", "Automatique, selon la date"], ...E.phases.map(p => [p.n, `${p.n}. ${esc(p.nom)}, ${nombre(p.kcal)} kcal`])])) : ""}
       ${champ("rAdj", "Ajustement des calories", choix("rAdj", "ajustement", r.ajustement || 0, [-300, -150, 0, 150, 300].map(v => [v, `${v > 0 ? "+" : ""}${v} kcal`])), "Par paliers de 150 kcal, si ton poids s'écarte de ce que tu vises.")}
       ${champ("rDebut", "Début de mon suivi", saisie("rDebut", "date_debut", r.date_debut, "date", `max="${isoDuJour()}"`), "Le suivi compte ton poids et tes mesures à partir de ce jour.")}
-      <small id="eObjectif" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
-      <button class="bouton second" type="submit">Enregistrer</button>
-    </form></section>
-  ${blocObjectifs()}
+      </div>`, `${nombre(kcal)} kcal · ${choisie.prot} g`)}
   <section class="bloc" aria-labelledby="tInfos" data-resume="${esc([i.nom || E.profil.nom, i.taille_cm ? i.taille_cm + " cm" : "", i.poids_kg ? virgule(i.poids_kg) + " kg" : ""].filter(Boolean).join(" · "))}"><h2 id="tInfos">Mes informations</h2>
     <p class="doux petit sous-titre">${E.profil.calcule ? "Change une valeur : tes calories, tes protéines et tes vitamines sont recalculées." : "Ton programme vient de ton fichier de profil : ces informations ne changent pas tes besoins."}</p>
     <form class="formulaire" id="fMesInfos" novalidate>
@@ -3303,7 +3308,7 @@ function plierReglages() {
     const h = s.querySelector(":scope > h2");
     if (!h || h.querySelector(".reg-tete")) return;
     let resume = s.dataset.resume || "";
-    if (h.id === "tPeriodes") { const n = s.querySelectorAll(".periode").length; resume = n ? `${n} période${n > 1 ? "s" : ""}` : ""; }
+    if (h.id === "tPeriodes" && !resume) { const n = s.querySelectorAll(".periode").length; resume = n ? `${n} période${n > 1 ? "s" : ""}` : ""; }
     if (h.id === "tClaude") resume = typeof M !== "undefined" && M.claude ? (M.claude.partage ? "IA partagée" : "Ta clé") : "À brancher";
     const ouvert = REG_OUVERTS.has(h.id);
     s.classList.add("pliable"); s.classList.toggle("ouvert", ouvert);
