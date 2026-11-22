@@ -3145,9 +3145,35 @@ function lignePeriode(x = {}) {
       <label>kcal<input class="p-kcal" type="text" inputmode="numeric" value="${v("kcal")}"></label>
       <label>Protéines (g)<input class="p-prot" type="text" inputmode="numeric" value="${v("prot")}"></label>
       <label>Glucides (g)<input class="p-glucides" type="text" inputmode="numeric" value="${v("glucides")}" placeholder="—"></label>
-      <label>Lipides (g)<input class="p-lipides" type="text" inputmode="numeric" value="${v("lipides")}" placeholder="—"></label></div></div>`;
+      <label>Lipides (g)<input class="p-lipides" type="text" inputmode="numeric" value="${v("lipides")}" placeholder="—"></label></div>
+    <p class="p-vise" aria-live="polite"></p></div>`;
 }
+// Le poids visé à la fin de chaque période (Taha, 22/11/2026) : à partir du dernier poids, ce que les calories de la
+// période font gagner ou perdre par rapport à la dépense du jour (7 700 kcal ≈ 1 kg). Une estimation, recalculée en tapant.
+function majPoidsVises() {
+  const blocs = [...document.querySelectorAll(".periode")];
+  if (!blocs.length) return;
+  const dep = E.profil.depense, i = E.profil.identite || {};
+  const dernier = (E.suivi || []).find(x => x.poids != null);
+  let poids = Number(dernier ? dernier.poids : i.poids_kg);
+  const jourMs = 864e5, auj = new Date(isoDuJour() + "T12:00");
+  const lignes = blocs.map(b => ({ b, du: b.querySelector(".p-du").value, au: b.querySelector(".p-au").value,
+    kcal: Number(String(b.querySelector(".p-kcal").value).replace(",", ".")) })).sort((a, c) => (a.du || "").localeCompare(c.du || ""));
+  for (const l of lignes) {
+    const sortie = l.b.querySelector(".p-vise");
+    if (!dep || !poids || !l.kcal || !l.du || !l.au || l.au < l.du) { sortie.textContent = ""; continue; }
+    const debut = new Date(Math.max(new Date(l.du + "T12:00"), auj)), fin = new Date(l.au + "T12:00");
+    const jours = Math.max(0, Math.round((fin - debut) / jourMs) + 1);
+    const parSemaine = (l.kcal - dep) * 7 / 7700;
+    const signe = v => `${v > 0 ? "+" : v < 0 ? "−" : ""}${virgule(Math.abs(Math.round(v * 10) / 10))}`;
+    if (jours > 730) { sortie.innerHTML = `Rythme visé : <b>${signe(parSemaine)} kg par semaine</b>`; continue; }
+    poids += (l.kcal - dep) * jours / 7700;
+    sortie.innerHTML = `Poids visé le ${esc(dateCourte(l.au))} : <b>≈ ${virgule(Math.round(poids * 10) / 10)} kg</b> <small>(${signe(parSemaine)} kg par semaine)</small>`;
+  }
+}
+document.addEventListener("input", ev => { if (ev.target.closest(".periode")) majPoidsVises(); });
 function blocObjectifs() {
+  apresRendu.push(majPoidsVises);
   return `<section class="bloc" aria-labelledby="tPeriodes"><h2 id="tPeriodes">Mes objectifs</h2>
     <p class="doux petit sous-titre">${E.phases_perso ? "Tes périodes : l'appli prend celle du jour." : "Ton programme actuel, en périodes : change ce que tu veux, puis enregistre."} Les vitamines suivent tes calories.</p>
     <div id="periodes">${periodesActuelles().map(lignePeriode).join("")}</div>
@@ -3169,16 +3195,17 @@ document.addEventListener("click", async ev => {
   if (t.id === "ajoutPeriode") {
     const tous = [...document.querySelectorAll(".periode .p-au")].map(i => i.value).filter(Boolean).sort();
     $("periodes").insertAdjacentHTML("beforeend", lignePeriode({ du: tous.length ? lendemain(tous[tous.length - 1]) : isoDuJour() }));
+    majPoidsVises();
     return;
   }
-  if (t.dataset.retirerPeriode !== undefined) { t.closest(".periode").remove(); return; }
+  if (t.dataset.retirerPeriode !== undefined) { t.closest(".periode").remove(); majPoidsVises(); return; }
   if (t.id === "oProposer") {
     t.disabled = true; t.innerHTML = `${icone("sparkle")}L'IA réfléchit…`; $("ePeriodes").textContent = "";
     try {
       const r = await fetch("/api/objectifs/proposer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ demande: $("oDemande").value }) });
       const rep = await r.json();
       if (!r.ok) $("ePeriodes").textContent = rep.erreur || "Claude n'a pas pu proposer.";
-      else { $("periodes").innerHTML = rep.proposition.phases.map(lignePeriode).join(""); $("oExplication").textContent = rep.proposition.explication || "Vérifie, puis enregistre."; }
+      else { $("periodes").innerHTML = rep.proposition.phases.map(lignePeriode).join(""); majPoidsVises(); $("oExplication").textContent = rep.proposition.explication || "Vérifie, puis enregistre."; }
     } catch (e) { $("ePeriodes").textContent = "Pas de réponse."; }
     t.disabled = false; t.innerHTML = `${icone("sparkle")}Proposer des périodes`;
     return;
