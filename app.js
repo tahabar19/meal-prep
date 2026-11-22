@@ -1,6 +1,6 @@
 "use strict";
 /* Mon Meal Prep - interface.
-   Le site ne decide rien : il affiche l'etat envoye par Jarvis (/api/etat) et lui
+   Le site ne decide rien : il affiche l'etat envoye par l'appli (/api/etat) et lui
    transmet tes actions. L'adresse (#/semaine, #/cuisine/<plat>…) dit ou tu es :
    le bouton Retour du telephone fonctionne et une page se partage ou se recharge. */
 
@@ -26,7 +26,7 @@ const QUAND = { matin: "Matin", midi: "Midi", soir: "Soir", collation: "Collatio
 
 // Sur le telephone (iPhone…), une mise en page compacte : l'ecran du jour en liste (Taha, 19/11/2026).
 const PETIT = matchMedia("(max-width: 899px)");
-let E = null;            // etat envoye par Jarvis
+let E = null;            // etat envoye par l'appli
 let BASE = null;         // recettes (prix, vitamines, photo) : demandees a part, une fois par version
 let journalPlus = [];    // entrees du journal chargees avec « Voir la suite »
 let journalSuite = null; // reste-t-il des entrees plus anciennes ?
@@ -115,7 +115,7 @@ function confirmer({ titre, texte, oui, non = "Annuler" }) {
   });
 }
 
-/* ------------------------------------------------------------ dialogue avec Jarvis */
+/* ------------------------------------------------------------ dialogue avec l'appli */
 async function appel(chemin, corps) {
   let r, donnees;
   try {
@@ -124,17 +124,17 @@ async function appel(chemin, corps) {
     donnees = await r.json();
   } catch (e) {
     if (!E) vuePanne();
-    else dire("Jarvis ne répond pas. Vérifie que le site tourne sur le PC.");
+    else dire("L'appli ne répond pas. Vérifie que le site tourne sur le PC.");
     return false;
   }
   const formulaire = ["/api/connexion", "/api/profil/creer", "/api/profil/modifier"].includes(chemin);   // l'erreur s'affiche dans le formulaire
   if (r.status === 401 && !formulaire) { E = null; vueConnexion(); return false; }
-  if (!r.ok) { if (!formulaire) dire(donnees.erreur || "Jarvis a refusé."); return donnees; }
+  if (!r.ok) { if (!formulaire) dire(donnees.erreur || "L'appli a refusé."); return donnees; }
   if (chemin === "/api/deconnexion") { E = null; oublierHorsLigne(); return true; }
   try {
     await completer(donnees);
   } catch (e) {
-    dire("Jarvis ne répond pas. Vérifie que le site tourne sur le PC.");
+    dire("L'appli ne répond pas. Vérifie que le site tourne sur le PC.");
     return false;
   }
   E = donnees;
@@ -228,7 +228,7 @@ function demanderPaiement(correction, quoi = "") {
     <p style="margin-bottom:18px">${correction ? "Ces montants servent au suivi de ton budget." : (E.mois ? "Les fruits et légumes de la liste entrent dans ton stock." : "Les produits achetés entrent dans ton stock. Confirme seulement une fois le paiement fait.")}</p>
     <div class="champ"><label for="pSuper">${E.mois ? "Payé pour les fruits et légumes" : "Payé au supermarché"}, en euros</label>
       <input id="pSuper" name="supermarche" type="number" inputmode="decimal" min="0" max="5000" step="0.01" autocomplete="off" value="${propose ?? ""}" placeholder="Par exemple 62,40…">
-      <small>${!correction && c.panier ? "Total du panier rempli par Jarvis. Corrige-le s'il a changé." : "Laisse vide si tu ne le connais pas."}</small></div>
+      <small>${!correction && c.panier ? "Total du panier rempli par l'appli. Corrige-le s'il a changé." : "Laisse vide si tu ne le connais pas."}</small></div>
     <div class="champ"><label for="pBoucher">${E.mois ? "Payé pour la viande" : "Payé chez le boucher"}, en euros</label>
       <input id="pBoucher" name="boucher" type="number" inputmode="decimal" min="0" max="5000" step="0.01" autocomplete="off" value="${correction && p.boucher != null ? p.boucher : ""}" placeholder="${nombre(estimeBoucher || 0, 2)}…">
       <small>Laisse vide pour garder l'estimation de ${euros(estimeBoucher || 0)}.</small></div>
@@ -254,7 +254,7 @@ function demanderPaiementDuMois() {
   const cm = E.courses_mois, d = $("dialogue");
   d.innerHTML = `<form method="dialog" novalidate>
     <h2 id="dialogueTitre">Le panier ${esc(E.magasin.principale)} est payé ?</h2>
-    <p style="margin-bottom:18px">${cm.panier ? "Le panier rempli par Jarvis" : "Tous les produits de la liste"} entre${cm.panier ? "" : "nt"} dans ton stock. Confirme seulement une fois le paiement fait.</p>
+    <p style="margin-bottom:18px">${cm.panier ? "Le panier rempli par l'appli" : "Tous les produits de la liste"} entre${cm.panier ? "" : "nt"} dans ton stock. Confirme seulement une fois le paiement fait.</p>
     <div class="champ"><label for="pMois">Payé, en euros</label>
       <input id="pMois" name="montant" type="number" inputmode="decimal" min="0" max="5000" step="0.01" autocomplete="off" value="${cm.panier ? cm.panier.total : ""}" placeholder="${nombre(cm.estimation, 2)}…">
       <small>${cm.panier ? "Total du panier, hors livraison. Corrige-le avec le vrai montant." : "Laisse vide si tu ne le connais pas."}</small></div>
@@ -275,7 +275,7 @@ function demanderPaiementDuMois() {
 const AIDE_MODES = {
   moins_cher: "Le prix et les promotions comptent trois fois plus.",
   plus_varie: "Plus de recettes différentes, et des plats que tu n'as jamais goûtés.",
-  flemmard: "Tes repas fixes (smoothie, œufs, shake, yaourt…) et UN plat par jour, cuisiné une fois et mangé midi et soir. Jarvis choisit chaque plat pour tomber sur tes calories et tes protéines.",
+  flemmard: "Tes repas fixes (smoothie, œufs, shake, yaourt…) et UN plat par jour, cuisiné une fois et mangé midi et soir. L'appli choisit chaque plat pour tomber sur tes calories et tes protéines.",
   fodmap: "Seulement les recettes pauvres en FODMAP : sans oignon, ail, blé ni lactose, et sans légumes crus (salade, concombre, carottes râpées).",
 };
 function demanderComposition(recomposer) {
@@ -288,7 +288,7 @@ function demanderComposition(recomposer) {
   const d = $("dialogue");
   d.innerHTML = `<form method="dialog" id="fComposer">
     <h2 id="dialogueTitre">${recomposer ? "Recomposer la semaine" : "Composer ma semaine"}</h2>
-    <p>${recomposer ? (engagee ? "La semaine en cours reste dans ton historique." : "La semaine proposée sera remplacée.") + " " : ""}Coche ou décoche ce qui compte cette fois-ci. Sans rien cocher, Jarvis équilibre tout.</p>
+    <p>${recomposer ? (engagee ? "La semaine en cours reste dans ton historique." : "La semaine proposée sera remplacée.") + " " : ""}Coche ou décoche ce qui compte cette fois-ci. Sans rien cocher, l'appli équilibre tout.</p>
     <div class="options" role="group" aria-label="Priorités de la semaine">
       ${E.modes.filter(m => !m.a_venir && !m.impose).map(m => option("mode", m.id, m.nom.charAt(0).toUpperCase() + m.nom.slice(1), AIDE_MODES[m.id] || "", coches.has(m.id))).join("")}
     </div>
@@ -398,7 +398,7 @@ function repasDuJour(s, k, n, compact = false, sansCollation = false, avecCuire 
       <button class="bouton sobre" data-action="changer" data-semaine="${k}" data-jour="${n}" data-moment="col${j.collations.length}">${icone("cooking-pot")}Ajouter une collation</button>
       <button class="bouton sobre" data-action="clonerJour" data-semaine="${k}" data-jour="${n}">${icone("copy")}Copier un autre jour ici</button>
       ${j.retire || cuisineLeJour ? "" : `<button class="bouton sobre" data-action="retirerJour" data-semaine="${k}" data-jour="${n}">${icone("x")}Retirer ce jour</button>`}</p>
-    <p class="petit muet" style="margin-top:8px">Le bouton ${icone("swap")} d'un repas permet de le changer, de le retirer ou d'y mettre ton propre plat. Le bouton ${icone("sliders-horizontal")} rééquilibre ce plat : Jarvis règle ses grammes, et seulement les siens, pour viser ton objectif du jour.</p>`}`;
+    <p class="petit muet" style="margin-top:8px">Le bouton ${icone("swap")} d'un repas permet de le changer, de le retirer ou d'y mettre ton propre plat. Le bouton ${icone("sliders-horizontal")} rééquilibre ce plat : l'appli règle ses grammes, et seulement les siens, pour viser ton objectif du jour.</p>`}`;
 }
 function reglable(s, k, n, id, moment) {
   // Bouton « Rééquilibrer » : le serveur dit quels plats se règlent (valeurs connues, pas encore cuisinés) ;
@@ -469,7 +469,7 @@ function tableauDeLaSemaine(s, k, n) {
       ${modes.map(x => `<span class="puce">${esc(x.charAt(0).toUpperCase() + x.slice(1))}</span>`).join("")}
       ${(() => { const paye = (E.courses_mois && E.courses_mois.commande) || E.semaine.etat === "commandee" || E.semaine.etat === "terminee";
         if (paye || passee) return "";
-        if (E.tache.etat === "en cours") return `<a class="puce accent" href="#/courses">Jarvis remplit le panier…</a>`;
+        if (E.tache.etat === "en cours") return `<a class="puce accent" href="#/courses">L'appli remplit le panier…</a>`;
         return E.valide ? `<a class="puce accent" href="#/courses">${icone("check")}Menu validé : voir les courses</a>`
           : `<button class="bouton" data-action="valider">${icone("check")}C'est bon, je valide le menu</button>`; })()}
       ${passee ? "" : boutonPdf("semaine")}
@@ -541,7 +541,7 @@ function vueSemaine({ params }) {
       <div class="grille accueil">
         <section class="bloc jour vide-jour"><div class="jour-texte">
           <div><h2 class="grand">Aucune semaine pour l'instant</h2>
-          <p class="doux">Jarvis choisit tes repas d'après tes notes, tes avis, ton stock, les promotions, les vitamines, ton budget et ton objectif. Tu cuisines chaque jour.</p></div>
+          <p class="doux">L'appli choisit tes repas d'après tes notes, tes avis, ton stock, les promotions, les vitamines, ton budget et ton objectif. Tu cuisines chaque jour.</p></div>
           <div class="actions"><button class="bouton grand" data-action="composer">Composer ma semaine</button>
             <a class="bouton second" href="#/catalogue">Parcourir le catalogue</a></div></div></section>
         <section class="bloc"><h2>Mon objectif</h2>
@@ -724,7 +724,7 @@ function demanderChangement(k, n, moment) {
     $("rpBadge").hidden = !!texte;
     // Le même champ crée ton plat : Claude, l'IA, trouve les aliments, les grammes et les macros de ce que tu as écrit.
     $("rpIA").innerHTML = texte.length >= 2 ? `<button type="button" class="rp-ia" data-ia>${icone("sparkle")}<span>Créer « ${esc(texte.length > 48 ? texte.slice(0, 46) + "…" : texte)} » avec l'IA
-        <small>Jarvis en fait ton plat : aliments, grammes et macros</small></span>${icone("caret-right")}</button>` : "";
+        <small>L'IA en fait ton plat : aliments, grammes et macros</small></span>${icone("caret-right")}</button>` : "";
     $("rpCompte").textContent = texte ? (liste.length ? `${liste.length} plat${liste.length > 1 ? "s" : ""} trouvé${liste.length > 1 ? "s" : ""}` : "Aucun plat de ta base")
       : `${liste.length} ${cat === "petitdej" ? "petits-déjeuners" : cat === "plat" ? "plats" : "collations"}`;
     $("rpListe").innerHTML = liste.slice(0, R.nb).map(carte).join("")
@@ -791,6 +791,34 @@ function demanderChangement(k, n, moment) {
   if (!d.open) d.showModal();
   d.scrollTop = revient ? R.defile || 0 : 0;
 }
+// « Créer mon propre plat » du catalogue (Taha, 22/11/2026 : « pas à jour avec ce qu'on a fait ») : le même champ IA que
+// « Remplacer un plat ». L'IA trouve aliments, grammes et macros, tu vérifies, le plat rejoint tes plats.
+// Sans compte Claude : les ingrédients à la main, comme avant.
+function creerPlatIA(cat = "plat", texte = "") {
+  if (E.claude === false) return demanderPlatPerso({ cat });
+  const d = $("dialogue");
+  d.innerHTML = `<form class="feuille rp creer-plat" novalidate>
+    <div class="rp-tete"><div><p class="rp-sur">Catalogue</p><h2 id="dialogueTitre">Créer un plat</h2></div>
+      <button type="button" class="rp-fermer" data-fermer aria-label="Fermer">${icone("x")}</button></div>
+    <p class="petit discret rp-intro">Écris ton plat ou ce que tu manges. L'IA trouve les aliments, les grammes et les macros ; tu vérifies avant d'enregistrer.</p>
+    <div class="rp-recherche champ-ia">${icone("sparkle")}<input id="cpTexte" type="text" enterkeyhint="go" autocomplete="off"
+        placeholder="Ex. : 2 œufs, pain pita 70 g" aria-label="Ton plat, ou ce que tu manges" value="${esc(texte)}"><span class="rp-badge-ia">IA</span></div>
+    <small class="erreur" id="eCp" role="alert" style="display:block;min-height:1em;margin-top:6px;color:var(--critique)"></small>
+    <button class="bouton bouton-ia" type="submit" style="width:100%;margin-top:6px">${icone("sparkle")}Créer avec l'IA</button>
+    <p class="petit" style="margin:14px 0 0;text-align:center"><button type="button" class="lien" data-main>Sans l'IA : entrer les ingrédients moi-même</button></p></form>`;
+  const f = d.querySelector("form");
+  f.querySelector("[data-fermer]").addEventListener("click", () => d.close("non"));
+  f.querySelector("[data-main]").addEventListener("click", () => demanderPlatPerso({ cat }));
+  f.addEventListener("submit", ev => {
+    ev.preventDefault();
+    const t = $("cpTexte").value.trim();
+    if (t.length < 2) { $("eCp").textContent = "Écris ton plat d'abord."; return; }
+    noterRepas({ date: E.journal_repas.aujourdhui, remplacer: { texte: t, creer: true,
+      place: cat === "petitdej" ? "pdj" : cat === "collation" ? "col" : undefined,
+      retour: () => creerPlatIA(cat, t), main: () => demanderPlatPerso({ cat }) } });
+  });
+  if (!d.open) d.showModal();
+}
 function demanderClonage(k, n) {
   const s = planDe(k), d = $("dialogue");
   d.innerHTML = `<div class="feuille">
@@ -830,12 +858,12 @@ async function apercuChangement(k, operation, titre, retour) {
     const r = await fetch("/api/semaine/modifier", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ operation, semaine: k, apercu: true }) });
     rep = await r.json();
-    if (!r.ok) { dire(rep.erreur || "Jarvis a refusé."); return; }
-  } catch (e) { dire("Jarvis ne répond pas."); return; }
+    if (!r.ok) { dire(rep.erreur || "L'appli a refusé."); return; }
+  } catch (e) { dire("L'appli ne répond pas."); return; }
   const a = rep.apercu, signe = v => `${v > 0 ? "+" : v < 0 ? "−" : ""}${nombre(Math.abs(v))}`;
   const q = m => m.unite === "qs" ? "" : ` ${quantite(m.quantite, m.unite)}`;
   // Les grammes réglés par Jarvis : en tête quand on ajuste les quantités d'un plat, après la journée sinon.
-  const GRAMMES = a.reglages && a.reglages.length ? `<h3${operation.type === "reequilibrer" ? ' style="margin-top:0"' : ""}>${operation.type === "objectif" ? "Ce que Jarvis règle" : operation.type === "reequilibrer" ? "Les nouvelles quantités" : "Le plat mis, réglé pour l'objectif"}</h3>
+  const GRAMMES = a.reglages && a.reglages.length ? `<h3${operation.type === "reequilibrer" ? ' style="margin-top:0"' : ""}>${operation.type === "objectif" ? "Ce que l'appli règle" : operation.type === "reequilibrer" ? "Les nouvelles quantités" : "Le plat mis, réglé pour l'objectif"}</h3>
       <p class="petit discret" style="margin:-4px 0 6px">Quantités de l'assiette, pour ${planDe(k).jours[operation.jour].jour.toLowerCase()} seulement. ${operation.type === "objectif" ? "Tes plats à toi, tes repas fixes et ce qui est déjà cuisiné ne bougent pas." : "Les autres repas ne bougent pas."}</p>
       ${a.reglages.map(c => `${operation.type === "reequilibrer" ? "" : `<h4 style="margin:10px 0 4px">${esc(c.nom)}</h4>`}<ul class="lignes">${c.lignes.map(l =>
         `<li><span>${esc(l.n)}</span><span class="q chiffres">${quantite(Math.round(l.avant * c.taille * 10) / 10, l.u)} → <b>${quantite(Math.round(l.apres * c.taille * 10) / 10, l.u)}</b></span></li>`).join("")}</ul>`).join("")}`
@@ -877,7 +905,7 @@ async function apercuChangement(k, operation, titre, retour) {
         <button type="button" data-ap-fois="0.5" aria-label="Plus">+</button></div>
       <p class="chiffres ap-macros" id="apMacros">${nombre(Math.round(choisi.kcal * tChoisi))} kcal, ${nombre(Math.round(choisi.prot * tChoisi))} g de protéines</p>
       <h3>Ingrédients</h3><div id="apIng">${listeIngredients(choisi, tChoisi)}</div></div>` : ""}
-    ${operation.type === "reequilibrer" ? `<p class="petit discret" style="margin:-4px 0 14px">« ${esc(recette(operation.plat).nom)} », ${esc(a.jour.toLowerCase())}. Jarvis règle les grammes de ce plat, et seulement les siens, pour viser ${nombre(a.objectif.kcal)} kcal et ${a.objectif.prot} g de protéines.</p>` : ""}
+    ${operation.type === "reequilibrer" ? `<p class="petit discret" style="margin:-4px 0 14px">« ${esc(recette(operation.plat).nom)} », ${esc(a.jour.toLowerCase())}. L'appli règle les grammes de ce plat, et seulement les siens, pour viser ${nombre(a.objectif.kcal)} kcal et ${a.objectif.prot} g de protéines.</p>` : ""}
     ${operation.type === "reequilibrer" ? GRAMMES : ""}
     ${operation.type === "reequilibrer" && !a.atteint ? `<div class="alerte" role="status" style="margin:0 0 14px">${icone("warning-circle")}<span><strong>Ce plat ne suffit pas pour tenir l'objectif.</strong>
       Même en réglant ses grammes (de la moitié au double), ${a.jour.toLowerCase()} ${a.reglages && a.reglages.length ? "arrive" : "reste"} à ${nombre(a.jour_kcal)} kcal et ${nombre(a.jour_prot)} g de protéines, pour ${nombre(a.objectif.kcal)} kcal et ${a.objectif.prot} g visés.
@@ -889,7 +917,7 @@ async function apercuChangement(k, operation, titre, retour) {
     <div id="apEcarts">${ecartsHTML()}</div>
     ${operation.type === "reequilibrer" ? "" : GRAMMES}
     ${a.combler && a.combler.plats.length ? `<h3>Il manque encore ${nombre(a.combler.kcal)} kcal${a.combler.prot > 5 ? ` et ${nombre(a.combler.prot)} g de protéines` : ""}</h3>
-      <p class="petit discret" style="margin:-4px 0 6px">${a.combler.moment.startsWith("col") ? "Ajoute une collation" : `Mets un ${nomMoment(a.combler.moment)}`} : ces plats comblent le mieux ce qui manque. Jarvis règle ensuite les grammes du plat choisi.</p>
+      <p class="petit discret" style="margin:-4px 0 6px">${a.combler.moment.startsWith("col") ? "Ajoute une collation" : `Mets un ${nomMoment(a.combler.moment)}`} : ces plats comblent le mieux ce qui manque. L'appli règle ensuite les grammes du plat choisi.</p>
       <ul class="candidats">${a.combler.plats.map(x => `<li><button type="button" class="candidat" data-combler="${x.id}">${photo(recette(x.id), 160, "carre")}
         <span class="texte"><b>${esc(x.nom)}</b><span class="chiffres">${nombre(x.kcal)} kcal, ${nombre(x.prot)} g de protéines</span></span>${icone("caret-right")}</button></li>`).join("")}</ul>` : ""}
     ${a.manque.length && !enSuivi() ? `<h3>${a.achete ? "À acheter toi-même" : "Ajouté à tes courses"}</h3>
@@ -989,17 +1017,17 @@ function demanderPlatPerso(ctx, saisie = { nom: "", ingredients: [], telQuel: tr
   const CATS = { plat: "un plat", petitdej: "un petit-déjeuner", collation: "une collation" };
   d.innerHTML = `<form class="feuille formulaire" novalidate>
     <h2 id="dialogueTitre">Mon propre plat</h2>
-    <p class="petit discret" style="margin:-4px 0 14px">Écris ce que tu manges, avec les quantités si tu les connais : « café au lait Tassimo », « 2 œufs, pain pita 70 g ». Jarvis met exactement ça, rien de plus.</p>
+    <p class="petit discret" style="margin:-4px 0 14px">Écris ce que tu manges, avec les quantités si tu les connais : « café au lait Tassimo », « 2 œufs, pain pita 70 g ». L'appli met exactement ça, rien de plus.</p>
     <div class="champ"><label for="ppNom">Nom du plat <small>(facultatif)</small></label>
       <input id="ppNom" name="nom" type="text" maxlength="80" autocomplete="off" placeholder="Poulet riz de ma mère" value="${esc(saisie.nom)}"></div>
     <div class="champ"><label for="ppIng">Ingrédients</label>
       <div class="ajout"><input id="ppIng" type="text" list="ppConnus" autocomplete="off" placeholder="Café au lait Tassimo, 2 œufs, riz 80 g…">
         <button class="bouton second" type="button" id="ppAjouter">Ajouter</button></div>
       <datalist id="ppConnus">${connus.map(n => `<option value="${esc(n)}">`).join("")}</datalist>
-      <small>Un par un, ou plusieurs séparés par des virgules, « et » ou « + ». Sans quantité, Jarvis met une portion habituelle, que tu règles à l'écran suivant. La marque ou le magasin ne gênent pas (« Skyr – Lidl »). Un produit inconnu ? Tu pourras le créer avec Claude.</small></div>
+      <small>Un par un, ou plusieurs séparés par des virgules, « et » ou « + ». Sans quantité, l'appli met une portion habituelle, que tu règles à l'écran suivant. La marque ou le magasin ne gênent pas (« Skyr – Lidl »). Un produit inconnu ? Tu pourras le créer avec Claude.</small></div>
     <div class="gouts" id="ppListe" aria-label="Ingrédients choisis">${saisie.ingredients.map((n, i) => `<button type="button" data-oter="${i}" aria-label="Retirer ${esc(n)}">${esc(n)}${qs[n] != null ? ` · ${nombre(qs[n])}${unites[n] && unites[n] !== "pièce" ? " " + unites[n] : ""}` : ""}${icone("x")}</button>`).join("")}</div>
     <div class="options" style="margin-top:14px"><label class="option"><input type="checkbox" id="ppCompleter"${saisie.telQuel ? "" : " checked"}>
-      <span><b>Jarvis complète la recette ${BADGE_IA}</b><small>Seulement si tu le veux : il ajoute ce qui manque (matière grasse, épices, accompagnement) et règle les quantités sur ${ctx.remplace ? `« ${esc(recette(ctx.remplace).nom)} »` : "ton objectif"}. Il faut alors un nom de plat.</small></span></label></div>
+      <span><b>L'IA complète la recette ${BADGE_IA}</b><small>Seulement si tu le veux : il ajoute ce qui manque (matière grasse, épices, accompagnement) et règle les quantités sur ${ctx.remplace ? `« ${esc(recette(ctx.remplace).nom)} »` : "ton objectif"}. Il faut alors un nom de plat.</small></span></label></div>
     <small id="ePerso" class="erreur" role="alert" style="display:block;margin-top:12px;color:var(--critique)">${erreur}</small>
     <div class="actions pied"><button class="bouton second" type="button" value="non">${ctx.retour ? "Retour" : "Annuler"}</button>
       <button class="bouton" type="submit">Voir le plat</button></div></form>`;
@@ -1012,7 +1040,7 @@ function demanderPlatPerso(ctx, saisie = { nom: "", ingredients: [], telQuel: tr
     if (!lus.length) return false;
     const suite = garder([...saisie.ingredients, ...lus.map(x => x.nom).filter(x => !saisie.ingredients.includes(x))], !$("ppCompleter").checked);
     lus.filter(x => x.q != null).forEach(x => { suite.quantites[x.nom] = x.q; suite.unites[x.nom] = x.u; });
-    if (lus.some(x => x.q != null)) suite.telQuel = true;     // des grammes donnes : Jarvis les garde tels quels
+    if (lus.some(x => x.q != null)) suite.telQuel = true;     // des grammes donnes : l'appli les garde tels quels
     demanderPlatPerso(ctx, suite);
     $("ppIng").focus();
     return true;
@@ -1036,7 +1064,7 @@ function demanderPlatPerso(ctx, saisie = { nom: "", ingredients: [], telQuel: tr
     const s = lire();
     if (!s.ingredients.length) { $("ePerso").textContent = "Ajoute au moins un ingrédient."; return $("ppIng").focus(); }
     if (s.nom.length < 3 && !s.telQuel) { $("ePerso").textContent = "Donne un nom à ton plat."; return $("ppNom").focus(); }
-    ev.submitter.disabled = true; if (!s.telQuel) ev.submitter.textContent = "Jarvis complète la recette…";      // Claude met une dizaine de secondes
+    ev.submitter.disabled = true; if (!s.telQuel) ev.submitter.textContent = "L'IA complète la recette…";      // Claude met une dizaine de secondes
     apercuPlatPerso(ctx, s);
   });
   if (!d.open) d.showModal();
@@ -1050,9 +1078,9 @@ async function apercuPlatPerso(ctx, saisie) {
   try {
     const r = await fetch("/api/plat_perso", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...corps, apercu: true }) });
     const rep = await r.json();
-    if (!r.ok) return demanderPlatPerso(ctx, saisie, esc(rep.erreur || "Jarvis a refusé."));
+    if (!r.ok) return demanderPlatPerso(ctx, saisie, esc(rep.erreur || "L'appli a refusé."));
     p = rep.plat;
-  } catch (e) { return dire("Jarvis ne répond pas."); }
+  } catch (e) { return dire("L'appli ne répond pas."); }
   if (!p.recette) {
     return demanderPlatPerso(ctx, saisie, p.inconnus.map(x => `Je ne connais pas « ${esc(x.nom)} ».${x.proches.length
       ? ` Tu voulais dire ${x.proches.map(n => `<button type="button" class="lien" data-pour="${esc(x.nom)}" data-proche="${esc(n)}">${esc(n)}</button>`).join(", ")} ?` : ""}
@@ -1070,13 +1098,13 @@ async function apercuPlatPerso(ctx, saisie) {
     <div class="macros" role="status">${[["Calories", r.kcal, "kcal"], ["Protéines", r.prot, "g"], ["Glucides", r.gluc, "g"], ["Lipides", r.lip, "g"]].map(([nom, v, u]) => `<div class="macro"><span>${nom}</span><b>${nombre(v)} ${u}</b></div>`).join("")}</div>`
     : `<p class="petit discret" style="margin:-4px 0 12px">Une portion, calée sur ${c.d_apres ? `« ${esc(c.d_apres)} » qu'il remplace` : "la part de ce repas dans ton objectif du jour"}. ${euros(p.cout)} la portion.</p>
     <div class="jour-change">${mesure("Calories", r.kcal, c.kcal, "kcal")}${mesure("Protéines", r.prot, c.prot, "g")}</div>`}
-    ${loin ? `<p class="dujour" style="margin-top:12px"><strong>Cible pas tout à fait tenue.</strong> Avec ces ingrédients, Jarvis ne peut pas faire mieux sans sortir de quantités raisonnables. Ajoute ${p.ecart.prot < 0 ? "une protéine (poulet, œufs, thon…)" : "un féculent ou enlève un ingrédient riche"} si tu veux t'en rapprocher.</p>` : ""}
+    ${loin ? `<p class="dujour" style="margin-top:12px"><strong>Cible pas tout à fait tenue.</strong> Avec ces ingrédients, l'appli ne peut pas faire mieux sans sortir de quantités raisonnables. Ajoute ${p.ecart.prot < 0 ? "une protéine (poulet, œufs, thon…)" : "un féculent ou enlève un ingrédient riche"} si tu veux t'en rapprocher.</p>` : ""}
     <h3>Ingrédients pour une portion</h3>
     ${p.tel_quel ? `<ul class="lignes reglables">${r.ing.map((i, n) => i.u === "qs" ? `<li><span>${esc(i.n)}</span><span class="q">au goût</span></li>`
       : `<li><label for="pq${n}">${esc(i.n)}</label><span class="reglage"><button type="button" data-n="${n}" data-sens="-1" aria-label="Moins de ${esc(i.n)}">−</button>
           <input id="pq${n}" data-n="${n}" type="number" inputmode="decimal" min="0" step="${pas(i)}" value="${i.q}">
           <button type="button" data-n="${n}" data-sens="1" aria-label="Plus de ${esc(i.n)}">+</button><span class="unite">${esc(i.u)}</span></span></li>`).join("")}</ul>`
-    : `<ul class="lignes">${r.ing.map(i => `<li><span>${esc(i.n)}${p.ajoutes.includes(i.n) ? `<small>Ajouté par Jarvis pour compléter la recette</small>` : ""}</span><span class="q">${quantite(i.q, i.u)}</span></li>`).join("")}</ul>`}
+    : `<ul class="lignes">${r.ing.map(i => `<li><span>${esc(i.n)}${p.ajoutes.includes(i.n) ? `<small>Ajouté par l'IA pour compléter la recette</small>` : ""}</span><span class="q">${quantite(i.q, i.u)}</span></li>`).join("")}</ul>`}
     ${p.tel_quel ? "" : p.par_claude ? `<details style="margin-top:12px"><summary>La recette, ${r.temps} min${icone("caret-right")}</summary>
       <ol class="etapes" style="margin:8px 0 0;padding-left:20px;display:grid;gap:6px">${r.etapes.map(e => `<li>${esc(e)}</li>`).join("")}</ol></details>`
       : `<p class="petit discret" style="margin-top:10px">Claude n'a pas répondu : la recette est complétée avec les règles simples du site, sans épices ni vraie méthode.</p>`}
@@ -1118,9 +1146,9 @@ async function demanderIngredient(o) {
     const r = await fetch(o.creer ? "/api/ingredient/proposer" : "/api/ingredient/valeurs",
       { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nom: o.nom }) });
     const rep = await r.json();
-    if (!r.ok) { dire(rep.erreur || "Jarvis a refusé."); return fermer(); }
+    if (!r.ok) { dire(rep.erreur || "L'appli a refusé."); return fermer(); }
     v = rep.ingredient;
-  } catch (e) { dire("Jarvis ne répond pas."); return fermer(); }
+  } catch (e) { dire("L'appli ne répond pas."); return fermer(); }
   const nouveau = o.creer || v.cree, val = o.creer ? v : v.valeurs, u = (nouveau ? v.u : null) || "g";
   // D'où viennent les valeurs : l'étiquette lue en ligne (avec son lien), sinon l'estimation de Claude.
   const origine = i => { const e = i == null ? null : (v.etiquettes || [])[i];
@@ -1214,9 +1242,9 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   try {
     const r = await fetch("/api/recette/ajuster", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plat: id, quantites, apercu: true, ...(jour ? { jour: jour.n, semaine: jour.k } : {}) }) });
     const rep = await r.json();
-    if (!r.ok) return dire(rep.erreur || "Jarvis a refusé.");
+    if (!r.ok) return dire(rep.erreur || "L'appli a refusé.");
     a = rep.ajustement;
-  } catch (e) { return dire("Jarvis ne répond pas."); }
+  } catch (e) { return dire("L'appli ne répond pas."); }
   // Le serveur garde les quantites d'UNE portion de base. Pour un jour, on saisit celles d'UN repas de ce jour :
   // portion de base × taille de l'assiette (R-01). La page Cuisine multiplie ensuite par le nombre de repas.
   const jj = jour ? planDe(jour.k).jours[jour.n] : null;
@@ -1459,13 +1487,33 @@ function ficheRapide(id, ctx, depuis, vu = null) {
     </div></article>`;
   document.body.appendChild(fond);
   // Centrée sur ce qui se voit vraiment : sur iPhone, l'écran visible n'est pas toujours celui de la page (Taha, 22/11/2026).
-  const vv = window.visualViewport;
-  const caler = () => { if (!vv) return;
+  const vv = window.visualViewport, carte = fond.querySelector(".carte-plat");
+  // Jamais de défilement dans la carte (Taha, 22/11/2026) : sur un petit écran, la photo rapetisse, puis les étiquettes
+  // et la ligne d'info s'effacent ; 0,8 cm sous le centre seulement s'il reste la place.
+  const tenir = () => {
+    const ph = carte.querySelector(".cp-photo .photo"), caches = carte.querySelectorAll(".cp-etiquettes, .cp-info"), sous = carte.querySelectorAll(".cp-choix small");
+    sous.forEach(x => { x.hidden = false; });
+    if (ph) Object.assign(ph.style, { height: "", aspectRatio: "" });
+    caches.forEach(x => { x.hidden = false; });
+    carte.style.top = "0px";
+    const trop = () => carte.scrollHeight - carte.clientHeight;
+    if (ph && trop() > 0) Object.assign(ph.style, { aspectRatio: "auto", height: `${Math.max(90, ph.offsetHeight - trop())}px` });
+    if (trop() > 0) caches.forEach(x => { x.hidden = true; });
+    if (ph && trop() > 0) ph.style.height = `${Math.max(60, ph.offsetHeight - trop())}px`;
+    if (trop() > 0) sous.forEach(x => { x.hidden = true; });
+    if (ph && trop() > 0) ph.style.height = `${Math.max(36, ph.offsetHeight - trop())}px`;
+    const place = (vv ? vv.height : innerHeight) - 32 - carte.offsetHeight;
+    carte.style.top = `${Math.max(0, Math.min(30, Math.floor(place / 2)))}px`;
+  };
+  const caler = () => { if (vv) {
     Object.assign(fond.style, { top: `${vv.offsetTop}px`, height: `${vv.height}px`, bottom: "auto" });
-    fond.style.setProperty("--haut-visible", `${vv.height}px`); };
+    fond.style.setProperty("--haut-visible", `${vv.height}px`); }
+    tenir(); };
   caler();
   if (vv) { vv.addEventListener("resize", caler); vv.addEventListener("scroll", caler); }
-  const carte = fond.querySelector(".carte-plat");
+  // Les ingrédients ouverts : la place se refait (la photo peut rapetisser encore).
+  const ing = carte.querySelector(".cp-ingredients");
+  if (ing) ing.addEventListener("toggle", tenir);
   // L'effet : la carte part de la place du plat touché (position et taille), puis grandit jusqu'au centre.
   const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const depart = depuis && depuis.getBoundingClientRect();
@@ -1556,7 +1604,7 @@ function lignesCochables(liste, lignes, q = l => quantite(l.acheter ?? l.quantit
 }
 // Les lignes a acheter suivies de celles que l'utilisateur a cochees « j'en ai deja ».
 const avecCoches = t => [...t.a_acheter, ...(t.coches || []).map(l => ({ ...l, coche: true }))];
-const NOTE_COCHES = `<p class="doux petit sous-titre">Coche ce que tu as déjà chez toi : Jarvis ne l'achète pas et il ne compte plus dans la liste.</p>`;
+const NOTE_COCHES = `<p class="doux petit sous-titre">Coche ce que tu as déjà chez toi : l'appli ne l'achète pas et il ne compte plus dans la liste.</p>`;
 function listeParRayon(lignes, liste = "panier") {
   // Une carte par rayon, dans l'ordre du magasin.
   const rayonDe = {};
@@ -1573,7 +1621,7 @@ function etapes(noms, rang) {
 }
 const etatEnClair = (conseils, suite = "") => { const [premier] = conseils.filter(Boolean);       // la premiere ligne dit ou on en est
   return (premier ? `<p class="dujour" role="status" style="margin-top:16px">${premier[2]}</p>` : "") + suite; };
-const suiviDeJarvis = (t, ouvert) => t.lignes.length ? `<details${ouvert ? " open" : ""} style="margin-top:16px"><summary>Ce que fait Jarvis${icone("caret-right")}</summary>
+const suiviDeJarvis = (t, ouvert) => t.lignes.length ? `<details${ouvert ? " open" : ""} style="margin-top:16px"><summary>Ce que fait l'appli${icone("caret-right")}</summary>
     <div class="journal-suivi" id="suivi" tabindex="0">${esc(t.lignes.join("\n"))}</div></details>` : "";
 
 function produitsManquants(cm, magasin, duree) {
@@ -1584,13 +1632,13 @@ function produitsManquants(cm, magasin, duree) {
   const cherche = hors.some(l => l.cherche), avec = hors.some(l => l.alternatives.length);
   const option = (i, valeur, titre, sous, coche) => `<label class="option"><input type="radio" name="alt${i}" value="${esc(valeur)}"${coche ? " checked" : ""}><span><b>${titre}</b>${sous ? `<small>${sous}</small>` : ""}</span></label>`;
   return `<section class="bloc large" aria-labelledby="tHors"><h2 id="tHors">Produits manquants${hors.length ? `<span class="puce">${hors.length} produit${hors.length > 1 ? "s" : ""}</span>` : ""}</h2>
-    ${hors.length ? `<p class="doux petit sous-titre">Jarvis ne les a pas mis au panier ${magasin}. ${avec ? `Pour chacun, choisis un produit de remplacement trouvé chez ${magasin} : il va dans ton panier, et les recettes de ${duree === "la semaine" ? "ta semaine" : duree.replace("les", "tes")} l'utilisent à la place, toutes seules. Sinon, achète-le ailleurs.` : cherche ? `Rien de proche chez ${magasin} : prends-les dans un autre magasin.` : `Prends-les ailleurs, ou demande à Jarvis de chercher de quoi les remplacer chez ${magasin}.`}</p>
+    ${hors.length ? `<p class="doux petit sous-titre">L'appli ne les a pas mis au panier ${magasin}. ${avec ? `Pour chacun, choisis un produit de remplacement trouvé chez ${magasin} : il va dans ton panier, et les recettes de ${duree === "la semaine" ? "ta semaine" : duree.replace("les", "tes")} l'utilisent à la place, toutes seules. Sinon, achète-le ailleurs.` : cherche ? `Rien de proche chez ${magasin} : prends-les dans un autre magasin.` : `Prends-les ailleurs, ou demande à l'appli de chercher de quoi les remplacer chez ${magasin}.`}</p>
     <div class="manquants">${hors.map((l, i) => `<fieldset class="manquant" data-manquant="${esc(l.nom)}">
       <legend><b>${esc(l.nom)}</b> <span class="q">${quantite(l.acheter, l.unite)}</span></legend>
       <p class="doux petit">${esc(l.raison.charAt(0).toUpperCase() + l.raison.slice(1))}.${l.plats.length ? ` Sert dans : ${l.plats.map(esc).join(", ")}.` : ""}</p>
       <div class="options">
         ${l.alternatives.map(a => option(i, a.nom, `${esc(a.nom)}, ${quantite(a.quantite, a.unite)}`,
-          `${a.paquets} × ${esc(a.produit)}${a.format ? ` (${esc(a.format)})` : ""} · ${euros(a.cout)}${a.pourquoi ? `<br>${esc(a.pourquoi)}` : ""}${a.deja_au_panier ? "<br>Déjà dans ton panier pour d'autres plats : Jarvis en ajoute." : ""}${a.composition_non_lue ? "<br>Étiquette non lue sur le site : vérifie la composition avant de payer." : ""}`)).join("")}
+          `${a.paquets} × ${esc(a.produit)}${a.format ? ` (${esc(a.format)})` : ""} · ${euros(a.cout)}${a.pourquoi ? `<br>${esc(a.pourquoi)}` : ""}${a.deja_au_panier ? "<br>Déjà dans ton panier pour d'autres plats : l'appli en ajoute." : ""}${a.composition_non_lue ? "<br>Étiquette non lue sur le site : vérifie la composition avant de payer." : ""}`)).join("")}
         ${option(i, "", l.alternatives.length ? "Je l'achète moi-même ailleurs" : "À acheter toi-même ailleurs", l.alternatives.length ? "La recette ne change pas." : l.cherche ? `Aucun produit proche trouvé chez ${magasin}.` : "Alternatives pas encore cherchées.", true)}
       </div>
       <label class="coche" style="margin-top:12px"><input type="checkbox" data-coche="${esc("hors|" + l.nom)}"><span>J'en ai déjà chez moi</span></label></fieldset>`).join("")}</div>
@@ -1612,24 +1660,24 @@ function vueCoursesDuMois() {
   let action = "", bouton = "";
   const conseils = [];
   if (enCours) {
-    conseils.push(["monter", "En cours", /alternatives/.test(t.titre) ? "Jarvis cherche des produits de remplacement pour ce qui manque… Quelques minutes. Tu peux quitter cette page, elle se met à jour toute seule."
-      : /complète/.test(t.titre) ? "Jarvis ajoute tes produits de remplacement au panier… Une ou deux minutes."
-      : "Jarvis remplit le panier… Compte une vingtaine de minutes. Tu peux quitter cette page, elle se met à jour toute seule."]);
+    conseils.push(["monter", "En cours", /alternatives/.test(t.titre) ? "L'appli cherche des produits de remplacement pour ce qui manque… Quelques minutes. Tu peux quitter cette page, elle se met à jour toute seule."
+      : /complète/.test(t.titre) ? "L'appli ajoute tes produits de remplacement au panier… Une ou deux minutes."
+      : "L'appli remplit le panier… Compte une vingtaine de minutes. Tu peux quitter cette page, elle se met à jour toute seule."]);
     action = `<div><b>Panier en cours…</b><span>${esc(t.lignes.filter(Boolean).slice(-1)[0] || "").slice(0, 60)}</span></div><button class="bouton" disabled>En cours…</button>`;
   } else if (cm.panier) {
-    conseils.push(["monter", "À toi", `<b>Le panier est rempli</b> : ${cm.panier.articles} produits pour ${euros(cm.panier.total)} hors livraison. ${E.profil.chrome ? `Il est dans le Chrome de TON profil, pas dans un autre navigateur : clique sur « Ouvrir mon profil Chrome », en haut de cette page` : `Ouvre le site de ${magasin} dans le Chrome de Jarvis`}, choisis ta livraison et paie.`]);
+    conseils.push(["monter", "À toi", `<b>Le panier est rempli</b> : ${cm.panier.articles} produits pour ${euros(cm.panier.total)} hors livraison. ${E.profil.chrome ? `Il est dans le Chrome de TON profil, pas dans un autre navigateur : clique sur « Ouvrir mon profil Chrome », en haut de cette page` : `Ouvre le site de ${magasin} dans le Chrome de l'appli`}, choisis ta livraison et paie.`]);
     action = `<div><b>Panier de ${euros(cm.panier.total)}</b><span>Il reste à payer chez ${magasin}</span></div><button class="bouton" data-action="payerMois">C'est payé</button>`;
     bouton = `<button class="bouton grand" data-action="payerMois">C'est payé</button><button class="bouton sobre" data-action="panier">${icone("arrows-clockwise")}Refaire le panier</button>`;
   } else if (aCommander) {
     if (t.etat === "occupe") {
-      conseils.push(["", "Occupé", "Jarvis remplit le panier d'un autre profil. Réessaie dans quelques minutes."]);
-      action = `<div><b>Jarvis est occupé</b><span>Il remplit le panier d'un autre profil</span></div><button class="bouton" disabled>Patiente…</button>`;
+      conseils.push(["", "Occupé", "L'appli remplit le panier d'un autre profil. Réessaie dans quelques minutes."]);
+      action = `<div><b>L'appli est occupée</b><span>Il remplit le panier d'un autre profil</span></div><button class="bouton" disabled>Patiente…</button>`;
     } else if (!E.valide) {
       conseils.push(["alerte", "À faire", "Valide d'abord ton menu dans Semaine : tu pourras ensuite passer la commande ici."]);
       action = `<div><b>Menu pas encore validé</b><span>Valide-le, puis passe la commande ici</span></div><a class="bouton" href="#/semaine">Voir le menu</a>`;
       bouton = `<a class="bouton grand" href="#/semaine">Voir le menu</a>`;
     } else {
-      conseils.push(["monter", "Prêt", `${aCommander} produits à mettre au panier ${magasin} pour ${duree}, environ ${euros(cm.estimation)}. Clique sur « Passer la commande » : Jarvis remplit le panier, tu paies toi-même.`]);
+      conseils.push(["monter", "Prêt", `${aCommander} produits à mettre au panier ${magasin} pour ${duree}, environ ${euros(cm.estimation)}. Clique sur « Passer la commande » : l'appli remplit le panier, tu paies toi-même.`]);
       action = `<div><b>${magasin}, ${aCommander} produits</b><span>Pour ${duree}, environ ${euros(cm.estimation)}</span></div><button class="bouton" data-action="panier">Passer la commande</button>`;
       bouton = `<button class="bouton grand" data-action="panier">Passer la commande</button><button class="bouton sobre" data-action="payerMois">J'ai fait cette commande moi-même</button>`;
     }
@@ -1656,7 +1704,7 @@ function vueCoursesDuMois() {
   const rang = enCours ? 1 : cm.panier ? 2 : aCommander ? (E.valide ? 1 : 0) : marcheFait ? 4 : 3;
   return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}<div class="tete">
     <div><h1 tabindex="-1">Courses</h1>
-      <p class="doux">Trois listes : <b>le panier ${magasin}</b>, rempli par Jarvis une fois pour les ${m.nb} semaines (épicerie, frais, surgelés) ; <b>le marché</b>, à faire toi-même chaque semaine (fruits, légumes, viande chez le boucher) ; <b>les fruits secs</b>, une fois par mois.</p></div>
+      <p class="doux">Trois listes : <b>le panier ${magasin}</b>, rempli par l'appli une fois pour les ${m.nb} semaines (épicerie, frais, surgelés) ; <b>le marché</b>, à faire toi-même chaque semaine (fruits, légumes, viande chez le boucher) ; <b>les fruits secs</b>, une fois par mois.</p></div>
     <div class="ligne"><span class="puce">Semaine ${m.rang + 1} sur ${m.nb}</span>${cm.panier ? `<span class="puce accent">Panier rempli</span>` : ""}${E.profil.chrome ? `<button class="bouton second" data-action="enseignes">Ouvrir mon profil Chrome</button>` : ""}${boutonPdf("courses")}</div>
   </div>
   <div class="grille accueil">
@@ -1672,7 +1720,7 @@ function vueCoursesDuMois() {
     </section>
 
     ${aCommander ? `<section class="bloc large" aria-labelledby="tMoisC"><h2 id="tMoisC">Panier ${magasin}<span class="puce">${aCommander} produits</span></h2>
-      <p class="doux petit sous-titre">Rempli par Jarvis pour ${duree} : épicerie, frais, surgelés, et les légumes qui se gardent (oignons, ail, pommes de terre, carottes).</p>
+      <p class="doux petit sous-titre">Rempli par l'appli pour ${duree} : épicerie, frais, surgelés, et les légumes qui se gardent (oignons, ail, pommes de terre, carottes).</p>
       ${NOTE_COCHES}${cm.panier && (cm.coches || []).length ? `<p class="dujour" style="margin-bottom:12px"><strong>Panier déjà rempli.</strong> Ce que tu coches maintenant y est peut-être déjà : retire-le sur le site de ${magasin}, ou refais le panier.</p>` : ""}
       ${listeParRayon(avecCoches(cm), "panier")}</section>` : ""}
 
@@ -1728,9 +1776,9 @@ function vueCourses() {
   let action = "", bouton = "";
   const conseils = [];
   if (enCours) {
-    conseils.push(["monter", "En cours", /alternatives/.test(t.titre) ? "Jarvis cherche des produits de remplacement pour ce qui manque… Quelques minutes. Tu peux quitter cette page, elle se met à jour toute seule."
-      : /complète/.test(t.titre) ? "Jarvis ajoute tes produits de remplacement au panier… Une ou deux minutes."
-      : "Jarvis remplit le panier… Compte une vingtaine de minutes. Tu peux quitter cette page, elle se met à jour toute seule."]);
+    conseils.push(["monter", "En cours", /alternatives/.test(t.titre) ? "L'appli cherche des produits de remplacement pour ce qui manque… Quelques minutes. Tu peux quitter cette page, elle se met à jour toute seule."
+      : /complète/.test(t.titre) ? "L'appli ajoute tes produits de remplacement au panier… Une ou deux minutes."
+      : "L'appli remplit le panier… Compte une vingtaine de minutes. Tu peux quitter cette page, elle se met à jour toute seule."]);
     action = `<div><b>Panier en cours…</b><span>${esc(t.lignes.filter(Boolean).slice(-1)[0] || "").slice(0, 60)}</span></div>
       <button class="bouton" disabled>En cours…</button>`;
   } else if (fini) {
@@ -1738,27 +1786,27 @@ function vueCourses() {
     action = `<div><b>Commande payée</b><span>Stock à jour</span></div><a class="bouton" href="#/cuisine">Cuisiner</a>`;
     bouton = `<a class="bouton grand" href="#/cuisine">Cuisiner</a><button class="bouton sobre" data-action="corriger">${total != null ? "Corriger les montants payés" : "Indiquer le montant payé"}</button>`;
   } else if (s.etat === "panier") {
-    conseils.push(["monter", "À toi", `<b>Le panier est rempli.</b> Ouvre le site de ${magasin} dans le Chrome de Jarvis, choisis ta livraison et paie. Reviens ensuite ici.`]);
+    conseils.push(["monter", "À toi", `<b>Le panier est rempli.</b> Ouvre le site de ${magasin} dans le Chrome de l'appli, choisis ta livraison et paie. Reviens ensuite ici.`]);
     action = `<div><b>Panier rempli</b><span>Il reste à payer chez ${magasin}</span></div>
       <button class="bouton" data-action="payer">C'est payé</button>`;
     bouton = `<button class="bouton grand" data-action="payer">C'est payé</button>`;
   } else if (n) {
     if (t.etat === "occupe") {
-      conseils.push(["", "Occupé", "Jarvis remplit le panier d'un autre profil. Réessaie dans quelques minutes."]);
-      action = `<div><b>Jarvis est occupé</b><span>Il remplit le panier d'un autre profil</span></div><button class="bouton" disabled>Patiente…</button>`;
+      conseils.push(["", "Occupé", "L'appli remplit le panier d'un autre profil. Réessaie dans quelques minutes."]);
+      action = `<div><b>L'appli est occupée</b><span>Il remplit le panier d'un autre profil</span></div><button class="bouton" disabled>Patiente…</button>`;
     } else if (!E.valide) {
       conseils.push(["alerte", "À faire", "Valide d'abord ton menu dans Semaine : tu pourras ensuite passer la commande ici."]);
       action = `<div><b>Menu pas encore validé</b><span>Valide-le, puis passe la commande ici</span></div><a class="bouton" href="#/semaine">Voir le menu</a>`;
       bouton = `<a class="bouton grand" href="#/semaine">Voir le menu</a>`;
     } else {
-      conseils.push(["monter", "Prêt", `${n} articles à mettre au panier chez ${magasin}. Clique sur « Passer la commande » : Jarvis remplit le panier, tu paies toi-même.`]);
+      conseils.push(["monter", "Prêt", `${n} articles à mettre au panier chez ${magasin}. Clique sur « Passer la commande » : l'appli remplit le panier, tu paies toi-même.`]);
       action = `<div><b>${n} articles à acheter</b><span>Tu paies toi-même</span></div>
       <button class="bouton" data-action="panier">Passer la commande</button>`;
       bouton = `<button class="bouton grand" data-action="panier">Passer la commande</button><button class="bouton sobre" data-action="payer">J'ai fait les courses moi-même</button>`;
     }
   } else conseils.push(["", "Stock", "Rien à acheter : tout est déjà en stock."]);
   if (c.boucher.length && !fini) conseils.push(["", "Boucher", `${c.boucher.length} produit${c.boucher.length > 1 ? "s" : ""} de viande à prendre chez ton boucher : jamais dans le panier.`]);
-  if (c.en_stock.length) conseils.push(["", "Stock", `${c.en_stock.length} produits sont déjà chez toi : Jarvis ne les rachète pas.`]);
+  if (c.en_stock.length) conseils.push(["", "Stock", `${c.en_stock.length} produits sont déjà chez toi : l'appli ne les rachète pas.`]);
   barre(action);
   const rang = fini ? 4 : s.etat === "panier" ? 2 : enCours || E.valide ? 1 : 0;
   return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}<div class="tete">
@@ -1873,7 +1921,7 @@ function vuePlus() {
   <ul class="menu">
     ${enSuivi() ? "" : lien("courses", "shopping-cart-simple", "Courses") + lien("cuisine", "cooking-pot", "Cuisine") + lien("budget", "receipt", "Budget et coûts")}
     ${lien("vitamines", "orange", "Vitamines")}
-    ${enSuivi() ? "" : lien("stock", "package", "Stock") + lien("journal", "notebook", "Journal de Jarvis")}
+    ${enSuivi() ? "" : lien("stock", "package", "Stock") + lien("journal", "notebook", "Journal de l'appli")}
     ${lien("profil", "user-circle", "Mon profil")}
     ${admin ? lien("profils", "users", "Profils") : ""}
     ${lien("reglages", "sliders-horizontal", "Réglages")}
@@ -2107,7 +2155,7 @@ function vueProfil() {
       ${Object.keys(V.noms).map(c => l(esc(V.noms[c].nom), `${dose(V.besoins[c])} ${V.noms[c].unite}`)).join("")}</ul>
     <p class="petit discret" style="margin-top:8px">Phase ${ph.n}, ${esc(ph.nom).toLowerCase()}. Ces repères ne remplacent pas un avis médical.</p></section>
   ${enSuivi() ? "" : `<section class="bloc" aria-labelledby="tCourses"><h2 id="tCourses" style="margin-bottom:8px">Mes courses</h2>
-    <ul class="lignes">${l("Budget", `${euros(E.reglages.budget_mois)} par mois`)}${l("Enseigne", esc(E.magasin.principale))}${l("Navigateur", p.chrome ? "Mon propre Chrome" : "Le Chrome de Jarvis")}</ul>
+    <ul class="lignes">${l("Budget", `${euros(E.reglages.budget_mois)} par mois`)}${l("Enseigne", esc(E.magasin.principale))}${l("Navigateur", p.chrome ? "Mon propre Chrome" : "Le Chrome de l'appli")}</ul>
     <p class="petit discret" style="margin-top:8px">Ta fiche complète est dans le fichier PROFIL.md de ton dossier de profil.</p></section>`}`;
 }
 function vueProfilFlemmard() {
@@ -2178,7 +2226,7 @@ function vueNouveau() {
   barre("");
   if (!E.utilisateur.admin) return vueIntrouvable();
   return `<a class="retour" href="#/profils">${icone("caret-left")}Profils</a>
-  <div class="titre"><h1 tabindex="-1">Nouveau profil</h1><p>La personne remplit ses informations, Jarvis calcule le reste.</p></div>${formulaireProfil(false)}`;
+  <div class="titre"><h1 tabindex="-1">Nouveau profil</h1><p>La personne remplit ses informations, l'appli calcule le reste.</p></div>${formulaireProfil(false)}`;
 }
 function vueCreation() {
   clearTimeout(minuteur);
@@ -2311,7 +2359,7 @@ function vueCatalogue({ params }) {
   const proteines = PROTEINES.filter(([id]) => ici.some(r => r.filtres.proteine === id));
   const groupe = (nom, puces) => puces ? `<div class="filtre-groupe"><span class="filtre-nom">${nom}</span><div class="gouts" role="group" aria-label="${nom}">${puces}</div></div>` : "";
   return `<div class="titre"><h1 tabindex="-1">Catalogue</h1>
-    <p>${repas.length} recettes. Dis ce que tu veux bien tester et ce que tu n'aimes pas : Jarvis en tient compte quand il compose ta semaine. ${nb("tester")} à tester, ${nb("non")} que tu n'aimes pas.</p></div>
+    <p>${repas.length} recettes. Dis ce que tu veux bien tester et ce que tu n'aimes pas : l'appli en tient compte quand il compose ta semaine. ${nb("tester")} à tester, ${nb("non")} que tu n'aimes pas.</p></div>
   <p class="actions" style="margin:-6px 0 14px"><button class="bouton second" data-action="creerPlat" data-cat="${F.cats.size === 1 ? [...F.cats][0] : "plat"}">${icone("cooking-pot")}Créer mon propre plat</button></p>
   <section class="filtres" aria-labelledby="tFiltres">
     <h2 id="tFiltres"><button type="button" class="filtres-bascule" data-action="filtreCat" data-cle="ouvert" data-valeur="" aria-expanded="${F.ouvert}">${icone("sliders-horizontal")}Filtres${actifs ? ` <span class="puce accent">${actifs}</span>` : ""}${icone("caret-right")}</button>
@@ -2608,7 +2656,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
         if (!r.ok) { $("eNr").textContent = rep.erreur || "Claude n'a pas pu calculer."; ok.disabled = false; ok.innerHTML = libelle; return; }
         moment = rep.proposition.moment || moment;
         verifier(rep.proposition, false, true);
-      } catch (e) { $("eNr").textContent = "Jarvis ne répond pas."; ok.disabled = false; ok.innerHTML = libelle; }
+      } catch (e) { $("eNr").textContent = "L'appli ne répond pas."; ok.disabled = false; ok.innerHTML = libelle; }
     });
     if (!d.open) d.showModal();
     if (!TACTILE.matches) setTimeout(() => $("nrTexte") && $("nrTexte").focus(), 50);     // sur iPhone : jamais (clavier bloqué)
@@ -2646,7 +2694,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       <h2 id="dialogueTitre">${entree ? "Modifier ce repas" : aLaMain ? "Tes chiffres" : "Vérifie avant d'enregistrer"}</h2>
       ${puces()}
       ${p.remarque ? `<p class="dujour" style="margin-top:12px">${esc(p.remarque)}</p>` : ""}
-      <div class="champ" style="margin-top:12px"><label for="nrNom">Nom du repas</label><input id="nrNom" type="text" maxlength="80" value="${esc(p.nom || "")}"></div>
+      <div class="champ" style="margin-top:12px"><label for="nrNom">${remplacer && remplacer.creer ? "Nom du plat" : "Nom du repas"}</label><input id="nrNom" type="text" maxlength="80" value="${esc(p.nom || "")}"></div>
       <p class="petit discret nr-titre-macros">Les macros du plat</p>
       <div class="cp-chiffres nr-macros" id="nrTotal" aria-live="polite"></div>
       ${!aLaMain && E.claude !== false ? `<div class="champ champ-ia nr-repondre"><label for="nrCorrection">Répondre à Claude ${BADGE_IA}</label>
@@ -2662,7 +2710,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       <small id="eNr" class="erreur" role="alert" style="display:block;margin-top:8px;color:var(--critique)"></small>
       ${entree && semainePourDate(date) ? `<p style="margin:10px 0 0"><button type="button" class="bouton second" id="nrAuMenu" style="width:100%">${icone("cooking-pot")}Mettre dans le menu du jour</button></p>` : ""}
       <div class="actions pied">${entree ? `<button class="bouton second" type="button" id="nrSuppr">Supprimer</button>` : `<button class="bouton second" type="button" id="nrRetour">Retour</button>`}
-        <button class="bouton" type="submit">${remplacer ? "Continuer" : !entree && semainePourDate(date) ? "Ajouter au menu" : "Enregistrer"}</button></div></form>`;
+        <button class="bouton" type="submit">${remplacer ? (remplacer.creer ? "Créer le plat" : "Continuer") : !entree && semainePourDate(date) ? "Ajouter au menu" : "Enregistrer"}</button></div></form>`;
     brancherPuces();
     rendreListe();
     $("nrAjout").addEventListener("click", () => { items.push({ nom: "Aliment", g: null, pour100: null, kcal: 0, prot: 0, gluc: 0, lip: 0, fib: 0, source: "donné par toi" }); rendreListe(); });
@@ -2685,7 +2733,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
         const rep = await r.json();
         if (!r.ok) { $("eNr").textContent = rep.erreur || "Claude n'a pas pu corriger."; b.disabled = false; b.innerHTML = libelle; return; }
         verifier(rep.proposition, false, true);
-      } catch (e) { $("eNr").textContent = "Jarvis ne répond pas."; b.disabled = false; b.innerHTML = libelle; }
+      } catch (e) { $("eNr").textContent = "L'appli ne répond pas."; b.disabled = false; b.innerHTML = libelle; }
     });
     if ($("nrSuppr")) $("nrSuppr").addEventListener("click", async () => {
       if (await appel("/api/repas/oublier", { id: entree.id }) === true) { d.close("oui"); rendre(); dire("Repas supprimé."); } });
@@ -2695,8 +2743,9 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       bouton.disabled = true;
       const nom = $("nrNom").value.trim();
       if (remplacer) {                               // le plat est créé ; le menu change après l'aperçu
-        const rep = await appel("/api/repas/au_menu", { date, moment, nom, items, seulement_plat: true, ...(photoPlat ? { photo: photoPlat } : {}) });
+        const rep = await appel("/api/repas/au_menu", { date, moment: moment || "dej", nom, items, seulement_plat: true, ...(photoPlat ? { photo: photoPlat } : {}) });
         bouton.disabled = false;
+        if (rep === true && remplacer.creer) { d.close("oui"); rendre(); return dire(`« ${(recette(E.au_menu && E.au_menu.plat) || { nom }).nom} » est dans tes plats.`); }
         if (rep === true && E.au_menu && E.au_menu.plat) return apercuChangement(remplacer.k, remplacer.operation(E.au_menu.plat),
           remplacer.titre((recette(E.au_menu.plat) || { nom }).nom), remplacer.retour);
         if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
@@ -2733,9 +2782,10 @@ function noterRepas({ date, entree = null, remplacer = null }) {
     try {
       r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texte, moment, date }) });
       rep = await r.json();
-    } catch (e) { if (!annule) { remplacer.retour(); dire("Jarvis ne répond pas."); } return; }
+    } catch (e) { if (!annule) { remplacer.retour(); dire("L'appli ne répond pas."); } return; }
     if (annule) return;
     if (!r.ok) { remplacer.retour(); dire(rep.erreur || "Claude n'a pas pu calculer."); return; }
+    if (remplacer.creer) moment = rep.proposition.moment || moment;      // depuis le catalogue : l'IA dit le repas
     verifier(rep.proposition, false, true);
   })();
 }
@@ -2848,14 +2898,14 @@ document.addEventListener("change", ev => {
 function vueJournal() {
   barre("");
   return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}
-  <div class="titre"><h1 tabindex="-1">Journal de Jarvis</h1><p>Ce qu'il a choisi ou fait, et pourquoi.</p></div>
+  <div class="titre"><h1 tabindex="-1">Journal de l'appli</h1><p>Ce qu'il a choisi ou fait, et pourquoi.</p></div>
   ${E.journal.length ? E.journal.concat(journalPlus).map(e => `<article class="entree"><time datetime="${e.date}">${dateHeure(e.date)}</time>
       <h2 style="font-size:17px">${esc(propre(e.titre))}</h2>
       ${e.details.length ? `<ul>${e.details.slice(0, 3).map(d => `<li>${esc(propre(d))}</li>`).join("")}</ul>` : ""}
       ${e.details.length > 3 ? `<details><summary>Tout afficher, ${e.details.length - 3} lignes de plus</summary>
         <ul>${e.details.slice(3).map(d => `<li>${esc(propre(d))}</li>`).join("")}</ul></details>` : ""}</article>`).join("")
       + ((journalSuite === null ? E.journal_suite : journalSuite) ? `<p class="actions" style="margin-top:18px"><button class="bouton second" data-action="journalSuite">Voir la suite</button></p>` : "")
-    : vide("Rien pour l'instant", "Le journal se remplit dès que Jarvis choisit une semaine ou remplit un panier.", "#/semaine", "Aller à la semaine")}`;
+    : vide("Rien pour l'instant", "Le journal se remplit dès que l'appli choisit une semaine ou remplit un panier.", "#/semaine", "Aller à la semaine")}`;
 }
 // Mes objectifs par période : chacun règle les siens, Claude peut en proposer (Taha, 19/11/2026).
 const finDuMois = ym => { const [y, m] = String(ym).split("-").map(Number); const d = new Date(y, m, 0);
@@ -3047,7 +3097,7 @@ function vueReglages() {
   const kcal = choisie.kcal + (r.ajustement || 0), semaine = r.budget_mois * 7 / 30;
   const modeSuivi = `<section class="bloc mode-suivi" aria-labelledby="tMode"><h2 id="tMode">Mode flemmard</h2>
     <p class="doux">${enSuivi() ? "Activé : l'écran Jour suit ta journée (tes plats prévus, ce que tu ajoutes, ce qu'il te reste). Ni courses, ni préparation à l'avance."
-      : "Désactivé : Jarvis compose tes semaines, tes courses et ta cuisine à l'avance."}</p>
+      : "Désactivé : l'appli compose tes semaines, tes courses et ta cuisine à l'avance."}</p>
     ${E.modes.some(m => m.impose) ? `<p class="petit discret">C'est le seul mode pour l'instant : les menus préparés avec courses, « moins cher » et « plus varié » arrivent bientôt.</p>`
       : `<button class="bouton ${enSuivi() ? "second" : ""}" data-action="modeSuivi" data-valeur="${enSuivi() ? "non" : "oui"}">${enSuivi() ? "Revenir aux menus préparés" : "Passer en mode flemmard"}</button>`}</section>`;
   return `<div class="tete">
@@ -3087,7 +3137,7 @@ function vueReglages() {
     </section>
 
   ${E.profil.calcule ? `<section class="bloc" aria-labelledby="tInfos"><h2 id="tInfos">Mes informations</h2>
-    <p class="doux petit sous-titre">Ce que tu avais indiqué à la création. Change une valeur, Jarvis recalcule tes calories, tes protéines et tes vitamines.</p>
+    <p class="doux petit sous-titre">Ce que tu avais indiqué à la création. Change une valeur, l'appli recalcule tes calories, tes protéines et tes vitamines.</p>
     <form class="formulaire" id="fInfos" novalidate>
       <div class="champs2">
       ${(() => { const i = E.profil.identite || {}, obj = { "Perte de poids": "perte", "Maintien": "maintien", "Prise de muscle": "prise" }[E.profil.programme] || "maintien";
@@ -3106,7 +3156,7 @@ function vueReglages() {
 
     <div class="pile">
     ${E.profil.chrome ? `<section class="bloc" aria-labelledby="tEns"><h2 id="tEns">Mes enseignes</h2>
-      <p class="doux petit sous-titre">Jarvis remplit ton panier dans un Chrome qui n'appartient qu'à ce profil. Ouvre-le sur le PC pour te connecter à tes enseignes : ton mot de passe reste entre toi et l'enseigne.</p>
+      <p class="doux petit sous-titre">L'appli remplit ton panier dans un Chrome qui n'appartient qu'à ce profil. Ouvre-le sur le PC pour te connecter à tes enseignes : ton mot de passe reste entre toi et l'enseigne.</p>
       <button class="bouton second" data-action="enseignes">Ouvrir mes enseignes sur le PC</button></section>` : ""}
     ${E.profil.id !== "defaut" ? `<section class="bloc" aria-labelledby="tMdp"><h2 id="tMdp">Mot de passe de ${esc(E.profil.nom)}</h2>
       <form class="formulaire" id="fMdp" novalidate>
@@ -3172,7 +3222,7 @@ function rendre() {
   rendreNavigation(ongletDe(r.vue));
   apresRendu = [];
   const NOMS = { semaine: "", plat: "Plat", courses: "Courses", cuisine: "Cuisine", plus: "Plus", catalogue: "Catalogue", avancement: "Avancement",
-                 budget: "Budget", vitamines: "Vitamines", stock: "Stock", journal: "Journal de Jarvis", profil: "Mon profil", profils: "Profils",
+                 budget: "Budget", vitamines: "Vitamines", stock: "Stock", journal: "Journal de l'appli", profil: "Mon profil", profils: "Profils",
                  nouveau: "Nouveau profil", reglages: "Réglages", suivi: "Mon suivi", historique: "Historique" };
   const fin = r.arg && recette(r.arg) ? recette(r.arg).nom : "";
   $("fil").innerHTML = [NOMS[r.vue], fin].filter(Boolean).map(t => `<span>/</span><span>${esc(t)}</span>`).join("");
@@ -3203,14 +3253,14 @@ const ACTIONS = {
   async ecarter(b) {
     const r = recette(b.dataset.plat);
     if (await confirmer({ titre: "Écarter ce plat ?", oui: "Écarter",
-      texte: `« ${r.nom} » sort de la semaine, et Jarvis la recompose sans lui.` }))
+      texte: `« ${r.nom} » sort de la semaine, et l'appli la recompose sans lui.` }))
       if (await agir("/api/semaine/remplacer", { plat: r.id }, "Plat écarté, semaine recomposée.")) location.hash = "#/semaine";
   },
   async panier() {
     const refaire = !!(E.courses_mois && E.courses_mois.panier);
     if (await confirmer({ titre: refaire ? "Refaire le panier ?" : "Passer la commande ?", oui: refaire ? "Refaire le panier" : "Passer la commande",
-      texte: `Jarvis relève les prix et met ${E.mois ? `les produits des ${E.mois.nb - E.mois.rang} semaines` : "les produits"} dans ton panier ${E.magasin.principale}, en une vingtaine de minutes, en lisant les étiquettes${((E.semaine || {}).modes || []).includes("fodmap") ? " (halal et pauvre en FODMAP : ni ail, ni oignon, ni fructose ajouté)" : " (halal)"}. Vide d'abord ce panier sur le site de l'enseigne s'il contient d'anciens produits. Jarvis ne paie jamais : tu choisis la livraison et tu paies toi-même.` }))
-      agir("/api/panier", {}, "Jarvis s'en occupe.");
+      texte: `L'appli relève les prix et met ${E.mois ? `les produits des ${E.mois.nb - E.mois.rang} semaines` : "les produits"} dans ton panier ${E.magasin.principale}, en une vingtaine de minutes, en lisant les étiquettes${((E.semaine || {}).modes || []).includes("fodmap") ? " (halal et pauvre en FODMAP : ni ail, ni oignon, ni fructose ajouté)" : " (halal)"}. Vide d'abord ce panier sur le site de l'enseigne s'il contient d'anciens produits. L'appli ne paie jamais : tu choisis la livraison et tu paies toi-même.` }))
+      agir("/api/panier", {}, "L'appli s'en occupe.");
   },
   async valider() {
     const m = E.mois;
@@ -3222,7 +3272,7 @@ const ACTIONS = {
   clonerJour: b => demanderClonage(Number(b.dataset.semaine), Number(b.dataset.jour)),
   retirerJour: b => { const k = Number(b.dataset.semaine), n = Number(b.dataset.jour);
     apercuChangement(k, { type: "retirer_jour", jour: n }, `Retirer ${planDe(k).jours[n].jour.toLowerCase()} de la semaine ?`); },
-  creerPlat: b => demanderPlatPerso({ cat: b.dataset.cat || "plat" }),
+  creerPlat: b => creerPlatIA(b.dataset.cat || "plat"),
   supprimerPlat: async b => { if (await agir("/api/plat_perso/supprimer", { plat: b.dataset.plat }, "Plat supprimé.")) location.hash = "#/catalogue"; },
   ajuster: b => demanderAjustement(b.dataset.plat),
   actionsJour: b => actionsDuJour(Number(b.dataset.semaine), Number(b.dataset.jour)),
@@ -3252,7 +3302,7 @@ const ACTIONS = {
   async suivante() {
     const m = E.mois, fin = m.rang + 1 >= m.nb;
     if (await confirmer({ titre: fin ? `Composer les ${m.nb} semaines suivantes ?` : "Passer à la semaine suivante ?", oui: fin ? "Composer" : "Passer à la suivante",
-      texte: fin ? `Jarvis compose ${m.nb} nouvelles semaines et un nouveau panier.` : `La semaine ${m.rang + 2} devient la semaine en cours. Celle-ci reste dans ton historique.` }))
+      texte: fin ? `L'appli compose ${m.nb} nouvelles semaines et un nouveau panier.` : `La semaine ${m.rang + 2} devient la semaine en cours. Celle-ci reste dans ton historique.` }))
       if (await agir("/api/semaine/suivante", {}, fin ? "Nouvelles semaines composées." : "Semaine suivante.")) location.hash = "#/semaine";
   },
   corriger: () => demanderPaiement(true),
@@ -3271,7 +3321,7 @@ const ACTIONS = {
   },
   voir: b => agir("/api/profil/voir", { profil: b.dataset.profil }, "Profil affiché.").then(ok => { if (ok) location.hash = "#/semaine"; }),
   enseignes: () => agir("/api/profil/enseignes", {}, "Chrome s'ouvre sur le PC."),
-  chercherAlternatives: () => agir("/api/alternatives/chercher", {}, "Jarvis cherche de quoi remplacer ce qui manque."),
+  chercherAlternatives: () => agir("/api/alternatives/chercher", {}, "L'appli cherche de quoi remplacer ce qui manque."),
   async appliquerAlternatives() {
     const choix = {};
     document.querySelectorAll("[data-manquant]").forEach(f => { const v = f.querySelector("input:checked"); if (v && v.value) choix[f.dataset.manquant] = v.value; });
@@ -3279,8 +3329,8 @@ const ACTIONS = {
     if (!noms.length) return dire("Choisis d'abord un produit de remplacement.");
     const nb = E.mois ? E.mois.nb - E.mois.rang : 1;
     if (await confirmer({ titre: `Remplacer ${noms.length > 1 ? `ces ${noms.length} produits` : "ce produit"} ?`, oui: "Remplacer",
-      texte: `${noms.map(n => `${choix[n]} à la place de ${n.toLowerCase()}`).join(" ; ")}. Les recettes de ${nb > 1 ? `tes ${nb} semaines` : "ta semaine"} changent tout de suite, et Jarvis ajoute ${noms.length > 1 ? "ces produits" : "ce produit"} à ton panier ${E.magasin.principale}, sans payer. Tu pourras annuler chaque remplacement ici.` }))
-      agir("/api/alternatives/appliquer", { choix }, "Recettes mises à jour. Jarvis complète le panier.");
+      texte: `${noms.map(n => `${choix[n]} à la place de ${n.toLowerCase()}`).join(" ; ")}. Les recettes de ${nb > 1 ? `tes ${nb} semaines` : "ta semaine"} changent tout de suite, et l'appli ajoute ${noms.length > 1 ? "ces produits" : "ce produit"} à ton panier ${E.magasin.principale}, sans payer. Tu pourras annuler chaque remplacement ici.` }))
+      agir("/api/alternatives/appliquer", { choix }, "Recettes mises à jour. L'appli complète le panier.");
   },
   async annulerRemplacement(b) {
     if (await confirmer({ titre: "Annuler ce remplacement ?", oui: "Annuler le remplacement", non: "Garder",
@@ -3318,7 +3368,7 @@ const ACTIONS = {
       const d = await r.json();
       journalPlus = journalPlus.concat(d.entrees); journalSuite = d.suite;
       rendre();
-    } catch (e) { dire("Jarvis ne répond pas."); }
+    } catch (e) { dire("L'appli ne répond pas."); }
   },
   ingredient: b => demanderIngredient({ nom: b.dataset.nom }),
   mangerAujourdhui: b => mangerAujourdhui(b.dataset.plat, b.dataset.moment),
@@ -3425,7 +3475,7 @@ document.addEventListener("change", ev => {
     const [liste, ...reste] = i.dataset.coche.split("|"), nom = reste.join("|");
     if (liste === "secs") { cocher(i.dataset.coche, i.checked); return; }          // fruits secs : simple pense-bete, garde sur l'appareil
     const cible = liste === "marche" || (liste === "boucher" && E.rythme === "mois") ? "marche" : "panier";
-    agir("/api/courses/cocher", { liste: cible, nom, coche: i.checked }, i.checked ? `« ${nom} » : tu en as déjà, Jarvis ne l'achète pas.` : `« ${nom} » revient dans la liste.`);
+    agir("/api/courses/cocher", { liste: cible, nom, coche: i.checked }, i.checked ? `« ${nom} » : tu en as déjà, l'appli ne l'achète pas.` : `« ${nom} » revient dans la liste.`);
     return;
   }
   if (i.matches(".stock-ligne input"))
