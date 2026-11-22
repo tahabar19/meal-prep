@@ -1369,3 +1369,6 @@ html:has(.carte-fond.ouvert){background:#060706}
 .item-note .nr-chiffres input{min-height:28px!important;font-size:.78rem;text-align:center}
 .item-note .nr-chiffres label{font-size:.66rem!important}
 .item-note small{font-size:.68rem}
+/* Budget : icône ronde en haut, juste avant « Profil » (Taha, 22/11/2026) */
+.entete-profil.entete-icone{width:42px;padding:0;margin-right:8px}
+.entete-profil.entete-icone + .entete-profil{margin-left:0}
