@@ -2517,6 +2517,10 @@ function rayonsDesIngredients() {
   for (const x of E.recettes) for (const i of x.ing || []) if (i.a != null && r[i.n] == null) r[i.n] = i.a;
   return r;
 }
+// Le stock se lit en kg et en litres (Taha, 22/11/2026 : « au lieu de g mettre en kg ») ; il reste rangé en g et en ml.
+const enAffiche = l => l.unite === "g" || l.unite === "ml"
+  ? { q: Math.round(l.quantite) / 1000, u: l.unite === "g" ? "kg" : "L", f: 1000 }
+  : { q: Math.round(l.quantite * 10) / 10, u: l.unite === "pièce" ? (l.quantite > 1 ? "pièces" : "pièce") : l.unite, f: 1 };
 const pasStock = l => l.unite === "pièce" ? 1 : l.quantite > 1000 ? 100 : l.quantite > 200 ? 50 : 10;
 function vueStockMaison() {
   barre("");
@@ -2543,8 +2547,8 @@ function vueStockMaison() {
       ${[...groupes.entries()].map(([g, lignes]) => `<section class="bloc stock-groupe"><h2>${esc(g)}</h2><ul class="stock-liste">${lignes.map(l =>
         `<li><span class="stock-nom">${esc(l.nom)}</span><span class="stock-q">
           <button type="button" data-stock-pas="-1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Moins de ${esc(l.nom)}">−</button>
-          <input class="stock-saisie" type="number" inputmode="decimal" min="0" step="any" value="${Math.round(l.quantite * 10) / 10}" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" aria-label="Quantité de ${esc(l.nom)}, en ${esc(l.unite)}">
-          <span class="stock-u">${esc(l.unite === "pièce" ? (l.quantite > 1 ? "pièces" : "pièce") : l.unite)}</span>
+          <input class="stock-saisie" type="number" inputmode="decimal" min="0" step="any" value="${enAffiche(l).q}" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-facteur="${enAffiche(l).f}" aria-label="Quantité de ${esc(l.nom)}, en ${esc(enAffiche(l).u)}">
+          <span class="stock-u">${esc(enAffiche(l).u)}</span>
           <button type="button" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Plus de ${esc(l.nom)}">+</button></span></li>`).join("")}</ul></section>`).join("")
         || `<p class="discret">Rien à ce nom.</p>`}` : ""}`;
 }
@@ -3866,7 +3870,7 @@ document.addEventListener("change", ev => {
     agir("/api/courses/cocher", { liste: cible, nom, coche: i.checked }, i.checked ? `« ${nom} » : tu en as déjà, l'appli ne l'achète pas.` : `« ${nom} » revient dans la liste.`);
     return;
   }
-  if (i.matches(".stock-saisie")) return agir("/api/stock", { nom: i.dataset.nom, unite: i.dataset.unite, quantite: Math.max(0, Number(i.value) || 0) }, "");
+  if (i.matches(".stock-saisie")) return agir("/api/stock", { nom: i.dataset.nom, unite: i.dataset.unite, quantite: Math.max(0, (Number(String(i.value).replace(",", ".")) || 0) * (Number(i.dataset.facteur) || 1)) }, "");
   if (i.matches("[data-stock-photo]") && i.files && i.files[0]) {
     const sorte = i.dataset.stockPhoto, f = i.files[0]; i.value = "";
     photoReduite(f, sorte === "ticket" ? 2200 : 1600).then(ph => stockAnalyser({ photo: ph }, sorte)).catch(() => dire("Photo illisible."));
