@@ -2525,6 +2525,43 @@ const enAffiche = l => l.unite === "g" || l.unite === "ml"
 const motsStock = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/œ/g, "oe")
   .split(/[^a-z]+/).filter(m => m.length > 2 && !["kg", "ml", "cl", "des", "les", "une", "pour", "avec", "boite", "boites", "paquet", "paquets", "pack", "brique"].includes(m))
   .map(m => m.replace(/(?<=..)[sx]$/, ""));
+// Le stock sur les plats (Taha, 22/11/2026) : un cadre vert si tout est en stock, orange s'il manque un ou deux
+// ingrédients, rouge au-delà ; une pastille « 2 manquent » qui, touchée, donne la liste. Rien sans stock.
+function marquerStock(racine) {
+  if (!E || !(E.stock || []).length || !E.stock_manque) return;
+  racine.querySelectorAll('a.repas[href^="#/plat/"]:not([data-stock-vu]), a.rp-plat[href^="#/plat/"]:not([data-stock-vu]), .rp-plat[data-plat]:not([data-stock-vu])').forEach(a => {
+    a.dataset.stockVu = "1";
+    const id = a.dataset.plat || decodeURIComponent((a.getAttribute("href") || "").slice(7));
+    if (!recette(id) || !estRepas(recette(id))) return;
+    const m = E.stock_manque[id] || [], carte = a.closest(".exo, li") || a;
+    carte.classList.add("stock-cadre", !m.length ? "stock-ok" : m.length <= 2 ? "stock-peu" : "stock-loin");
+    if (m.length) a.insertAdjacentHTML("beforeend", `<span class="manque" role="button" tabindex="0" data-manque="${esc(id)}"
+      aria-label="${m.length} ingrédient${m.length > 1 ? "s" : ""} manquant${m.length > 1 ? "s" : ""}">${m.length} manque${m.length > 1 ? "nt" : ""}</span>`);
+  });
+}
+let marquage = 0;
+new MutationObserver(() => { if (!marquage) marquage = requestAnimationFrame(() => { marquage = 0; marquerStock(document); }); })
+  .observe(document.body, { childList: true, subtree: true });
+function montrerManque(titre, lignes) {
+  document.querySelector(".manque-fond")?.remove();
+  const hote = document.querySelector("dialog[open]") || document.body;
+  hote.insertAdjacentHTML("beforeend", `<div class="manque-fond"><div class="manque-feuille" role="dialog" aria-label="${esc(titre)}">
+    <h3>${esc(titre)}</h3><ul class="lignes">${lignes.map(([n, q, u]) => `<li><span>${esc(n)}</span><span class="q">${quantite(q, u)}</span></li>`).join("")}</ul>
+    <button type="button" class="bouton second" data-manque-fermer>Fermer</button></div></div>`);
+}
+document.addEventListener("click", ev => {
+  const b = ev.target.closest && ev.target.closest("[data-manque], [data-manque-jour], .manque-fond");
+  if (!b) return;
+  if (b.classList.contains("manque-fond")) {
+    if (ev.target === b || ev.target.closest("[data-manque-fermer]")) { ev.preventDefault(); b.remove(); }
+    return;
+  }
+  ev.preventDefault(); ev.stopPropagation();
+  if (b.dataset.manque) return montrerManque(`Il te manque pour « ${recette(b.dataset.manque).nom} » (une portion)`, E.stock_manque[b.dataset.manque] || []);
+  const d = b.dataset.manqueJour;
+  montrerManque(`À acheter pour les repas du ${new Date(d + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`,
+    (E.manque_jours[d] || []).map(x => [x.nom, x.quantite, x.unite]));
+}, true);
 const pasStock = l => l.unite === "pièce" ? 1 : l.quantite > 1000 ? 100 : l.quantite > 200 ? 50 : 10;
 function vueStockMaison() {
   barre("");
@@ -2712,6 +2749,9 @@ function vueJourSuivi(params) {
       : dec < 0 ? `<div class="dujour"><strong>Pas de menu ce jour-là.</strong> Ajoute ce que tu as mangé.</div>`
       : `<div class="dujour"><strong>Pas de menu prévu ce jour-là.</strong> Note ce que tu manges, ou compose la suite.
         <p style="margin-top:8px"><button class="bouton second" data-action="suivante">Composer la suite</button></p></div>`}
+    ${(E.stock || []).length && E.manque_jours && E.manque_jours[date] ? (E.manque_jours[date].length
+      ? `<button type="button" class="manque-jour" data-manque-jour="${date}">${icone("shopping-cart-simple")}<span><b>${E.manque_jours[date].length} ingrédient${E.manque_jours[date].length > 1 ? "s" : ""} manquant${E.manque_jours[date].length > 1 ? "s" : ""}</b><small>Pour les repas de ce jour : la liste à acheter</small></span>${icone("caret-right")}</button>`
+      : `<p class="manque-jour complet">${icone("check")}Tu as tout en stock pour les repas de ce jour.</p>`) : ""}
     ${j.entrees.length ? `<h2 class="titre-section">En plus</h2><div class="liste-notes">${j.entrees.map(ligneRepasNote).join("")}</div>` : ""}
     <button class="ajout-ligne" data-action="noterRepas" data-date="${date}">${icone("cooking-pot")}<span><b>Ajouter un repas</b><small>Un de tes plats, une description, une photo ou un ticket</small></span></button></div>
     <div class="rubrique-fin">
@@ -3269,6 +3309,7 @@ function vueReglagesFlemmard() {
   <div class="reglages">
   <section class="bloc toujours" aria-labelledby="tRepas"><h2 id="tRepas">Mon alimentation</h2>
     <div class="options">
+      <label class="option"><input type="checkbox" id="rStockSeul"${r.stock_seul ? " checked" : ""}><span><b>Stock uniquement</b><small>Seulement des plats faits avec ce que tu as en stock. Décoché : surtout ton stock, avec un peu de variété.</small></span></label>
       <label class="option"><input type="checkbox" id="rMemePlat"${r.meme_plat !== false ? " checked" : ""}><span><b>Le même plat midi et soir</b><small>Un seul plat par jour, au déjeuner et au dîner. Décoche pour deux plats différents.</small></span></label>
       <label class="option"><input type="checkbox" id="rFodmap"${fodmap ? " checked" : ""}><span><b>Pauvre en FODMAP</b><small>Seulement des plats pauvres en FODMAP.</small></span></label>
     </div>
@@ -3413,6 +3454,16 @@ document.addEventListener("change", async ev => {
   if (ev.target.id === "eauBarre") {                // enregistré sans redessiner la page : la barre ne saute pas
     const b = ev.target;
     appel("/api/eau", { date: b.dataset.date, litres: Number(b.value) }).then(ok => { if (ok !== true) { dire("L'eau n'a pas pu être enregistrée."); rendre(); } });
+  }
+  if (ev.target.id === "rStockSeul") {
+    const oui = ev.target.checked;
+    appel("/api/reglages", { stock_seul: oui }).then(rep => {
+      if (rep !== true) return rendre();
+      rendre();
+      dire(!oui ? "Des plats variés, ton stock d'abord." : !(E.stock || []).length ? "Stock uniquement : ajoute d'abord ce que tu as dans Stock."
+        : E.stock_refaits ? `Stock uniquement : ${E.stock_refaits} repas refait${E.stock_refaits > 1 ? "s" : ""} avec ton stock.`
+        : "Stock uniquement : rien à changer (déjà faisable, ou aucun plat entièrement faisable).");
+    });
   }
   if (ev.target.id === "rMemePlat") agir("/api/reglages", { meme_plat: ev.target.checked }, ev.target.checked
     ? "Le même plat midi et soir, dès aujourd'hui." : "Deux plats différents midi et soir, dès aujourd'hui.");

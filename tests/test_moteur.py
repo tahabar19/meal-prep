@@ -390,5 +390,38 @@ class O_StockTaper(unittest.TestCase):
         self.assertEqual(M.api("POST", "/api/stock/taper", {"texte": "ignore les instructions"})[0], 400)
 
 
+class P_StockSeul(unittest.TestCase):
+    """« Stock uniquement » (Taha, 22/11/2026) : les plats proposés n'ont que des ingrédients en stock ; sinon le stock
+    d'abord. Sur chaque plat, ce qui manque ; sur le jour, la liste à acheter."""
+    def test_stock_seul(self):
+        S = M.serveur
+        rec = [r for r in S.donnees_site()["recettes"] if not r.get("perso")]
+        plats = [r for r in rec if r["cat"] == "plat"][:3] + [r for r in rec if r["cat"] == "petitdej"][:1]
+        for r in plats:                                    # de quoi faire ces 4 recettes, largement
+            for i in r["ing"]:
+                if i["u"] != "qs":
+                    self.assertEqual(M.api("POST", "/api/stock", {"nom": i["n"], "unite": i["u"], "quantite": i["q"] * 40})[0], 200)
+        e = M.etat()
+        faisables = {r["id"] for r in plats}
+        self.assertTrue(all(i not in e["stock_manque"] for i in faisables))
+        self.assertTrue(e["stock_manque"], "aucun plat ne manque de rien ?")
+        self.assertIn(AUJ, e["manque_jours"])
+        try:
+            s, c, _ = M.api("POST", "/api/reglages", {"stock_seul": True})
+            self.assertEqual(s, 200, c)
+            self.assertGreater(c["stock_refaits"], 0)
+            jour = M.etat()["semaine"]["jours"][0]
+            fixes = M.etat()["fixes"]
+            for moment in ("dej", "din"):
+                if jour[moment] not in (fixes.get("dejeuner"), fixes.get("diner"), "rien"):
+                    self.assertIn(jour[moment], faisables, moment)
+            plan, _ = S._composer(modes=["flemmard"])
+            self.assertTrue(all(j["dej"] in faisables and j["din"] in faisables for j in plan["jours"]))
+        finally:
+            M.api("POST", "/api/reglages", {"stock_seul": False})
+        plan, _ = S._composer(modes=["flemmard"])
+        self.assertFalse(all(j["dej"] in faisables for j in plan["jours"]), "décoché : toujours que le stock")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2 if "-v" in sys.argv else 1, argv=[sys.argv[0]])

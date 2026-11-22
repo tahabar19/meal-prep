@@ -1416,3 +1416,24 @@ html:has(.carte-fond.ouvert){background:#060706}
 .stock-aide{min-height:0;margin:4px 4px 0;font-size:.85rem;color:var(--discret)}
 .stock-aide:empty{display:none}
 .stock-aide .lien{font-size:inherit}
+/* Le stock sur les plats (Taha, 22/11/2026) : vert = tout en stock (le vert des graphiques), orange = un ou deux
+   ingrédients manquent, rouge = plus */
+.stock-cadre{outline:2px solid transparent;outline-offset:-2px;border-radius:var(--r-carte)}
+.stock-ok{outline-color:var(--s3)}
+.stock-peu{outline-color:var(--alerte)}
+.stock-loin{outline-color:var(--critique)}
+.grille-plats a.repas{position:relative}
+.manque{position:absolute;top:6px;right:6px;z-index:2;padding:3px 8px;border-radius:var(--r-pilule);font-size:.7rem;font-weight:700;line-height:1.2;background:var(--alerte);color:#1c1300;cursor:pointer;white-space:nowrap}
+.stock-loin .manque{background:var(--critique);color:#fff}
+.rp-plat .manque{position:static;margin-left:auto;flex:none}
+.manque-jour{display:flex;align-items:center;gap:12px;width:100%;margin:12px 0 0;padding:12px 14px;border:1.5px solid var(--alerte);border-radius:var(--r-carte);background:var(--surface);color:var(--encre);font:inherit;text-align:left;cursor:pointer}
+.manque-jour > .ic{flex:none;width:20px;height:20px;color:var(--alerte)}
+.manque-jour span{display:grid;gap:2px;flex:1}
+.manque-jour small{color:var(--discret);font-size:.8rem}
+.manque-jour.complet{border-color:var(--s3);cursor:default;font-size:.9rem;color:var(--texte)}
+.manque-jour.complet .ic{color:var(--s3)}
+.manque-fond{position:fixed;inset:0;z-index:1000;display:grid;align-items:end;background:var(--voile)}
+.manque-feuille{max-height:75vh;overflow:auto;padding:18px 16px calc(16px + var(--bas));border-radius:var(--r-feuille) var(--r-feuille) 0 0;background:var(--surface);box-shadow:var(--ombre)}
+.manque-feuille h3{margin:0 0 10px;font-size:1rem}
+.manque-feuille .lignes{margin:0 0 14px}
+.manque-feuille .bouton{width:100%}
