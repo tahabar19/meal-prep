@@ -2533,7 +2533,12 @@ function vueStockMaison() {
   const ajout = `<div class="stock-ajout">
       <label class="stock-bouton">${icone("image")}<span>Photo</span><small>frigo, placard</small><input type="file" accept="image/*" hidden data-stock-photo="photo"></label>
       <label class="stock-bouton">${icone("receipt")}<span>Ticket</span><small>de caisse</small><input type="file" accept="image/*" hidden data-stock-photo="ticket"></label>
-      <button type="button" class="stock-bouton" data-action="stockTaper">${icone("notebook")}<span>Taper</span><small>6 œufs, riz 1 kg…</small></button></div>`;
+      </div>
+    <form class="rp-recherche champ-ia stock-taper" id="fStockTaper" novalidate>${icone("sparkle")}
+      <input id="stTaper" type="text" enterkeyhint="send" autocomplete="off" maxlength="600"
+        placeholder="Ce que tu as acheté : 6 œufs, riz 1 kg…" aria-label="Ce que tu as acheté, ajouté au stock">
+      <button type="submit" class="stock-taper-ok" aria-label="Ajouter au stock">${icone("plus")}</button></form>
+    <small class="erreur" id="eStockTaper" role="alert"></small>`;
   return `<div class="m-tete"><div><h1 tabindex="-1">Mon stock</h1>
       <p class="petit discret">${st.length ? `${st.length} produit${st.length > 1 ? "s" : ""} à la maison. Ce que tu marques mangé en sort tout seul.` : "Ajoute ce que tu as chez toi : l'appli te propose des repas avec."}</p></div></div>
     ${ajout}
@@ -3326,6 +3331,25 @@ document.addEventListener("click", ev => {
   const s = b.closest("section"), id = b.closest("h2").id, ouvert = !s.classList.contains("ouvert");
   s.classList.toggle("ouvert", ouvert); b.setAttribute("aria-expanded", String(ouvert));
   if (ouvert) REG_OUVERTS.add(id); else REG_OUVERTS.delete(id);
+});
+// La barre du stock (Taha, 22/11/2026) : ce qu'on a acheté, tapé en clair, entre tout de suite dans le stock. Le texte
+// clair est lu par l'appli elle-même ; l'IA ne lit que ce qui est flou (« 2 boîtes de thon »).
+document.addEventListener("submit", async ev => {
+  if (ev.target.id !== "fStockTaper") return;
+  ev.preventDefault();
+  const champ = $("stTaper"), b = ev.target.querySelector("button"), texte = champ.value.trim();
+  $("eStockTaper").textContent = "";
+  if (!texte) return champ.focus();
+  champ.disabled = b.disabled = true; b.classList.add("occupe");
+  const rep = await appel("/api/stock/taper", { texte });
+  if (rep === true && E.stock_ajout) {
+    const a = E.stock_ajout;
+    rendre();
+    dire(`Ajouté : ${a.ajoutes.map(x => `${x.nom} ${quantite(x.quantite, x.unite)}`).join(", ")}${a.incompris.length ? ` · pas compris : ${a.incompris.join(", ")}` : ""}`);
+    return;                                          // la page est redessinée avec le stock à jour
+  }
+  champ.disabled = b.disabled = false; b.classList.remove("occupe");
+  if (rep && rep.erreur) $("eStockTaper").textContent = rep.erreur;
 });
 document.addEventListener("submit", async ev => {
   const f = ev.target;

@@ -1405,3 +1405,11 @@ html:has(.carte-fond.ouvert){background:#060706}
 .objectif-reglages .champ{margin:0;display:grid;gap:5px;min-width:0}
 .objectif-reglages .champ small{display:none}
 .objectif-reglages .champ:has(#rPhase){grid-column:1 / -1}
+/* Stock : Photo et Ticket, puis la barre « ce que tu as acheté » (Taha, 22/11/2026) */
+.stock-ajout{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:10px}
+.stock-taper{margin:0 0 4px}
+.stock-taper-ok{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:grid;place-items:center;border:0;border-radius:50%;background:var(--accent);color:var(--canvas);cursor:pointer}
+.stock-taper-ok .ic{width:18px;height:18px}
+.stock-taper-ok.occupe{opacity:.5;animation:pulse 1s infinite alternate}
+#eStockTaper{display:block;min-height:1em;margin:2px 0 8px;color:var(--critique);font-size:.85rem}
+@keyframes pulse{from{opacity:.4}to{opacity:.8}}
