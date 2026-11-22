@@ -1256,22 +1256,16 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   const vu = i => Math.round(i.q * t * 10) / 10;                    // ce qui s'affiche : un repas
   const versBase = (q, i) => Math.round(q / t * 100) / 100;          // ce qui s'enregistre : une portion de base
   const change = a.ingredients.some(i => i.u !== "qs" && i.q !== i.base);
-  const ligne = (nom, cle, unite, bonSiPlus) => { const avant = a.avant[cle] * t, apres = a.apres[cle] * t, delta = apres - avant;
-    return `<div class="macro"><span>${nom}</span><b>${nombre(apres)} ${unite}</b>
-      <small class="${!delta || bonSiPlus === null ? "" : (delta > 0) === bonSiPlus ? "mieux" : "moins"}">${delta ? `${delta > 0 ? "+" : "−"}${nombre(Math.abs(delta))} ${unite}` : "comme la recette"}</small></div>`; };
+  // Les chiffres comme sur la carte d'un plat (Taha, 22/11/2026) ; l'écart s'affiche seulement quand une quantité change.
+  const ligne = (nom, cle, unite, bonSiPlus) => { const avant = a.avant[cle] * t, apres = a.apres[cle] * t, delta = Math.round(apres) - Math.round(avant);
+    return `<div><b>${nombre(apres)}${unite === "kcal" ? "" : ` ${unite}`}</b><span>${nom}</span>${delta ? `<small class="${bonSiPlus === null ? "" : (delta > 0) === bonSiPlus ? "mieux" : "moins"}">${delta > 0 ? "+" : "−"}${nombre(Math.abs(delta))}</small>` : ""}</div>`; };
   const connusTous = ingredientsConnus(), dans = new Set(a.ingredients.filter(i => i.q > 0 || i.u === "qs").map(i => i.n));
   const sansAccents = x => String(x).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/œ/g, "oe").trim();
-  const RAPIDES = [["Plus de protéines", "proteine", 1.2], ["Moins de glucides", "feculent", 0.8], ["Plus de glucides", "feculent", 1.2], ["Moins de gras", "gras", 0.5]]
-    .filter(([, role]) => a.ingredients.some(i => i.role === role && i.u !== "qs"));
   d.innerHTML = `<form class="feuille" novalidate>
     <h2 id="dialogueTitre">${jour ? "Modifier les ingrédients" : `Ajuster « ${esc(a.nom)} »`}</h2>
     ${jour ? `<p class="petit discret" style="margin:-4px 0 12px">« ${esc(a.nom)} », ${planDe(jour.k).jours[jour.n].jour.toLowerCase()} seulement.</p>` : ""}
-    <p class="petit discret" style="margin:-4px 0 12px">${jour ? `Les quantités d'UN repas de ${jj.jour.toLowerCase()}, pour ce jour-là seulement : la recette ne change pas les autres jours.${seance && seance.repas > 1 ? ` Tu cuisines ${seance.repas} repas : la page Cuisine donne le total.` : ""}`
-      : "Les quantités d'une portion, pour ton profil, tous les jours où ce plat est au menu. Tes semaines et tes courses suivront."}</p>
-    <div class="macros" role="status">${ligne("Calories", "kcal", "kcal", null)}${ligne("Protéines", "prot", "g", true)}${ligne("Glucides", "gluc", "g", null)}${ligne("Lipides", "lip", "g", null)}
-      <div class="macro"><span>Prix</span><b>${euros(a.cout * t)}</b><small>${Math.abs(a.cout - a.cout_avant) * t >= 0.01 ? `${a.cout > a.cout_avant ? "+" : "−"}${euros(Math.abs(a.cout - a.cout_avant) * t)}` : "comme la recette"}</small></div></div>
-    ${jj ? `<p class="petit discret" style="margin-top:6px">Chiffres d'un repas de ${jj.jour.toLowerCase()}.</p>` : ""}
-    ${RAPIDES.length ? `<div class="gouts" style="margin-top:12px" aria-label="Ajustements rapides">${RAPIDES.map(([nom, role, f]) => `<button type="button" data-role="${role}" data-facteur="${f}">${nom}</button>`).join("")}</div>` : ""}
+    ${jour ? "" : `<p class="petit discret" style="margin:-4px 0 12px">Pour tous les jours où ce plat est au menu.</p>`}
+    <div class="cp-chiffres aj-chiffres" role="status">${ligne("kcal", "kcal", "kcal", null)}${ligne("prot.", "prot", "g", true)}${ligne("gluc.", "gluc", "g", null)}${ligne("lip.", "lip", "g", null)}</div>
     <h3>Ingrédients</h3>
     <ul class="lignes reglables">${a.ingredients.map((i, n) => i.u === "qs" ? `<li><span>${esc(i.n)}</span><span class="q">au goût</span></li>`
       : `<li${i.q === 0 ? ' class="retire"' : ""}>${i.q === 0 ? `<button type="button" class="ing-remettre" data-remettre-ing="${n}" aria-label="Remettre ${esc(i.n)}">↺</button>`
@@ -1294,10 +1288,6 @@ async function demanderAjustement(id, quantites = null, jour = null) {
     refaire({ ...actuel, [i.n]: versBase(arrondi(vu(i) + Number(b.dataset.sens) * pas(i), i), i) }); }));
   d.querySelectorAll("input[data-n]").forEach(c => c.addEventListener("change", () => { const i = a.ingredients[Number(c.dataset.n)];
     refaire({ ...actuel, [i.n]: versBase(Math.max(0, Number(c.value) || 0), i) }); }));
-  d.querySelectorAll("[data-role]").forEach(b => b.addEventListener("click", () => {
-    const q = { ...actuel };
-    a.ingredients.filter(i => i.role === b.dataset.role && i.u !== "qs").forEach(i => { q[i.n] = versBase(Math.max(pas(i), arrondi(vu(i) * Number(b.dataset.facteur), i)), i); });
-    refaire(q); }));
   const origine = d.querySelector("[data-origine]");
   if (origine) origine.addEventListener("click", () => refaire({}));
   let remplace = null;                     // l'ingredient a remplacer, sinon on ajoute

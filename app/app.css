@@ -1227,3 +1227,8 @@ details.idees-ligne > summary small{color:var(--discret);font-size:.78rem}
 details.idees-ligne > summary > .ic{flex:none;color:var(--discret);transition:transform .2s}
 details.idees-ligne[open] > summary > .ic{transform:rotate(90deg)}
 details.idees-ligne .rp-liste{margin:2px 0 8px}
+/* Modifier les ingrédients : les chiffres comme sur la carte d'un plat, l'écart en petit dessous (Taha, 22/11/2026) */
+.aj-chiffres{margin:4px 0 4px}
+.aj-chiffres small{font-size:.7rem;font-variant-numeric:tabular-nums;color:var(--discret)}
+.aj-chiffres small.mieux{color:var(--accent)}
+.aj-chiffres small.moins{color:var(--alerte)}

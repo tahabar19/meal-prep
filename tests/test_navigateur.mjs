@@ -322,6 +322,9 @@ try {
     await B.js(`document.querySelectorAll('.grille-plats a.repas')[${Math.max(i, 0)}].click()`);
     vrai(await attendre(`document.querySelector('.cp-choix [data-action=ajusterJour]')`, 10000) >= 0, 'pas de « Modifier les ingrédients »');
     await B.js(`document.querySelector('.cp-choix [data-action=ajusterJour]').click()`);
+    // Taha, 22/11/2026 : chiffres comme sur la carte, sans texte d'explication ni « Plus de protéines / Moins de glucides »
+    vrai(await attendre(`document.querySelector('#dialogue[open] .aj-chiffres')`, 10000) >= 0, 'pas les chiffres façon carte');
+    vrai(await B.js(`!document.querySelector('#dialogue .macros, #dialogue [data-role]') && !/UN repas|Chiffres d'un repas/.test(document.getElementById('dialogue').innerText)`), 'il reste les gros blocs, les boutons rapides ou le texte');
     vrai(await attendre(`document.querySelectorAll('.ing-poubelle').length > 1`, 20000) >= 0, 'pas de poubelles');
     const kcal = () => B.js(`parseInt((document.querySelector('#dialogue b') || {}).textContent.replace(/\\s/g, ''))`);
     const avant = await kcal();
