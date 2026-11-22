@@ -1258,30 +1258,37 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   const change = a.ingredients.some(i => i.u !== "qs" && i.q !== i.base);
   // Les chiffres comme sur la carte d'un plat (Taha, 22/11/2026) ; l'écart s'affiche seulement quand une quantité change.
   const ligne = (nom, cle, unite, bonSiPlus) => { const avant = a.avant[cle] * t, apres = a.apres[cle] * t, delta = Math.round(apres) - Math.round(avant);
-    return `<div><b>${nombre(apres)}${unite === "kcal" ? "" : ` ${unite}`}</b><span>${nom}</span>${delta ? `<small class="${bonSiPlus === null ? "" : (delta > 0) === bonSiPlus ? "mieux" : "moins"}">${delta > 0 ? "+" : "−"}${nombre(Math.abs(delta))}</small>` : ""}</div>`; };
+    return `<div><b>${nombre(apres)}${unite === "kcal" ? "" : ` ${unite}`}</b><span>${nom}</span>${delta ? `<small class="${bonSiPlus === null ? "" : (delta > 0) === bonSiPlus ? "aj-bon" : "aj-mauvais"}">${delta > 0 ? "+" : "−"}${nombre(Math.abs(delta))}</small>` : ""}</div>`; };
+  // Taha, 22/11/2026 : la journée au-dessus des chiffres du plat (calories et protéines du jour), avec l'écart quand une
+  // quantité change ; « Valider » enregistre tout de suite, sans fenêtre « ce que ça change ».
+  if (jour && jour.depart == null) jour.depart = { kcal: a.apres.kcal * t, prot: a.apres.prot * t };
+  const sJ = jour ? planDe(jour.k) : null, plusJ = jour ? enPlusDuJour(sJ, jour.n) : null, objJ = sJ ? sJ.objectif || {} : {};
+  const tuileJour = (nom, cle, unite) => { const base = (jj[cle] || 0) + plusJ[cle], delta = Math.round(a.apres[cle] * t) - Math.round(jour.depart[cle]);
+    return `<div><span>${nom}</span><b class="chiffres">${nombre(Math.round(base + delta))}${objJ[cle] ? `<small> / ${nombre(objJ[cle])}</small>` : ""} ${unite}</b>${delta ? `<small class="ecart ${cle === "prot" ? (delta > 0 ? "aj-bon" : "aj-mauvais") : ""}">${delta > 0 ? "+" : "−"}${nombre(Math.abs(delta))} ${unite}</small>` : ""}</div>`; };
   const connusTous = ingredientsConnus(), dans = new Set(a.ingredients.filter(i => i.q > 0 || i.u === "qs").map(i => i.n));
   const sansAccents = x => String(x).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/œ/g, "oe").trim();
-  d.innerHTML = `<form class="feuille" novalidate>
+  d.innerHTML = `<form class="feuille aj-form" novalidate>
     <h2 id="dialogueTitre">${jour ? "Modifier les ingrédients" : `Ajuster « ${esc(a.nom)} »`}</h2>
     ${jour ? `<p class="petit discret" style="margin:-4px 0 12px">« ${esc(a.nom)} », ${planDe(jour.k).jours[jour.n].jour.toLowerCase()} seulement.</p>` : ""}
     ${jour ? "" : `<p class="petit discret" style="margin:-4px 0 12px">Pour tous les jours où ce plat est au menu.</p>`}
+    ${jour ? `<div class="aj-jour" role="status">${tuileJour("Calories du jour", "kcal", "kcal")}${tuileJour("Protéines du jour", "prot", "g")}</div>` : ""}
     <div class="cp-chiffres aj-chiffres" role="status">${ligne("kcal", "kcal", "kcal", null)}${ligne("prot.", "prot", "g", true)}${ligne("gluc.", "gluc", "g", null)}${ligne("lip.", "lip", "g", null)}</div>
     <h3>Ingrédients</h3>
     <ul class="lignes reglables">${a.ingredients.map((i, n) => i.u === "qs" ? `<li><span>${esc(i.n)}</span><span class="q">au goût</span></li>`
       : `<li${i.q === 0 ? ' class="retire"' : ""}>${i.q === 0 ? `<button type="button" class="ing-remettre" data-remettre-ing="${n}" aria-label="Remettre ${esc(i.n)}">↺</button>`
-          : `<button type="button" class="ing-poubelle" data-retirer-ing="${n}" aria-label="Retirer ${esc(i.n)}">${icone("poubelle")}</button>`}<label for="aj${n}">${esc(i.n)}${i.ajoute ? `<small>ajouté par toi</small>` : i.q !== i.base ? `<small>${i.q === 0 ? "retiré · " : ""}${quantite(i.base * t, i.u)} dans la recette</small>` : ""}
+          : `<button type="button" class="ing-poubelle" data-retirer-ing="${n}" aria-label="Retirer ${esc(i.n)}">${icone("poubelle")}</button>`}<label for="aj${n}">${esc(i.n)}${i.ajoute ? `<small>ajouté par toi</small>` : i.q === 0 ? `<small>retiré</small>` : ""}
         ${i.ajoute ? "" : `<small><button type="button" class="lien" data-changer="${n}">Changer d'ingrédient</button></small>`}${seance && seance.repas > 1 ? `<small>à cuisiner pour ${seance.repas} repas : ${quantite(i.q * seance.portions, i.u)}</small>` : ""}</label>
         <span class="reglage"><button type="button" data-n="${n}" data-sens="-1" aria-label="Moins de ${esc(i.n)}">−</button>
           <input id="aj${n}" data-n="${n}" type="number" inputmode="decimal" min="0" step="${pas(i)}" value="${vu(i)}" aria-describedby="au${n}">
           <button type="button" data-n="${n}" data-sens="1" aria-label="Plus de ${esc(i.n)}">+</button><span class="unite" id="au${n}">${esc(i.u)}</span></span></li>`).join("")}</ul>
     <div class="champ ing-cherche" style="margin-top:14px"><label for="ajNouveau" id="ajNouveauTitre">Ajouter un ingrédient</label>
-      <div class="rp-recherche${E.claude === false ? "" : " champ-ia"}">${icone(E.claude === false ? "magnifying-glass" : "sparkle")}<input id="ajNouveau" type="search" enterkeyhint="go" autocomplete="off"
-        placeholder="Quinoa, skyr Lidl, dinde hachée…" aria-describedby="ajAide"></div>
+      <div class="aj-ajout"><div class="rp-recherche${E.claude === false ? "" : " champ-ia"}">${icone(E.claude === false ? "magnifying-glass" : "sparkle")}<input id="ajNouveau" type="search" enterkeyhint="go" autocomplete="off"
+        placeholder="Quinoa, skyr Lidl…" aria-describedby="ajAide"></div><button type="button" class="bouton second" id="ajAjouter">Ajouter</button></div>
       <ul class="ing-suggestions" id="ajSuggestions" aria-label="Ingrédients trouvés"></ul>
       <small id="ajAide">Tape un nom : ${connusTous.length} ingrédients connus${E.claude === false ? "" : ", et l'IA crée les autres (valeurs de l'étiquette en ligne, sinon estimées)"}.</small></div>
     <div class="actions pied"><button class="bouton second" type="button" value="non">Annuler</button>
       ${change ? `<button class="bouton sobre" type="button" data-origine>${jour ? "Comme la recette" : "Recette d'origine"}</button>` : ""}
-      <button class="bouton" type="submit">${jour ? "Voir ce que ça change" : "Enregistrer"}</button></div></form>`;
+      <button class="bouton" type="submit">Valider</button></div></form>`;
   const refaire = q => demanderAjustement(id, q, jour);
   d.querySelector("[value=non]").addEventListener("click", () => jour && jour.retour ? jour.retour() : d.close("non"));
   d.querySelectorAll("[data-sens]").forEach(b => b.addEventListener("click", () => { const i = a.ingredients[Number(b.dataset.n)];
@@ -1315,16 +1322,19 @@ async function demanderAjustement(id, quantites = null, jour = null) {
     if (b.dataset.ing) return ajouterIngredient(b.dataset.ing);
     if (b.dataset.ingIa) return creerIngredient(b.dataset.ingIa);
   });
-  $("ajNouveau").addEventListener("keydown", ev => {
-    if (ev.key !== "Enter") return;
-    ev.preventDefault();
+  // « Ajouter » ou Entrée : un ingrédient connu va dans la liste (on le voit avant de valider) ; sinon l'IA le crée.
+  const ajouterTape = () => {
     const brut = $("ajNouveau").value.trim();
-    if (!brut) return;
+    if (!brut) { $("ajNouveau").focus(); return; }
     const exact = connusTous.find(n => sansAccents(n) === sansAccents(brut));
     if (exact) return ajouterIngredient(exact);
-    ev.target.blur();
+    const seul = connusTous.filter(n => !dans.has(n) && sansAccents(n).includes(sansAccents(brut)));
+    if (seul.length === 1) return ajouterIngredient(seul[0]);
+    $("ajNouveau").blur();
     creerIngredient(brut);
-  });
+  };
+  $("ajAjouter").addEventListener("click", ajouterTape);
+  $("ajNouveau").addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); ajouterTape(); } });
   // La poubelle : l'ingrédient est retiré de l'assiette (quantité 0) ; « ↺ » le remet comme dans la recette.
   d.querySelectorAll("[data-retirer-ing]").forEach(b => b.addEventListener("click", ev => {
     ev.preventDefault();
@@ -1350,9 +1360,9 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   }));
   d.querySelector("form").addEventListener("submit", async ev => {
     ev.preventDefault(); ev.stopPropagation();
-    if (jour) return apercuChangement(jour.k, { type: "ajuster", jour: jour.n, plat: id, quantites: actuel },
-      `Modifier « ${a.nom} » pour ${planDe(jour.k).jours[jour.n].jour.toLowerCase()} ?`, () => demanderAjustement(id, actuel, jour));
     d.close("oui");
+    if (jour) return agir("/api/semaine/modifier", { operation: { type: "ajuster", jour: jour.n, plat: id, quantites: actuel }, semaine: jour.k, confirme: true },
+      `« ${a.nom} » modifié pour ${planDe(jour.k).jours[jour.n].jour.toLowerCase()}.`);
     agir("/api/recette/ajuster", { plat: id, quantites: actuel, apercu: false }, change ? "Quantités enregistrées : semaines et courses recalculées." : "Recette d'origine remise.");
   });
   if (!d.open) d.showModal();

@@ -353,7 +353,20 @@ try {
     const nb = await B.js(`document.querySelectorAll('.reglables > li').length`);
     await B.js(`document.querySelector('#ajSuggestions [data-ing]').click()`);
     vrai(await attendre(`document.querySelectorAll('.reglables > li').length === ${nb + 1}`, 15000) >= 0, `« ${ajoute} » n'est pas ajouté`);
-    await B.js(`document.querySelector('#dialogue [value=non]').click()`);
+    // Taha, 22/11/2026 : « Ajouter » à côté du champ ; la journée en haut ; « Valider » enregistre sans fenêtre d'aperçu
+    vrai(await B.js(`!!document.getElementById('ajAjouter') && !!document.querySelector('#dialogue .aj-jour')`), 'pas de bouton Ajouter ou pas de chiffres du jour');
+    const autre = await B.js(`ingredientsConnus().find(n => /^(œufs?|oeufs?|tomate|oignon)/i.test(n) && ![...document.querySelectorAll('.reglables label')].some(l => l.textContent.includes(n)))`);
+    if (autre) {
+      const nb2 = await B.js(`document.querySelectorAll('.reglables > li').length`);
+      await taper(autre); await B.js(`document.getElementById('ajAjouter').click()`);
+      vrai(await attendre(`document.querySelectorAll('.reglables > li').length === ${nb2 + 1}`, 15000) >= 0, `« ${autre} » : le bouton Ajouter ne l'ajoute pas`);
+    }
+    vrai(await B.js(`/Valider/.test(document.querySelector('#dialogue [type=submit]').textContent)`), 'le bouton n\'est pas « Valider »');
+    await viderToast();
+    await B.js(`document.querySelector('#dialogue [type=submit]').click()`);
+    const msg = await toast();
+    vrai(/modifié/.test(msg), `pas enregistré directement : « ${msg} »`);
+    vrai(await B.js(`!document.getElementById('dialogue').open`), 'une fenêtre reste ouverte après Valider');
   });
 
   await test('Ajouter un repas : pas de Matin / Midi / Soir à choisir', async () => {
