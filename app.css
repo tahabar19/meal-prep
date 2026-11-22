@@ -1437,3 +1437,24 @@ html:has(.carte-fond.ouvert){background:#060706}
 .manque-feuille h3{margin:0 0 10px;font-size:1rem}
 .manque-feuille .lignes{margin:0 0 14px}
 .manque-feuille .bouton{width:100%}
+/* Retouches du 22/11/2026 (Taha) : couleurs du stock adoucies, « Ajouter un repas » en case de la grille,
+   ingrédients manquants plus discrets et leur liste dans une carte au centre. */
+:root{--stock-ok:#4f8270;--stock-peu:#9c8150;--stock-loin:#9a6563}
+.stock-cadre{outline-width:1.5px}
+.stock-ok{outline-color:var(--stock-ok)}
+.stock-peu{outline-color:var(--stock-peu)}
+.stock-loin{outline-color:var(--stock-loin)}
+.manque{background:#2b2720;color:#d4b47c;font-weight:600;box-shadow:0 0 0 1px rgba(156,129,80,.45)}
+.stock-loin .manque{background:#2b2222;color:#d49c9a;box-shadow:0 0 0 1px rgba(154,101,99,.45)}
+.manque-jour{display:inline-flex;width:auto;gap:8px;margin:10px 0 0;padding:7px 12px;border:1px solid var(--filet);border-radius:var(--r-pilule);font-size:.85rem;color:var(--texte)}
+.manque-jour > .ic{width:16px;height:16px;color:var(--stock-peu)}
+.manque-jour > .ic:last-child{color:var(--discret)}
+.manque-jour.complet{display:flex;border:0;padding:6px 0;font-size:.85rem;color:var(--discret)}
+.manque-jour.complet .ic{color:var(--stock-ok)}
+.manque-fond{align-items:center;justify-items:center;padding:16px}
+.manque-feuille{width:min(100%,380px);max-height:calc(var(--haut-visible,100dvh) - 32px);padding:20px 18px 16px;border-radius:22px}
+.exo.ajout-tuile{display:flex;align-items:center;justify-content:center;min-height:110px;padding:0;border:1.5px dashed var(--filet)!important;
+  background:transparent!important;color:var(--discret);font:inherit;cursor:pointer;border-radius:var(--r-carte)}
+.exo.ajout-tuile .ic{width:30px;height:30px;color:var(--accent)}
+.exo.ajout-tuile:hover,.exo.ajout-tuile:focus-visible{border-color:var(--accent)!important}
+.stock-faisable + .stock-taper{margin-top:14px}
