@@ -2171,16 +2171,17 @@ function vueProfilFlemmard() {
     <div class="fait"><b>${ph.prot}<small> g</small></b><span>protéines</span></div>
     ${E.eau ? `<div class="fait"><b>${virgule(E.eau.litres)}<small> L</small></b><span>d'eau</span></div>` : ""}
   </div>
-  <p class="petit discret" style="margin:-4px 0 16px">Phase ${ph.n}, ${esc(ph.nom).toLowerCase()}. Ces repères ne remplacent pas un avis médical.</p>
-  <section class="bloc" aria-labelledby="tQui"><h2 id="tQui" style="margin-bottom:8px">Mes informations</h2>
-    <ul class="lignes">${i.date_naissance ? l("Date de naissance", `${esc(dateLongueCourte(i.date_naissance).replace(/^[a-zé]+ /i, ""))} (${i.age} ans)`) : i.age ? l("Âge", `${i.age} ans`) : ""}
-      ${i.sexe ? l("Sexe", esc(i.sexe)) : ""}${i.telephone ? l("Téléphone", esc(i.telephone)) : ""}
-      ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul></section>
-  <ul class="menu" style="margin-top:16px">
-    ${lien("#/reglages", "sliders-horizontal", "Réglages", "Objectif, date de début, alimentation, informations, compte Claude, mot de passe")}
+  <p class="petit discret profil-phase">Phase ${ph.n}, ${esc(ph.nom).toLowerCase()}. Ces repères ne remplacent pas un avis médical.</p>
+  <section class="bloc profil-infos" aria-labelledby="tQui"><h2 id="tQui">Mes informations</h2>
+    <dl>${[i.date_naissance ? ["Naissance", `${esc(dateLongueCourte(i.date_naissance).replace(/^[a-zé]+ /i, ""))} (${i.age} ans)`] : i.age ? ["Âge", `${i.age} ans`] : null,
+      i.sexe ? ["Sexe", esc(i.sexe)] : null, i.taille_cm ? ["Taille", `${i.taille_cm} cm`] : null,
+      i.poids_kg ? ["Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`] : null, i.telephone ? ["Téléphone", esc(i.telephone)] : null]
+      .filter(Boolean).map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join("")}</dl></section>
+  <ul class="menu profil-menu">
+    ${lien("#/reglages", "sliders-horizontal", "Réglages", "Objectif, alimentation, compte Claude, mot de passe")}
     ${E.utilisateur.admin ? lien("#/profils", "users", "Profils", "") : ""}
   </ul>
-  <p style="margin-top:18px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>`;
+  <p class="profil-sortie"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>`;
 }
 function vueProfils() {
   barre("");
@@ -2494,12 +2495,10 @@ function vueJourSuivi(params) {
     ${j.entrees.length ? `<h2 class="titre-section">En plus</h2><div class="liste-notes">${j.entrees.map(ligneRepasNote).join("")}</div>` : ""}
     <button class="ajout-ligne" data-action="noterRepas" data-date="${date}">${icone("cooking-pot")}<span><b>Ajouter un repas</b><small>Un de tes plats, une description, une photo ou un ticket</small></span></button></div>
     <div class="rubrique-fin">
-    ${idees && idees.plats.length ? `<section class="bloc idees" aria-labelledby="tIdees"><h2 id="tIdees">Pour finir la journée</h2>
-      <p class="petit discret" style="margin:-8px 0 8px">${idees.moment.startsWith("col") ? "En collation" : `Pour le ${nomMoment(idees.moment)}`}, grammes réglés pour tomber sur ton objectif${j.entrees.length ? ", ce que tu as noté compris" : ""}.</p>
-      <details class="idees-liste"><summary>Voir les propositions${icone("caret-right")}</summary>
+    ${idees && idees.plats.length ? `<details class="bloc idees idees-ligne"><summary><span><b>Pour finir la journée</b><small>${idees.plats.length} idée${idees.plats.length > 1 ? "s" : ""} ${idees.moment.startsWith("col") ? "en collation" : `pour le ${nomMoment(idees.moment)}`}, réglée${idees.plats.length > 1 ? "s" : ""} sur ton objectif</small></span>${icone("caret-right")}</summary>
       <ul class="rp-liste">${idees.plats.map((x, i) => `<li><button type="button" class="rp-plat" data-idee="${i}">${photo(recette(x.id), 120, "carre")}
         <span class="rp-texte"><b>${esc(x.nom)}</b>${macrosLigne(x.kcal, x.prot)}</span>
-        ${o.kcal && Math.abs(x.kcal_jour - o.kcal) <= o.kcal * 0.05 && x.prot_jour >= o.prot * 0.95 ? `<span class="rp-tient" title="Ta journée tient l'objectif">${icone("check")}</span>` : ""}</button></li>`).join("")}</ul></details></section>` : ""}
+        ${o.kcal && Math.abs(x.kcal_jour - o.kcal) <= o.kcal * 0.05 && x.prot_jour >= o.prot * 0.95 ? `<span class="rp-tient" title="Ta journée tient l'objectif">${icone("check")}</span>` : ""}</button></li>`).join("")}</ul></details>` : ""}
     ${ici && courante && !jp.retire && ici.n <= rangDuJour(ici.s) && jp.cuisine.some(c => !fait(ici.s, ici.n, c.id)) ? `<div class="m-actions bas">
       <button class="bouton second" data-action="journee" data-jour="${ici.n}">${icone("check")}Tout mangé</button></div>` : ""}</div>`;
 }

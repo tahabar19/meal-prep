@@ -163,8 +163,8 @@ try {
     vrai(await B.js(`!document.querySelector('.liste-plats, .grille-plats .rp-macros')`), 'les plats du jour sont en liste');
     const idees = await B.js(`document.querySelectorAll('.idees .candidat').length`);
     vrai(idees === 0, '« Pour finir la journée » encore en anciennes cartes');
-    if (await B.js(`!!document.querySelector('.idees details')`)) {
-      await B.js(`(() => { const d = document.querySelector('.idees details'); d.open = true; d.scrollIntoView(); })()`);
+    if (await B.js(`!!document.querySelector('details.idees')`)) {
+      await B.js(`(() => { const d = document.querySelector('details.idees'); d.open = true; d.scrollIntoView(); })()`);
       vrai(await B.js(`document.querySelectorAll('.idees .rp-plat').length > 0`), 'pas de liste dans « Pour finir la journée »');
       await att(300); await B.photo('idees-liste');
     }
