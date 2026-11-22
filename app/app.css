@@ -1208,7 +1208,12 @@ details.a-completer[open] > summary > .ic{transform:rotate(90deg)}
 .fc-tete p{margin:4px 0 0;font-size:.85rem}
 .fiche-compacte > .fc-bloc{margin:0!important;padding:0!important;background:none!important;border:0!important;box-shadow:none!important}
 .fc-bloc h2{margin:0 0 6px;font-size:.78rem!important;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--discret)}
-.fc-bloc .ingredients li{padding:5px 0;font-size:.9rem}
+.fc-bloc .ingredients li{padding:4px 0;font-size:.9rem}
 .fc-bloc .ingredients .lien{color:var(--encre);text-decoration:none;font-weight:400}
 .fc-bloc .etapes{gap:6px;padding-left:20px;font-size:.88rem;line-height:1.4}
 @media (min-width:900px){.fiche-compacte{grid-template-columns:minmax(0,1fr);max-width:640px}.fiche-compacte > *{grid-column:1}}
+/* la note : petites étoiles sous le nom, sans titre (Taha, 22/11/2026) */
+.fc-note{display:flex;gap:0;margin:2px 0 0 -6px}
+.fc-note button{width:30px;height:30px;color:var(--discret)}
+.fc-note button .ic{width:16px;height:16px}
+.fc-note button.pleine{color:var(--accent)}
