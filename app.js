@@ -734,14 +734,12 @@ function demanderChangement(k, n, moment) {
   const nomRepas = { pdj: "Petit-déjeuner", dej: "Déjeuner", din: "Dîner" }[place] || "Collation";
   const suite = moment === "din" && n < 6 && s.jours[n + 1].dej_reste ? `Le déjeuner de ${s.jours[n + 1].jour.toLowerCase()} changera aussi : c'est la seconde part de ce dîner.`
     : moment === "dej" && j.dej_reste ? "Ce déjeuner ne sera plus le reste de la veille : il se cuisinera à midi." : "";
-  const peutAjuster = !sansRepas && !(moment === "dej" && j.dej_reste);
   d.innerHTML = `<div class="feuille rp">
     <div class="rp-tete"><div><p class="rp-sur">${esc(j.jour)} · ${nomRepas}</p>
       <h2 id="dialogueTitre">${nouvelle ? "Ajouter une collation" : sansRepas ? `Choisir ${leRepas}` : `Remplacer ${leRepas}`}</h2></div>
       <button type="button" class="rp-fermer" data-fermer aria-label="Fermer">${icone("x")}</button></div>
     ${sansRepas ? "" : `<div class="rp-actuel">${photo(actuel, 120, "carre")}<div><b>${esc(actuel.nom)}</b>
-        <span class="chiffres">${nombre(Math.round(avantK))} kcal · ${nombre(Math.round(avantP))} g prot.</span></div>
-      ${peutAjuster ? `<button type="button" class="rp-modifier" data-ajuster>Modifier</button>` : ""}</div>`}
+        <span class="chiffres">${nombre(Math.round(avantK))} kcal · ${nombre(Math.round(avantP))} g prot.</span></div></div>`}
     ${obj.kcal ? `<p class="rp-objectif chiffres">Ta journée : <b>${nombre(Math.round(jourK))}</b> / ${nombre(obj.kcal)} kcal · <b>${nombre(Math.round(jourP))}</b> / ${nombre(obj.prot)} g</p>` : ""}
     ${suite ? `<p class="petit discret rp-intro">${suite}</p>` : ""}
     <div class="rp-collant" id="rpCollant">
@@ -771,7 +769,6 @@ function demanderChangement(k, n, moment) {
     if (!b) return;
     const x = b.dataset;
     if ("fermer" in x) return d.close("non");
-    if ("ajuster" in x) { sortir(); return demanderAjustement(actuelId, null, { k, n, retour }); }
     if ("ia" in x) return creerAvecIA();
     if (x.plat) { sortir(); return apercuChangement(k, operation(x.plat), `${sansRepas ? "Mettre" : "Remplacer par"} « ${recette(x.plat).nom} » ?`, retour); }
     if ("voirPlus" in x) { R.nb += 20; return maj(); }
@@ -1193,7 +1190,7 @@ async function demanderIngredient(o) {
       const vit = lireVitamines("inV_");
       if (vit.erreur) { $("eIng").textContent = vit.erreur; return; }
       corps.vitamines = vit;
-    }
+    } else if (o.creer && v.vitamines) corps.vitamines_claude = v.vitamines;      // déjà données : pas un appel de plus
     const ok = await appel("/api/ingredient/enregistrer", corps);
     if (ok !== true) { $("eIng").textContent = (ok && ok.erreur) || ""; return; }
     const nom = E.ingredient || corps.nom;
@@ -1232,6 +1229,8 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   const ligne = (nom, cle, unite, bonSiPlus) => { const avant = a.avant[cle] * t, apres = a.apres[cle] * t, delta = apres - avant;
     return `<div class="macro"><span>${nom}</span><b>${nombre(apres)} ${unite}</b>
       <small class="${!delta || bonSiPlus === null ? "" : (delta > 0) === bonSiPlus ? "mieux" : "moins"}">${delta ? `${delta > 0 ? "+" : "−"}${nombre(Math.abs(delta))} ${unite}` : "comme la recette"}</small></div>`; };
+  const connusTous = ingredientsConnus(), dans = new Set(a.ingredients.filter(i => i.q > 0 || i.u === "qs").map(i => i.n));
+  const sansAccents = x => String(x).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/œ/g, "oe").trim();
   const RAPIDES = [["Plus de protéines", "proteine", 1.2], ["Moins de glucides", "feculent", 0.8], ["Plus de glucides", "feculent", 1.2], ["Moins de gras", "gras", 0.5]]
     .filter(([, role]) => a.ingredients.some(i => i.role === role && i.u !== "qs"));
   d.innerHTML = `<form class="feuille" novalidate>
@@ -1251,11 +1250,11 @@ async function demanderAjustement(id, quantites = null, jour = null) {
         <span class="reglage"><button type="button" data-n="${n}" data-sens="-1" aria-label="Moins de ${esc(i.n)}">−</button>
           <input id="aj${n}" data-n="${n}" type="number" inputmode="decimal" min="0" step="${pas(i)}" value="${vu(i)}" aria-describedby="au${n}">
           <button type="button" data-n="${n}" data-sens="1" aria-label="Plus de ${esc(i.n)}">+</button><span class="unite" id="au${n}">${esc(i.u)}</span></span></li>`).join("")}</ul>
-    <div class="champ" style="margin-top:14px"><label for="ajNouveau" id="ajNouveauTitre">Ajouter un ingrédient</label>
-      <div class="ajout"><input id="ajNouveau" type="text" list="ajConnus" autocomplete="off" placeholder="Quinoa, dinde hachée…">
-        <button class="bouton second" type="button" id="ajAjouter">Ajouter</button></div>
-      <datalist id="ajConnus">${ingredientsConnus().map(n => `<option value="${esc(n)}">`).join("")}</datalist>
-      <small id="ajAide">Mets 0 pour retirer un ingrédient. Un produit inconnu ? Crée-le d'abord dans « Mon propre plat ».</small></div>
+    <div class="champ ing-cherche" style="margin-top:14px"><label for="ajNouveau" id="ajNouveauTitre">Ajouter un ingrédient</label>
+      <div class="rp-recherche${E.claude === false ? "" : " champ-ia"}">${icone(E.claude === false ? "magnifying-glass" : "sparkle")}<input id="ajNouveau" type="search" enterkeyhint="go" autocomplete="off"
+        placeholder="Quinoa, skyr Lidl, dinde hachée…" aria-describedby="ajAide"></div>
+      <ul class="ing-suggestions" id="ajSuggestions" aria-label="Ingrédients trouvés"></ul>
+      <small id="ajAide">Tape un nom : ${connusTous.length} ingrédients connus${E.claude === false ? "" : ", et l'IA crée les autres (valeurs de l'étiquette en ligne, sinon estimées)"}.</small></div>
     <div class="actions pied"><button class="bouton second" type="button" value="non">Annuler</button>
       ${change ? `<button class="bouton sobre" type="button" data-origine>${jour ? "Comme la recette" : "Recette d'origine"}</button>` : ""}
       <button class="bouton" type="submit">${jour ? "Voir ce que ça change" : "Enregistrer"}</button></div></form>`;
@@ -1272,15 +1271,40 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   const origine = d.querySelector("[data-origine]");
   if (origine) origine.addEventListener("click", () => refaire({}));
   let remplace = null;                     // l'ingredient a remplacer, sinon on ajoute
-  const ajouterIngredient = () => {
-    const nom = $("ajNouveau").value.trim();
-    if (!nom) return $("ajNouveau").focus();
+  const ajouterIngredient = nom => {
     const q = { ...actuel };
     if (remplace) { q[remplace] = 0; q[nom] = { comme: remplace }; } else q[nom] = null;   // null : sa quantite habituelle
     refaire(q);
   };
-  $("ajAjouter").addEventListener("click", ajouterIngredient);
-  $("ajNouveau").addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); ajouterIngredient(); } });
+  // Taha, 21/11/2026 : « une liste très limitée d'ingrédients ». Tous les ingrédients connus se cherchent en tapant
+  // (sans accents, n'importe quel mot) ; ce qui n'y est pas, l'IA le crée : vraie étiquette en ligne, sinon estimation.
+  const creerIngredient = nom => demanderIngredient({ nom, creer: true, retour: () => refaire(actuel), apres: ajouterIngredient });
+  const proposerIngredients = () => {
+    const brut = $("ajNouveau").value.trim(), t = sansAccents(brut), mots = t.split(/\s+/).filter(Boolean);
+    const trouves = !mots.length ? [] : connusTous.filter(n => !dans.has(n) && mots.every(m => sansAccents(n).includes(m)))
+      .sort((a, b) => (sansAccents(b).startsWith(t) - sansAccents(a).startsWith(t)) || a.length - b.length).slice(0, 8);
+    const exact = connusTous.some(n => sansAccents(n) === t);
+    $("ajSuggestions").innerHTML = trouves.map(n => `<li><button type="button" data-ing="${esc(n)}">${esc(n)}${icone("plus")}</button></li>`).join("")
+      + (brut.length >= 2 && !exact ? `<li><button type="button" class="rp-ia" data-ing-ia="${esc(brut)}">${icone("sparkle")}<span>Créer « ${esc(brut.length > 40 ? brut.slice(0, 38) + "…" : brut)} »${E.claude === false ? "" : " avec l'IA"}
+          <small>${E.claude === false ? "Tu donnes ses valeurs pour 100 g" : "Ses valeurs : l'étiquette en ligne, sinon estimées"}</small></span>${icone("caret-right")}</button></li>` : "");
+  };
+  $("ajNouveau").addEventListener("input", proposerIngredients);
+  $("ajSuggestions").addEventListener("click", ev => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    if (b.dataset.ing) return ajouterIngredient(b.dataset.ing);
+    if (b.dataset.ingIa) return creerIngredient(b.dataset.ingIa);
+  });
+  $("ajNouveau").addEventListener("keydown", ev => {
+    if (ev.key !== "Enter") return;
+    ev.preventDefault();
+    const brut = $("ajNouveau").value.trim();
+    if (!brut) return;
+    const exact = connusTous.find(n => sansAccents(n) === sansAccents(brut));
+    if (exact) return ajouterIngredient(exact);
+    ev.target.blur();
+    creerIngredient(brut);
+  });
   // La poubelle : l'ingrédient est retiré de l'assiette (quantité 0) ; « ↺ » le remet comme dans la recette.
   d.querySelectorAll("[data-retirer-ing]").forEach(b => b.addEventListener("click", ev => {
     ev.preventDefault();
@@ -1299,8 +1323,8 @@ async function demanderAjustement(id, quantites = null, jour = null) {
     ev.preventDefault();
     remplace = a.ingredients[Number(b.dataset.changer)].n;
     $("ajNouveauTitre").textContent = `Remplacer « ${remplace} » par`;
-    $("ajAjouter").textContent = "Remplacer";
     $("ajAide").textContent = "Même quantité si l'unité est la même, sinon sa quantité habituelle. Tu la règles ensuite.";
+    proposerIngredients();
     $("ajNouveau").focus();
     $("ajNouveau").scrollIntoView({ block: "center" });
   }));
@@ -1375,7 +1399,7 @@ function ficheRapide(id, ctx, depuis, vu = null) {
   const val = m => Math.round(vu ? vu[m] || 0 : compte && compte[m] != null ? compte[m] : (r[m] || 0) * t);
   const f = r0.filtres || { regimes: [], atouts: [] };
   const CAT = { plat: "Plat", petitdej: "Petit-déjeuner", collation: "Collation" };
-  const labels = [CAT[r0.cat], r0.perso ? "Mon plat" : "", ...f.regimes, ...f.atouts].filter((x, i, tous) => x && tous.indexOf(x) === i).slice(0, 5);
+  const labels = [CAT[r0.cat], r0.perso ? "Mon plat" : "", ...f.regimes, ...f.atouts].filter((x, i, tous) => x && tous.indexOf(x) === i).slice(0, 3);
   const place = ctx && ctx.moment.startsWith("col") ? ((j.au_repas || {})[id] || "col") : ctx && ctx.moment;
   const quand = ctx ? [(MOMENTS_REPAS.find(([m]) => m === place) || [, ""])[1], j.jour].filter(Boolean).join(" · ") : "";
   const courante = ctx && (!E.mois || ctx.k === E.mois.rang);
@@ -1402,17 +1426,6 @@ function ficheRapide(id, ctx, depuis, vu = null) {
         <div><b data-cp-v="${val("kcal")}" data-u="">${nombre(val("kcal"))}</b><span>kcal</span></div><div><b data-cp-v="${val("prot")}" data-u=" g">${nombre(val("prot"))} g</b><span>prot.</span></div>
         <div><b data-cp-v="${val("gluc")}" data-u=" g">${nombre(val("gluc"))} g</b><span>gluc.</span></div><div><b data-cp-v="${val("lip")}" data-u=" g">${nombre(val("lip"))} g</b><span>lip.</span></div>
       </div>
-      ${ctx && enSuivi() && !(ctx.moment === "dej" && j.dej_reste) ? (() => {
-        // Combien de fois l'assiette prévue (2 bananes, une demi-part…) : toutes les quantités du plat ce jour-là.
-        // lu sur un ingrédient encore dans l'assiette : un ingrédient retiré (poubelle, 0) ne dit rien de la quantité
-        const aj = (j.ajustes || {})[id] || {}, base = (r0.ing || []).find(x => x.u !== "qs" && x.q > 0 && aj[x.n] !== 0), ajuste = base && aj[base.n];
-        const fois = base && typeof ajuste === "number" ? Math.max(0.5, Math.round(ajuste / base.q * 2) / 2) : 1;
-        // −/+ : les chiffres et les ingrédients changent tout de suite, la carte reste ouverte ; l'enregistrement
-        // part une fois les touches finies (Taha, 21/11/2026).
-        return `<div class="cp-quantite" data-fois="${fois}"><span>Quantité</span>
-          <button type="button" data-cp-fois="-0.5" ${fois <= 0.5 ? "disabled" : ""} aria-label="Moins">−</button>
-          <b class="chiffres">×${virgule(fois)}</b>
-          <button type="button" data-cp-fois="0.5" ${fois >= 5 ? "disabled" : ""} aria-label="Plus">+</button></div>`; })() : ""}
       <p class="petit discret cp-info">${[vu ? "Ce que tu as mangé ce jour-là" : ctx ? (t !== 1 ? `Assiette à ${nombre(Math.round(t * 100))} % de la recette` : "Recette telle quelle") : "Une portion",
         r0.temps ? `${r0.temps} min` : "", r.ajusteeCeJour ? "ajustée ce jour" : ""].filter(Boolean).join(" · ")}</p>
       ${(rIng.ing || []).length ? `<details class="cp-ingredients"${vu ? " open" : ""}><summary>Ingrédients${icone("caret-right")}</summary>
@@ -1420,13 +1433,15 @@ function ficheRapide(id, ctx, depuis, vu = null) {
       ${ctx && enSuivi() ? `<div class="cp-mange">${courante && ctx.n <= rangDuJour(s)
           ? `<button class="bouton${mange ? " second" : ""}" data-action="manger" data-jour="${ctx.n}" data-plat="${id}" data-annuler="${mange ? 1 : 0}">${icone("check")}${mange ? "Pas encore mangé" : "J'ai mangé"}</button>` : ""}
         <a class="bouton sobre" href="${courante ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Voir la recette</a></div>`
-      : enSuivi() ? `<a class="bouton sobre cp-cuisiner" href="#/cuisine/${id}">${icone("cooking-pot")}Voir la recette</a>`
+      : enSuivi() ? `${vu && vu.date && vu.date < E.journal_repas.aujourdhui && semainePourDate(E.journal_repas.aujourdhui)
+          ? `<button type="button" class="bouton cp-cuisiner" data-action="mangerAujourdhui" data-plat="${id}" data-moment="${esc(vu.moment || "")}">${icone("check")}Manger aujourd'hui</button>` : ""}
+        <a class="bouton sobre cp-cuisiner" href="#/cuisine/${id}">${icone("cooking-pot")}Voir la recette</a>`
       : `<a class="bouton cp-cuisiner" href="${courante && ctx ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Cuisiner</a>`}
       ${ctx && (libre || reg) ? `<div class="cp-choix">
         ${libre ? `<button type="button" data-action="changer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}">${icone("swap")}
-          <span><b>Remplacer par un autre plat</b><small>Un plat du catalogue, un des tiens, ou retirer ce repas</small></span>${icone("caret-right")}</button>` : ""}
+          <span><b>Remplacer par un autre plat</b><small>Du catalogue ou un des tiens</small></span>${icone("caret-right")}</button>` : ""}
         ${(libre || enSuivi()) && !(ctx.moment === "dej" && j.dej_reste) ? `<button type="button" data-action="ajusterJour" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}">${icone("notebook")}
-          <span><b>Modifier les ingrédients</b><small>Retirer, ajouter ou changer un ingrédient, pour ce jour</small></span>${icone("caret-right")}</button>` : ""}
+          <span><b>Modifier les ingrédients</b><small>Retirer, ajouter, changer, pour ce jour</small></span>${icone("caret-right")}</button>` : ""}
       </div>` : ctx ? "" : `<div class="cp-avis">${boutonsGout(r0)}</div>`}
       ${(() => {
         // Deux petits boutons discrets en bas de la carte (Taha, 20/11/2026) : équilibrer la journée, fixer le plat.
@@ -1456,35 +1471,6 @@ function ficheRapide(id, ctx, depuis, vu = null) {
     }));
   } else requestAnimationFrame(() => fond.classList.add("ouvert"));
   fermerCarte.etat = { fond, carte, rentrer: depart && !calme ? versDepart : null, avant: document.activeElement };
-  const qte = carte.querySelector(".cp-quantite");
-  if (qte) {
-    const fois0 = Number(qte.dataset.fois), aj0 = { ...((j.ajustes || {})[id] || {}) };
-    let fois = fois0, minuteur = null, enregistre = fois0;
-    const sauver = () => {
-      minuteur = null;
-      if (fois === enregistre) return;
-      enregistre = fois;
-      // Toutes les quantités de l'assiette ×(fois / fois de départ), ingrédients ajoutés par toi compris.
-      const f = fois / fois0, quantites = {}, x = q => Math.round(q * f * 100) / 100;
-      for (const i of r0.ing || []) if (i.u !== "qs") quantites[i.n] = x(typeof aj0[i.n] === "number" ? aj0[i.n] : i.q);
-      for (const [nom, q] of Object.entries(aj0)) if (!(nom in quantites))
-        quantites[nom] = typeof q === "number" ? x(q) : q && typeof q === "object" && typeof q.q === "number" ? { ...q, q: x(q.q) } : q;
-      agir("/api/semaine/modifier", { operation: { type: "ajuster", jour: ctx.n, plat: id, quantites }, semaine: ctx.k, confirme: true },
-        `« ${r0.nom} » : ×${virgule(fois)}.`);
-    };
-    qte.querySelectorAll("[data-cp-fois]").forEach(b => b.addEventListener("click", () => {
-      fois = Math.min(5, Math.max(0.5, fois + Number(b.dataset.cpFois)));
-      qte.querySelector("b").textContent = `×${virgule(fois)}`;
-      qte.querySelector('[data-cp-fois="-0.5"]').disabled = fois <= 0.5;
-      qte.querySelector('[data-cp-fois="0.5"]').disabled = fois >= 5;
-      carte.querySelectorAll("[data-cp-v]").forEach(v => { v.textContent = `${nombre(Math.round(Number(v.dataset.cpV) * fois / fois0))}${v.dataset.u}`; });
-      const l = carte.querySelector(".cp-ing-liste");
-      if (l) l.innerHTML = listeIngredients(rIng, tIng * fois / fois0);
-      clearTimeout(minuteur);
-      minuteur = setTimeout(sauver, 800);
-    }));
-    fermerCarte.etat.avantFermeture = () => { if (minuteur) { clearTimeout(minuteur); sauver(); } };
-  }
   fond.addEventListener("click", ev => { if (ev.target === fond) fermerCarte(); });
   carte.querySelector(".cp-fermer").addEventListener("click", () => fermerCarte());
   carte.querySelectorAll("[data-action]").forEach(x => x.addEventListener("click", () => fermerCarte(true)));   // l'action ouvre sa propre feuille
@@ -2447,7 +2433,19 @@ function platDHistorique(x, date) {
     <div class="chiffres">${nombre(x.kcal)} kcal, ${nombre(x.prot)} g de protéines</div></div>`;
   if (!r) return `<div class="exo repas-ligne"><div class="repas">${photo({}, 480)}${texte}</div></div>`;     // plat supprimé depuis
   return `<div class="exo repas-ligne"><a class="repas" href="#/plat/${x.id}" data-date="${date}" data-moment-vu="${esc(x.moment)}" data-kcal="${x.kcal}" data-prot="${x.prot}" data-gluc="${x.gluc || 0}"
-    data-lip="${x.lip || 0}" data-quand="${esc(`${quand} · ${dateLongueCourte(date)}`)}">${photo(r, 480)}${texte}</a></div>`;
+    data-lip="${x.lip || 0}" data-quand="${esc(`${quand} · ${dateLongueCourte(date)}`)}">${photo(r, 480)}${texte}</a>
+    ${date < E.journal_repas.aujourdhui && semainePourDate(E.journal_repas.aujourdhui) ? `<button type="button" class="histo-manger" data-action="mangerAujourdhui" data-plat="${x.id}" data-moment="${esc(place)}">Manger aujourd'hui</button>` : ""}</div>`;
+}
+// « Manger aujourd'hui » sur un plat de l'historique (Taha, 21/11/2026) : au même repas aujourd'hui s'il n'est pas
+// encore mangé (le plat prévu est remplacé), sinon en plus ; l'aperçu montre ce que ça change avant d'enregistrer.
+function mangerAujourdhui(id, moment) {
+  const ici = semainePourDate(E.journal_repas.aujourdhui), r = recette(id);
+  if (!ici || !r) return dire("Pas de menu aujourd'hui.");
+  const jp = ici.s.jours[ici.n], place = ["pdj", "dej", "din"].includes(moment) ? moment : null;
+  const libre = place && !(place === "dej" && jp.dej_reste) && (jp[place] === "rien" || !fait(ici.s, ici.n, jp[place]));
+  if (libre && jp[place] === id) return dire(`« ${r.nom} » est déjà au menu aujourd'hui.`);
+  const op = libre ? { type: "changer", jour: ici.n, moment: place, plat: id } : { type: "ajouter", jour: ici.n, plat: id, ...(place ? { moment: place } : {}) };
+  apercuChangement(ici.k, op, libre && jp[place] !== "rien" ? `Aujourd'hui, « ${r.nom} » à la place de « ${recette(jp[place]).nom} » ?` : `Ajouter « ${r.nom} » aujourd'hui ?`);
 }
 const calVitamines = { ouvert: false, mois: "", date: "" };      // le calendrier des Vitamines, ouvert ou non
 const eauCochee = date => !!(E.eau && ((E.eau.bu || {})[date] || 0) >= E.eau.litres - 0.001);
@@ -2486,7 +2484,9 @@ function noterRepas({ date, entree = null, remplacer = null }) {
   const d = $("dialogue"), heure = new Date().getHours();
   let moment = remplacer ? remplacer.place : entree ? entree.moment : heure < 11 ? "pdj" : heure < 15 ? "dej" : heure < 18 ? "col" : "din";
   let photoJointe = null, texte = remplacer ? remplacer.texte : "", photoPlat;      // photoPlat : la photo qui deviendra celle du plat
-  const puces = () => remplacer ? "" : `<div class="gouts" role="group" aria-label="Repas">${MOMENTS_REPAS.map(([m, nom]) => `<button type="button" data-moment="${m}" aria-pressed="${m === moment}">${nom}</button>`).join("")}</div>`;
+  // Un nouveau repas : plus de Matin / Midi / Soir à choisir, l'IA le dit d'après le plat (Taha, 21/11/2026).
+  // Ils restent pour changer un repas déjà noté.
+  const puces = () => !entree ? "" : `<div class="gouts" role="group" aria-label="Repas">${MOMENTS_REPAS.map(([m, nom]) => `<button type="button" data-moment="${m}" aria-pressed="${m === moment}">${nom}</button>`).join("")}</div>`;
   const brancherPuces = () => d.querySelectorAll("[data-moment]").forEach(b => b.addEventListener("click", () => {
     moment = b.dataset.moment; d.querySelectorAll("[data-moment]").forEach(x => x.setAttribute("aria-pressed", x === b)); }));
   // Taper le nom d'un plat de ta base le retrouve (Taha, 19/11/2026) : sans accents, « oe » pour « œ »,
@@ -2517,7 +2517,17 @@ function noterRepas({ date, entree = null, remplacer = null }) {
         <small class="discret ing-courts">${esc(ingredientsCourts(r))}</small></span>${icone("caret-right")}</button></li>`).join("")}</ul>` : "";
     zone.querySelectorAll("[data-plat-connu]").forEach(b => b.addEventListener("click", () => ajouterPlatConnu(recette(b.dataset.platConnu))));
   };
+  // Un plat de ta base : son repas vient de son type ; un plat de midi ou du soir va au repas encore libre, sinon selon l'heure.
+  const momentDuPlat = r => {
+    if (r.cat === "petitdej") return "pdj";
+    if (r.cat !== "plat") return "col";
+    const ici = semainePourDate(date), jp = ici && ici.s.jours[ici.n];
+    const pref = date === E.journal_repas.aujourdhui && heure >= 15 ? "din" : "dej", autre = pref === "dej" ? "din" : "dej";
+    const vide = m => !!jp && jp[m] === "rien" && !(m === "dej" && jp.dej_reste);
+    return !vide(pref) && vide(autre) ? autre : pref;
+  };
   const ajouterPlatConnu = r => {
+    moment = momentDuPlat(r);
     const ici = semainePourDate(date);
     if (ici) {                                       // dans le menu du jour : au repas choisi s'il est vide, sinon en collation
       const jp = ici.s.jours[ici.n], libre = moment !== "col" && jp[moment] === "rien" && !(moment === "dej" && jp.dej_reste);
@@ -2565,7 +2575,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       $("eNr").textContent = "";
       try {
         const r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ texte, photo: photoJointe, moment, date }) });
+          body: JSON.stringify({ texte, photo: photoJointe, date, ...(date === E.journal_repas.aujourdhui ? { heure } : {}) }) });
         const rep = await r.json();
         if (!r.ok) { $("eNr").textContent = rep.erreur || "Claude n'a pas pu calculer."; ok.disabled = false; ok.innerHTML = libelle; return; }
         moment = rep.proposition.moment || moment;
@@ -3283,6 +3293,7 @@ const ACTIONS = {
     } catch (e) { dire("Jarvis ne répond pas."); }
   },
   ingredient: b => demanderIngredient({ nom: b.dataset.nom }),
+  mangerAujourdhui: b => mangerAujourdhui(b.dataset.plat, b.dataset.moment),
   noter: b => agir("/api/note", { plat: b.dataset.plat, note: Number(b.dataset.note) }, "Note enregistrée."),
   quantite: b => {
     const r = recette(b.dataset.plat), fois = Number(b.dataset.fois), facteur = fois / (Number(b.dataset.avant) || 1), quantites = {};
