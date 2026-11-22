@@ -1295,8 +1295,10 @@ section.suivi-noter.suivi-petit{margin-top:14px;padding:12px 14px!important}
 .suivi-noter.suivi-petit .bouton.large{min-height:44px;font-size:.92rem}
 section.suivi-courbe.suivi-petit{padding:10px 12px!important}
 .suivi-courbe.suivi-petit .jours a,.suivi-courbe.suivi-petit .jours button{min-height:34px;padding:0 12px;font-size:.82rem}
-/* Carte d'un plat ouverte : plus de barre d'onglets grise en bas, la carte se centre sur tout l'écran (Taha, 22/11/2026) */
-body:has(.carte-fond) .nav-bas,body:has(.carte-fond) #barre{visibility:hidden}
+/* Carte d'un plat : le fond flou couvre tout l'écran, barre d'onglets comprise (Taha, 22/11/2026) */
+.carte-fond{top:0;right:0;bottom:0;left:0;height:auto;min-height:100%;
+  -webkit-backdrop-filter:blur(0);backdrop-filter:blur(0)}
+.carte-fond.ouvert{-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
 /* Mot de passe : afficher / cacher, jauge de solidité (Taha, 22/11/2026) */
 .mdp-saisie{position:relative}
 .mdp-saisie input{width:100%;padding-right:48px}

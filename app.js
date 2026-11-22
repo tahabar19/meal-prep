@@ -1561,13 +1561,12 @@ function ficheRapide(id, ctx, depuis, vu = null) {
     if (ph && trop() > 0) ph.style.height = `${Math.max(60, ph.offsetHeight - trop())}px`;
     if (trop() > 0) sous.forEach(x => { x.hidden = true; });
     if (ph && trop() > 0) ph.style.height = `${Math.max(36, ph.offsetHeight - trop())}px`;
-    const place = (vv ? vv.height : innerHeight) - 32 - carte.offsetHeight;
+    const place = fond.clientHeight - 32 - carte.offsetHeight;
     carte.style.top = `${Math.max(0, Math.min(30, Math.floor(place / 2)))}px`;
   };
-  const caler = () => { if (vv) {
-    Object.assign(fond.style, { top: `${vv.offsetTop}px`, height: `${vv.height}px`, bottom: "auto" });
-    fond.style.setProperty("--haut-visible", `${vv.height}px`); }
-    tenir(); };
+  // Le fond couvre tout l'écran, jusqu'en bas (Taha, 22/11/2026 : sur iPhone, la « zone visible » s'arrêtait au-dessus
+  // de la barre du bas et laissait une bande opaque) ; la carte se centre sur tout l'écran.
+  const caler = () => { fond.style.setProperty("--haut-visible", `${fond.clientHeight}px`); tenir(); };
   caler();
   if (vv) { vv.addEventListener("resize", caler); vv.addEventListener("scroll", caler); }
   // Les ingrédients ouverts : la place se refait (la photo peut rapetisser encore).
