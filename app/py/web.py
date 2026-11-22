@@ -143,6 +143,7 @@ def preparer() -> None:
     etiquettes._lire_plusieurs = _lire_pages
     s._claude_json = _claude_json
     s._claude_avec_photo = _claude_avec_photo
+    s._image_generee = _image_generee
     s._octets_photo_du_site = _photo_du_catalogue
     s.sauvegarder = lambda *a, **k: None          # les sauvegardes, c'est Supabase
     # Un seul journal, centralisé (Taha, 19/11/2026) : plus de journal.json dans le profil.
@@ -233,6 +234,19 @@ def _claude_json(demande: str, timeout: int = 60) -> dict | None:
     try:
         return _claude([{"type": "text", "text": demande}])
     except _ErreurClaude:
+        return None
+
+
+def _image_generee(recette: dict) -> bytes | None:
+    """La photo d'un nouveau plat par Gemini « Nano Banana » : la fonction Supabase fait la consigne (le style des photos
+    du catalogue) avec le nom et les ingrédients. None sans clé ou en cas d'erreur : on cherche une photo libre."""
+    d = _pont("image", {"nom": recette.get("nom", ""), "cat": recette.get("cat", ""),
+                        "ingredients": [i["n"] for i in recette.get("ing", []) if i.get("u") != "qs"][:12]})
+    if not isinstance(d, dict) or d.get("erreur") or not d.get("base64"):
+        return None
+    try:
+        return base64.b64decode(d["base64"])
+    except ValueError:
         return None
 
 

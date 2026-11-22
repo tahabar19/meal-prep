@@ -19,7 +19,7 @@ const MODELE = "claude-sonnet-5-5"; // Sonnet (Taha, 20/11/2026 : « utilise Son
 
 // Limites (Taha, 19/11/2026 : « que les requêtes Claude ne dépassent pas leurs limites ») : Claude ne fait que la
 // tâche nutrition demandée par l'appli, répond en JSON, dans des tailles bornées, avec un quota par personne.
-const QUOTAS: Record<string, [number, number]> = { messages: [40, 200], web: [400, 2000], cle: [10, 30] };   // par heure, par jour
+const QUOTAS: Record<string, [number, number]> = { messages: [40, 200], web: [400, 2000], cle: [10, 30], image: [8, 25] };   // par heure, par jour
 const TACHES: Record<string, string> = {
   repas: "analyser ce qu'une personne a mangé (texte, photo d'assiette, d'étiquette ou de ticket de caisse) et en donner les aliments, leurs poids et leurs valeurs nutritionnelles, puis corriger ce repas à sa demande (ajouter, retirer ou changer un aliment, viser des calories ou des macros) ; ou lire ce qu'elle a chez elle pour son stock de cuisine (photo de frigo ou de placard, ticket de caisse de supermarché, liste écrite) et en donner les aliments et leurs quantités",
   aide: "une petite aide de cuisine ou de nutrition demandée par l'appli : les valeurs d'un aliment, les ingrédients d'un plat, des mots de recherche ou le choix d'une photo de plat",
@@ -160,6 +160,46 @@ async function lire(url: string, binaire: boolean) {
   return { status: r.status, type: r.headers.get("content-type") || "", base64: btoa(s) };
 }
 
+// ---------- La photo d'un nouveau plat, créée par Gemini « Nano Banana » (Taha, 22/11/2026) ----------
+// Toujours le même modèle de consigne, celui des photos du catalogue : les photos restent unifiées. La consigne est
+// faite ICI à partir du nom et des ingrédients (bornés) : la page ne peut pas faire dessiner autre chose avec la clé.
+const STYLE_PHOTO = `Tu crées des photos de plats pour une appli de repas. TOUTES les images ont exactement le même style :
+- vraie photo culinaire professionnelle, réaliste et appétissante, format carré 1:1 ;
+- appareil à 45° au-dessus du plat, une seule portion, bien centrée ;
+- vaisselle en céramique gris anthracite mat, posée sur une surface en ardoise sombre ;
+- lumière naturelle douce venant de la gauche, ombres légères, arrière-plan flou ;
+- on voit UNIQUEMENT les ingrédients donnés, en portions réalistes, bien reconnaissables ;
+- accessoire au plus : une serviette en lin beige pliée dans un coin ;
+- jamais de texte, de logo, d'emballage, de mains ni de personnes.`;
+const propre = (t: unknown, n: number) => String(t ?? "").normalize("NFC").replace(/[^\p{L}\p{N} ,.'’&()%+\-–]/gu, " ").replace(/\s+/g, " ").trim().slice(0, n);
+function vaisselle(nom: string, cat: string): string {
+  const n = nom.toLowerCase();
+  if (/shake|smoothie|caf[ée]|jus|boisson|milk|lait (chaud|froid)|latte|chocolat chaud/.test(n)) return "Dans un grand verre transparent, posé sur l'ardoise.";
+  if (/soupe|velout|bol|bowl|porridge|pudding|yaourt|skyr|fromage blanc|curry|chili|ramen|dhal|c[ée]r[ée]ales|salade de fruits/.test(n)) return "Dans un bol en céramique gris anthracite mat.";
+  if (cat === "collation") return "Dans une petite assiette en céramique gris anthracite mat.";
+  return "Dans une assiette en céramique gris anthracite mat, une seule portion.";
+}
+async function imagePlat(corps: any): Promise<{ base64: string; type: string }> {
+  const cle = Deno.env.get("GEMINI_API_KEY");
+  if (!cle) throw new Error("Pas de clé Gemini.");
+  const nom = propre(corps.nom, 80), cat = propre(corps.cat, 20);
+  const ing = (Array.isArray(corps.ingredients) ? corps.ingredients : []).slice(0, 12).map((x: unknown) => propre(x, 40)).filter(Boolean);
+  if (nom.length < 2) throw new Error("Nom de plat vide.");
+  const consigneImage = `${STYLE_PHOTO}\n\nCrée une image : une photo de ce plat, sans aucun texte.\n${nom}.${ing.length ? ` Ingrédients visibles : ${ing.join(", ")}.` : ""} ${vaisselle(nom, cat)}`;
+  const modele = Deno.env.get("MODELE_IMAGE") || "gemini-2.5-flash-image";
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modele)}:generateContent`, {
+    method: "POST", signal: AbortSignal.timeout(90000),
+    headers: { "Content-Type": "application/json", "x-goog-api-key": cle },
+    body: JSON.stringify({ contents: [{ parts: [{ text: consigneImage }] }],
+                           generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "1:1" } } }),
+  });
+  const d: any = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error("Gemini : " + (d?.error?.message || r.status));
+  const morceau = (d?.candidates?.[0]?.content?.parts || []).find((x: any) => x.inlineData?.data);
+  if (!morceau) throw new Error("Gemini n'a pas rendu d'image.");
+  return { base64: morceau.inlineData.data, type: morceau.inlineData.mimeType || "image/png" };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
@@ -170,7 +210,12 @@ Deno.serve(async (req) => {
     if (!user) return json({ erreur: "Reconnecte-toi." }, 401);
     const corps = await req.json();
 
-    if (["web", "web_lot", "cle", "messages"].includes(corps.action) && !(await quota(admin, user.id, corps.action === "web_lot" ? "web" : corps.action)))
+    if (corps.action === "image") {                     // l'IA d'images de Taha, pour la famille ; pas pour les comptes d'essai
+      const { data: moi } = await admin.from("profils").select("identifiant").eq("id", user.id).maybeSingle();
+      if (!moi || moi.identifiant.startsWith("zz-")) return json({ erreur: "Pas d'images pour ce compte.", sans_cle: true }, 400);
+      if (!Deno.env.get("GEMINI_API_KEY")) return json({ erreur: "Pas de clé Gemini.", sans_cle: true }, 400);
+    }
+    if (["web", "web_lot", "cle", "messages", "image"].includes(corps.action) && !(await quota(admin, user.id, corps.action === "web_lot" ? "web" : corps.action)))
       return json({ erreur: "Trop de demandes pour l'instant : réessaie dans un moment." }, 429);
 
     if (corps.action === "web") {
@@ -183,6 +228,11 @@ Deno.serve(async (req) => {
       const urls = (Array.isArray(corps.urls) ? corps.urls : []).slice(0, 8).map(String);
       const pages = await Promise.all(urls.map((u: string) => lire(u, false).catch((e) => ({ erreur: (e as Error).message }))));
       return json({ pages });
+    }
+
+    if (corps.action === "image") {
+      try { return json(await imagePlat(corps)); }
+      catch (e) { return json({ erreur: (e as Error).message }, 502); }
     }
 
     // ---------- Connecter son compte : on vérifie la clé avant de l'enregistrer ----------

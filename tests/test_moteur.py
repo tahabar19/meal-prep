@@ -449,5 +449,32 @@ class Q_PlatProche(unittest.TestCase):
                 self.assertAlmostEqual(c["au_menu"]["quantites"][i["n"]], i["q"] * 1.5, delta=max(0.6, i["q"] * 0.05))
 
 
+class R_PhotoGemini(unittest.TestCase):
+    """Un nouveau plat : sa photo vient d'abord de Gemini (Nano Banana), sinon d'une recherche libre (22/11/2026)."""
+    def test_photo_creee(self):
+        import io, json as _json
+        from PIL import Image
+        S = M.serveur
+        tampon = io.BytesIO(); Image.new("RGB", (64, 64), (90, 60, 30)).save(tampon, "PNG")
+        demandes = []
+        vrais = S._image_generee, S.claude_disponible
+        S._image_generee = lambda r: (demandes.append(r["nom"]), tampon.getvalue())[1]
+        S.claude_disponible = lambda: True
+        try:
+            plat = next(x for x in S.plats_perso() if not x.get("photo_de"))
+            photo = S._photos_perso() / f"{plat['id']}.jpg"
+            if photo.exists():
+                photo.unlink()
+            S.chercher_photo(plat)
+            while M.web.apres():
+                pass
+        finally:
+            S._image_generee, S.claude_disponible = vrais
+        self.assertIn(plat["nom"], demandes)
+        self.assertTrue(photo.exists())
+        credits = _json.loads((S._photos_perso() / "credits.json").read_text())
+        self.assertIn("Gemini", credits[plat["id"]]["source"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2 if "-v" in sys.argv else 1, argv=[sys.argv[0]])
