@@ -2261,7 +2261,8 @@ function vueProfilFlemmard() {
     ${E.utilisateur.admin ? lien("#/profils", "users", "Profils", "") : ""}
   </ul>
   ${lienAndroid()}
-  <p style="margin-top:18px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>`;
+  <p style="margin-top:18px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>
+  ${typeof VERSION === "string" ? `<p class="petit discret" style="margin-top:6px;font-size:.7rem;opacity:.6">Version ${esc(VERSION.replace(/^(\d{4})-(\d\d)-(\d\d)-(\d\d)(\d\d)\d\d$/, "du $3/$2 à $4:$5"))}</p>` : ""}`;
 }
 function vueProfils() {
   barre("");

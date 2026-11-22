@@ -1308,3 +1308,7 @@ section.suivi-courbe.suivi-petit{padding:10px 12px!important}
 .mdp-jauge i{display:block;height:100%;width:0;border-radius:inherit;background:var(--alerte);transition:width .2s,background .2s}
 .mdp-jauge i[data-niveau="3"]{background:#e0c341}
 .mdp-jauge i[data-niveau="4"],.mdp-jauge i[data-niveau="5"]{background:var(--accent)}
+/* Sécurité iPhone (Taha, 22/11/2026, 2e capture) : si le fond s'arrête au-dessus du bas de l'écran, la barre d'onglets
+   est elle-même assombrie et floutée comme le reste de la page : plus de bande opaque. */
+body:has(.carte-fond.ouvert) .nav-bas{filter:brightness(.35) blur(3px);transition:filter .28s ease}
+html:has(.carte-fond.ouvert){background:#060706}
