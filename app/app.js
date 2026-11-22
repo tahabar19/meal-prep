@@ -2262,7 +2262,7 @@ function vueProfilFlemmard() {
   </ul>
   ${lienAndroid()}
   <p style="margin-top:18px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>
-  ${typeof VERSION === "string" ? `<p class="petit discret" style="margin-top:6px;font-size:.7rem;opacity:.6">Version ${esc(VERSION.replace(/^(\d{4})-(\d\d)-(\d\d)-(\d\d)(\d\d)\d\d$/, "du $3/$2 à $4:$5"))}</p>` : ""}`;
+  ${typeof VERSION === "string" ? `<p class="petit discret" style="margin-top:6px;font-size:.7rem;opacity:.6">Version ${esc(VERSION.replace(/^(\d{4})-(\d\d)-(\d\d)-(\d\d)(\d\d)\d\d$/, "du $3/$2 à $4:$5"))} · écran ${innerHeight}/${screen.height}, trou ${getComputedStyle(document.documentElement).getPropertyValue("--trou-bas").trim() || "0px"}</p>` : ""}`;
 }
 function vueProfils() {
   barre("");
