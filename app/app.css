@@ -1312,12 +1312,3 @@ section.suivi-courbe.suivi-petit{padding:10px 12px!important}
    est elle-même assombrie et floutée comme le reste de la page : plus de bande opaque. */
 body:has(.carte-fond.ouvert) .nav-bas{filter:brightness(.35) blur(3px);transition:filter .28s ease}
 html:has(.carte-fond.ouvert){background:#060706}
-/* iPhone, appli installée : recoller en bas de l'écran ce qui y est attaché (--trou-bas mesuré dans index.html) */
-:root{--trou-bas:0px}
-@media (max-width:899px){
-  .nav-bas{bottom:calc(-1 * var(--trou-bas))}
-  .barre{bottom:calc(var(--nav-bas) + var(--bas) - var(--trou-bas))}
-  .toast{bottom:calc(var(--nav-bas) + var(--bas) + 16px - var(--trou-bas))}
-  .carte-fond{bottom:calc(-1 * var(--trou-bas))!important}
-  dialog.dialogue[open]{margin-bottom:calc(-1 * var(--trou-bas))}
-}
