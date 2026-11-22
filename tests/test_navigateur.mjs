@@ -156,6 +156,18 @@ try {
     await aller('#/semaine');
   });
 
+  // Taha, 22/11/2026 : les plats du jour en liste, comme dans « Remplacer par un autre plat ».
+  await test('Jour : les plats en liste', async () => {
+    await aller('#/semaine');
+    vrai(await attendre(`document.querySelectorAll('.liste-plats .repas-ligne').length > 1`, 10000) >= 0, 'pas de liste de plats');
+    const h = await B.js(`Math.max(...[...document.querySelectorAll('.liste-plats .repas-ligne')].map(x => x.getBoundingClientRect().height))`);
+    vrai(h <= 80, `une ligne fait ${h} px de haut`);
+    vrai(await B.js(`!!document.querySelector('.liste-plats .rp-macros')`), 'pas de chiffres comme dans Remplacer');
+    const d = await debordement();
+    vrai(d <= 1, `la page déborde de ${d} px`);
+    await B.photo('jour-liste');
+  });
+
   // Taha, 22/11/2026 : plus de barre « Quantité » sur la carte (Modifier les ingrédients suffit), et pas de défilement.
   await test('Carte d\'un plat : ingrédients, sans barre de quantité, sans défiler', async () => {
     await aller('#/semaine');
@@ -166,6 +178,8 @@ try {
     const d = await B.js(`(() => { const c = document.querySelector('.carte-plat'); return c.scrollHeight - c.clientHeight; })()`);
     console.log(`        carte : ${await B.js(`document.querySelector('.carte-plat').scrollHeight`)} px de haut`);
     vrai(d <= 1, `la carte défile de ${d} px`);
+    const ec = await B.js(`(() => { const r = document.querySelector('.carte-plat').getBoundingClientRect(); return Math.round(r.top - (innerHeight - r.bottom)); })()`);
+    vrai(Math.abs(ec) <= 2, `la carte n'est pas centrée (${ec} px d'écart haut/bas)`);
     await B.photo('carte-plat');
     await fermerCarte();
   });

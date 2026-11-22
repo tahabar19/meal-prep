@@ -364,6 +364,8 @@ function carteSansRepas(quand, k, n, moment) {
     <div class="chiffres">Mets-y un plat quand tu as décidé.</div>
     <button class="bouton second" data-action="changer" data-semaine="${k}" data-jour="${n}" data-moment="${moment}">${icone("swap")}Mettre un plat</button></div></div>`;
 }
+// Les chiffres d'un plat en une ligne, comme dans « Remplacer par un autre plat » (Taha, 22/11/2026).
+const macrosLigne = (kcal, prot) => `<span class="rp-macros chiffres"><span><strong>${nombre(Math.round(kcal))}</strong> kcal</span><span><strong>${nombre(Math.round(prot))} g</strong> prot.</span></span>`;
 function repasDuJour(s, k, n, compact = false, sansCollation = false, avecCuire = false, sansIcones = false) {
   // Les repas d'un jour (semaine k), en cartes, chacun avec son bouton « Changer » tant qu'il n'est pas cuisine.
   const j = s.jours[n], courante = !E.mois || k === E.mois.rang;
@@ -385,7 +387,8 @@ function repasDuJour(s, k, n, compact = false, sansCollation = false, avecCuire 
       return `<div class="exo repas-ligne${cuit ? " cuisine-fait" : ""}"><a class="repas" href="#/plat/${id}" data-semaine="${k}" data-jour="${n}" data-moment="${moment}">
         ${photo(r, 480)}
         <div class="exo-texte"><div class="quand">${quand}${cuit ? (enSuivi() ? " · mangé" : " · cuisiné") : estFixe(id, moment) ? " · fixe" : detail ? `, ${detail}` : ""}</div><h3>${esc(r.nom)}</h3>
-        <div class="chiffres">${nombre(compte ? compte.kcal : v.kcal * t)} kcal, ${nombre(compte ? compte.prot : v.prot * t)} g de protéines${v.ajusteeCeJour ? " · quantités ajustées ce jour" : ""}</div></div></a>
+        ${sansIcones ? macrosLigne(compte ? compte.kcal : v.kcal * t, compte ? compte.prot : v.prot * t)
+          : `<div class="chiffres">${nombre(compte ? compte.kcal : v.kcal * t)} kcal, ${nombre(compte ? compte.prot : v.prot * t)} g de protéines${v.ajusteeCeJour ? " · quantités ajustées ce jour" : ""}</div>`}</div></a>
       ${sansIcones ? "" : `${libre(id, moment) ? `<button class="changer" data-action="changer" data-semaine="${k}" data-jour="${n}" data-moment="${moment}" aria-label="Changer le ${nomMoment(moment)} de ${j.jour.toLowerCase()}" title="Changer">${icone("swap")}</button>` : ""}
       ${avecCuire ? `<a class="changer cuire${reglable(s, k, n, id, moment) ? "" : " haut"}" href="${courante ? `#/cuisine/${id}?jour=${n}` : `#/plat/${id}`}" aria-label="Cuisiner ${esc(r.nom)}" title="Cuisiner">${icone("cooking-pot")}</a>` : ""}
       ${reglable(s, k, n, id, moment) ? `<button class="changer regler" data-action="reequilibrer" data-semaine="${k}" data-jour="${n}" data-moment="${moment}" data-plat="${id}" aria-label="Rééquilibrer ${esc(r.nom)} pour viser l'objectif" title="Rééquilibrer ce plat">${icone("sliders-horizontal")}</button>` : ""}`}</div>`; }).join("")}</div>
@@ -1455,6 +1458,13 @@ function ficheRapide(id, ctx, depuis, vu = null) {
         return boutons.length ? `<p class="cp-equilibrer">${boutons.join("")}</p>` : ""; })()}
     </div></article>`;
   document.body.appendChild(fond);
+  // Centrée sur ce qui se voit vraiment : sur iPhone, l'écran visible n'est pas toujours celui de la page (Taha, 22/11/2026).
+  const vv = window.visualViewport;
+  const caler = () => { if (!vv) return;
+    Object.assign(fond.style, { top: `${vv.offsetTop}px`, height: `${vv.height}px`, bottom: "auto" });
+    fond.style.setProperty("--haut-visible", `${vv.height}px`); };
+  caler();
+  if (vv) { vv.addEventListener("resize", caler); vv.addEventListener("scroll", caler); }
   const carte = fond.querySelector(".carte-plat");
   // L'effet : la carte part de la place du plat touché (position et taille), puis grandit jusqu'au centre.
   const calme = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1470,7 +1480,8 @@ function ficheRapide(id, ctx, depuis, vu = null) {
       carte.style.transform = ""; carte.style.opacity = "";
     }));
   } else requestAnimationFrame(() => fond.classList.add("ouvert"));
-  fermerCarte.etat = { fond, carte, rentrer: depart && !calme ? versDepart : null, avant: document.activeElement };
+  fermerCarte.etat = { fond, carte, rentrer: depart && !calme ? versDepart : null, avant: document.activeElement,
+    avantFermeture: () => { if (vv) { vv.removeEventListener("resize", caler); vv.removeEventListener("scroll", caler); } } };
   fond.addEventListener("click", ev => { if (ev.target === fond) fermerCarte(); });
   carte.querySelector(".cp-fermer").addEventListener("click", () => fermerCarte());
   carte.querySelectorAll("[data-action]").forEach(x => x.addEventListener("click", () => fermerCarte(true)));   // l'action ouvre sa propre feuille
@@ -2408,8 +2419,8 @@ function vueJourSuivi(params) {
       return `<div class="eau" title="${esc(E.eau.selon)}">${icone("goutte")}<span class="eau-txt">Eau <small class="chiffres">${virgule(E.eau.litres)} L</small></span>
         <button type="button" class="eau-check" id="eauCheck" data-date="${date}" aria-pressed="${fait}" aria-label="${virgule(E.eau.litres)} L d'eau bus aujourd'hui">${icone("check")}</button></div>`; })() : ""}
     ${o.gluc || o.lip ? `<p class="petit discret chiffres" style="margin:-4px 0 12px">Glucides ${nombre(Math.round(j.gluc || 0))}${o.gluc ? ` / ${nombre(o.gluc)}` : ""} g · Lipides ${nombre(Math.round(j.lip || 0))}${o.lip ? ` / ${nombre(o.lip)}` : ""} g</p>` : ""}
-    ${ici && (!m || ici.k >= m.rang) ? `<section class="m-repas grille-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true)}</section>`
-      : dec < 0 && (j.repas || []).length ? `<section class="grille-plats histo-plats" aria-label="Les plats de ce jour"><div class="exos">${j.repas.map(x => platDHistorique(x, date)).join("")}</div></section>`
+    ${ici && (!m || ici.k >= m.rang) ? `<section class="m-repas grille-plats liste-plats" aria-label="Les plats prévus">${repasDuJour(ici.s, ici.k, ici.n, true, true, false, true)}</section>`
+      : dec < 0 && (j.repas || []).length ? `<section class="grille-plats histo-plats liste-plats" aria-label="Les plats de ce jour"><div class="exos">${j.repas.map(x => platDHistorique(x, date)).join("")}</div></section>`
       : dec < 0 ? `<div class="dujour"><strong>Pas de menu ce jour-là.</strong> Ajoute ce que tu as mangé.</div>`
       : `<div class="dujour"><strong>Pas de menu prévu ce jour-là.</strong> Note ce que tu manges, ou compose la suite.
         <p style="margin-top:8px"><button class="bouton second" data-action="suivante">Composer la suite</button></p></div>`}
@@ -2430,7 +2441,7 @@ function platDHistorique(x, date) {
   const r = recette(x.id), place = x.moment.startsWith("col") ? (x.au_repas || "col") : x.moment;
   const quand = (MOMENTS_REPAS.find(([m]) => m === place) || [, "Collation"])[1];
   const texte = `<div class="exo-texte"><div class="quand">${quand}</div><h3>${esc(x.nom)}</h3>
-    <div class="chiffres">${nombre(x.kcal)} kcal, ${nombre(x.prot)} g de protéines</div></div>`;
+    ${macrosLigne(x.kcal, x.prot)}</div>`;
   if (!r) return `<div class="exo repas-ligne"><div class="repas">${photo({}, 480)}${texte}</div></div>`;     // plat supprimé depuis
   return `<div class="exo repas-ligne"><a class="repas" href="#/plat/${x.id}" data-date="${date}" data-moment-vu="${esc(x.moment)}" data-kcal="${x.kcal}" data-prot="${x.prot}" data-gluc="${x.gluc || 0}"
     data-lip="${x.lip || 0}" data-quand="${esc(`${quand} · ${dateLongueCourte(date)}`)}">${photo(r, 480)}${texte}</a>
@@ -2462,7 +2473,7 @@ function vueHistorique() {
         ${E.eau ? `<small class="histo-eau${eauCochee(j.date) ? " coche" : ""}">${icone("goutte")}${virgule((E.eau.bu || {})[j.date] || 0)} L${eauCochee(j.date) ? ` ${icone("check")}` : " · pas coché"}</small>` : ""}</span>
         <span class="chiffres histo-chiffres"><span>${nombre(Math.round(j.kcal))} kcal <i class="mini-piste"><i style="width:${pct(j.kcal, o.kcal)}%"></i></i></span>
           <span>${nombre(Math.round(j.prot))} g <i class="mini-piste"><i style="width:${pct(j.prot, o.prot)}%"></i></i></span></span>${icone("caret-right")}</summary>
-      ${(j.repas || []).length ? `<section class="grille-plats histo-plats" aria-label="Les plats de ce jour"><div class="exos">${j.repas.map(x => platDHistorique(x, j.date)).join("")}</div></section>` : ""}
+      ${(j.repas || []).length ? `<section class="grille-plats histo-plats liste-plats" aria-label="Les plats de ce jour"><div class="exos">${j.repas.map(x => platDHistorique(x, j.date)).join("")}</div></section>` : ""}
       ${j.entrees.length ? `<div class="liste-notes" style="margin-top:8px">${j.entrees.map(ligneRepasNote).join("")}</div>` : ""}
       <p class="actions" style="margin-top:8px"><button class="bouton sobre" data-action="noterRepas" data-date="${j.date}">${icone("cooking-pot")}Ajouter un repas ce jour-là</button></p>
     </details>`).join("")}</div>` : `<p class="discret">Rien pour l'instant : les jours apparaissent ici dès que tu notes tes repas.</p>`}`;
