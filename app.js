@@ -1473,7 +1473,9 @@ function ficheRapide(id, ctx, depuis, vu = null) {
           <span><b>Remplacer par un autre plat</b><small>Du catalogue ou un des tiens</small></span>${icone("caret-right")}</button>` : ""}
         ${(libre || enSuivi()) && !(ctx.moment === "dej" && j.dej_reste) ? `<button type="button" data-action="ajusterJour" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}">${icone("notebook")}
           <span><b>Modifier les ingrédients</b><small>Retirer, ajouter, changer, pour ce jour</small></span>${icone("caret-right")}</button>` : ""}
-      </div>` : ctx ? "" : `<div class="cp-avis">${boutonsGout(r0)}</div>`}
+      </div>` : ctx ? "" : `${estRepas(r0) && !vu ? `<div class="cp-choix"><button type="button" data-action="ajuster" data-plat="${id}">${icone("sliders-horizontal")}
+          <span><b>${r0.ajustee ? "Recette ajustée : modifier" : "Ajuster la recette"}</b><small>Les quantités, pour tous les jours</small></span>${icone("caret-right")}</button></div>` : ""}
+        <div class="cp-avis">${boutonsGout(r0)}</div>`}
       ${(() => {
         // Deux petits boutons discrets en bas de la carte (Taha, 20/11/2026) : équilibrer la journée, fixer le plat.
         // Tout plat se fixe, à son repas (Taha, 20/11/2026).
@@ -1885,26 +1887,23 @@ function vueRecette({ arg, params }) {
   barre(seance && !ok ? `<div><b>${s.jours[n].jour}, ${combien}</b><span>Les ingrédients sortiront du stock</span></div>
     <button class="bouton" data-action="cuisine" data-plat="${r.id}" data-jour="${n}">C'est cuisiné</button>` : "");
   return `<a class="retour" href="#/cuisine${n >= 0 ? `?jour=${n}` : ""}">${icone("caret-left")}Cuisine</a>
-  <article class="fiche">
-    ${photo(r, 960, "grande", r.nom)}
-    <div><h1 tabindex="-1">${esc(r.nom)}</h1>
-      <p class="discret chiffres" style="margin-top:6px">${enSuivi() ? `${nombre(r.kcal * facteur)} kcal et ${nombre(r.prot * facteur)} g de protéines.`
-        : `${seance ? `${s.jours[n].jour}, ` : ""}${combien}${seance && seance.pour_demain ? " : ce soir et demain midi" : ""}. ${nombre(r.kcal * facteur)} kcal et ${nombre(r.prot * facteur)} g de protéines par repas.`}</p>
-      ${seance && facteur !== 1 ? `<p class="discret petit" style="margin-top:4px">Les quantités ci-dessous sont déjà ajustées à ton objectif du jour (${nombre(facteur * 100)} % de la recette de base) : tu cuisines tout et tu manges tout.</p>` : ""}</div>
+  <article class="fiche fiche-compacte">
+    <div class="fc-tete">${photo(r, 240, "carre", r.nom)}
+      <div><h1 tabindex="-1">${esc(r.nom)}</h1>
+        <p class="discret chiffres">${[`${nombre(r.kcal * facteur)} kcal`, `${nombre(r.prot * facteur)} g prot.`, r.temps ? `${r.temps} min` : "",
+          seance && facteur !== 1 ? `${nombre(facteur * 100)} % de la recette` : ""].filter(Boolean).join(" · ")}</p>
+        ${enSuivi() ? "" : `<p class="discret petit">${seance ? `${s.jours[n].jour}, ` : ""}${combien}${seance && seance.pour_demain ? " : ce soir et demain midi" : ""}.</p>`}</div></div>
     ${goute && estRepas(r) ? `<section aria-labelledby="tNote"><h2 id="tNote">Ta note</h2>
       <p class="discret petit" style="margin:4px 0 6px">Elle décide si ce plat revient dans les prochaines semaines.</p>
       <div class="etoiles" role="group" aria-label="Note de 1 à 5">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-action="noter" data-plat="${r.id}" data-note="${i}"
         class="${r.note && i <= Math.round(r.note) ? "pleine" : ""}" aria-label="${i} étoile${i > 1 ? "s" : ""} sur 5">${icone(r.note && i <= Math.round(r.note) ? "star-fill" : "star")}</button>`).join("")}</div>
       ${r.nb_notes ? `<p class="petit discret">Moyenne ${nombre(r.note, 1)} sur 5, ${r.nb_notes} note${r.nb_notes > 1 ? "s" : ""}.</p>` : ""}</section>` : ""}
-    <section aria-labelledby="tIng"><h2 id="tIng" style="margin-bottom:12px">Ingrédients</h2>
-      ${estRepas(r) ? `<p class="actions" style="margin:-4px 0 12px">
-        ${seance && !ok ? `<button class="bouton second" data-action="ajusterJour" data-plat="${r.id}" data-semaine="${k}" data-jour="${n}">${icone("sliders-horizontal")}${r.ajusteeCeJour ? `Ajusté pour ${s.jours[n].jour.toLowerCase()} : modifier` : `Ajuster pour ${s.jours[n].jour.toLowerCase()} seulement`}</button>` : ""}
-        <button class="bouton sobre" data-action="ajuster" data-plat="${r.id}">${icone("sliders-horizontal")}${r.ajustee ? "Recette ajustée par toi : modifier" : "Ajuster la recette, tous les jours"}</button></p>` : ""}
+    <section class="fc-bloc" aria-labelledby="tIng"><h2 id="tIng">Ingrédients</h2>
       <ul class="ingredients">${r.ing.map(i => `<li><span>${i.u === "qs" ? esc(i.n) : `<button type="button" class="lien" data-action="ingredient" data-nom="${esc(i.n)}"
         aria-label="Valeurs de ${esc(i.n)}">${esc(i.n)}</button>${(E.ingredients_perso || {})[i.n] ? ` <small class="discret">(${E.ingredients_perso[i.n].cree ? "créé" : "corrigé"} par toi)</small>` : ""}`}</span>
         <span>${quantite(i.u === "qs" ? 0 : Math.round(i.q * portions * 10) / 10, i.u)}</span></li>`).join("")}</ul>
-      <p class="petit discret" style="margin-top:8px">Touche un ingrédient pour voir ou corriger ses valeurs pour 100 g (celles de l'étiquette, par exemple).</p></section>
-    <section aria-labelledby="tEtapes"><h2 id="tEtapes" style="margin-bottom:12px">Préparation${r.temps ? `, ${r.temps} min` : ""}</h2>
+</section>
+    <section class="fc-bloc" aria-labelledby="tEtapes"><h2 id="tEtapes">Préparation</h2>
       <ol class="etapes">${r.etapes.map(e => `<li>${esc(e)}</li>`).join("")}</ol>
       ${r.four ? `<p class="petit discret" style="margin-top:10px">Four : ${esc(r.four)}.</p>` : ""}</section>
   </article>`;
