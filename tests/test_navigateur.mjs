@@ -156,16 +156,18 @@ try {
     await aller('#/semaine');
   });
 
-  // Taha, 22/11/2026 : les plats du jour en liste, comme dans « Remplacer par un autre plat ».
-  await test('Jour : les plats en liste', async () => {
+  // Taha, 22/11/2026 : les plats du jour restent en grille (pas en liste).
+  await test('Jour : les plats restent en grille', async () => {
     await aller('#/semaine');
-    vrai(await attendre(`document.querySelectorAll('.liste-plats .repas-ligne').length > 1`, 10000) >= 0, 'pas de liste de plats');
-    const h = await B.js(`Math.max(...[...document.querySelectorAll('.liste-plats .repas-ligne')].map(x => x.getBoundingClientRect().height))`);
-    vrai(h <= 80, `une ligne fait ${h} px de haut`);
-    vrai(await B.js(`!!document.querySelector('.liste-plats .rp-macros')`), 'pas de chiffres comme dans Remplacer');
-    const d = await debordement();
-    vrai(d <= 1, `la page déborde de ${d} px`);
-    await B.photo('jour-liste');
+    vrai(await attendre(`document.querySelectorAll('.grille-plats .repas-ligne').length > 1`, 10000) >= 0, 'pas de plats');
+    vrai(await B.js(`!document.querySelector('.liste-plats, .grille-plats .rp-macros')`), 'les plats du jour sont en liste');
+    const idees = await B.js(`document.querySelectorAll('.idees .candidat').length`);
+    vrai(idees === 0, '« Pour finir la journée » encore en anciennes cartes');
+    if (await B.js(`!!document.querySelector('.idees details')`)) {
+      await B.js(`(() => { const d = document.querySelector('.idees details'); d.open = true; d.scrollIntoView(); })()`);
+      vrai(await B.js(`document.querySelectorAll('.idees .rp-plat').length > 0`), 'pas de liste dans « Pour finir la journée »');
+      await att(300); await B.photo('idees-liste');
+    }
   });
 
   // Taha, 22/11/2026 : plus de barre « Quantité » sur la carte (Modifier les ingrédients suffit), et pas de défilement.
@@ -366,16 +368,19 @@ try {
     vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'mois ne s\'affiche pas');
   });
 
-  await test('Catalogue : grille, recherche, fiche', async () => {
+  // Taha, 22/11/2026 : le catalogue en liste, comme « Remplacer par un autre plat ».
+  await test('Catalogue : liste, recherche, fiche', async () => {
     await aller('#/catalogue');
-    const n = await B.js(`document.querySelectorAll('.catalogue a.repas').length`);
+    const n = await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`);
     vrai(n > 10, `${n} plats seulement`);
-    const colonnes = await B.js(`getComputedStyle(document.querySelector('.catalogue')).gridTemplateColumns.split(' ').length`);
-    vrai(colonnes === 3, `${colonnes} colonnes au lieu de 3`);
+    const h = await B.js(`Math.max(...[...document.querySelectorAll('.cat-liste a.rp-plat')].map(x => x.getBoundingClientRect().height))`);
+    vrai(h <= 80, `une ligne fait ${h} px`);
+    const d = await debordement();
+    vrai(d <= 1, `la page déborde de ${d} px`);
     await B.js(`(() => { const f = document.getElementById('filtre'); f.value = 'poulet'; f.dispatchEvent(new Event('input', { bubbles: true })); })()`); await att(700);
-    const m = await B.js(`document.querySelectorAll('.catalogue a.repas').length`);
+    const m = await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`);
     vrai(m > 0 && m < n, `recherche « poulet » : ${m} plats`);
-    await B.js(`document.querySelector('.catalogue a.repas').click()`);
+    await B.js(`document.querySelector('.cat-liste a.rp-plat').click()`);
     vrai(await attendre(`document.querySelector('.carte-plat h2, #cpTitre')`, 10000) >= 0, 'la fiche ne s\'ouvre pas');
     await fermerCarte();
     await B.js(`(() => { const f = document.getElementById('filtre'); f.value = ''; f.dispatchEvent(new Event('input', { bubbles: true })); })()`);
