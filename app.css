@@ -1255,3 +1255,13 @@ details.idees-ligne .rp-liste{margin:2px 0 8px}
 .aj-ajout{display:flex;gap:8px;align-items:stretch}
 .aj-ajout .rp-recherche{flex:1;min-width:0}
 .aj-ajout .bouton{flex:none;min-height:44px;padding:0 14px}
+/* « Ajouter » : l'icône violette quand l'IA va servir ; ce qui a été mis, en une ligne (Taha, 22/11/2026) */
+#ajAjouter{display:inline-flex;align-items:center;gap:6px}
+#ajAjouter .aj-ia-ic .ic{width:15px;height:15px;color:#c4b5fd}
+#ajAjouter.bouton-ia{color:#c4b5fd}
+.aj-note{margin:10px 0 0;padding:8px 10px;border-radius:10px;background:rgba(167,139,250,.10);font-size:.8rem;color:var(--texte)}
+.aj-note b{color:var(--encre)}
+.aj-veux-dire{padding:6px 2px 2px;font-size:.78rem;color:var(--discret);list-style:none}
+/* « Retirer ce plat » : discret, rouge seulement au toucher (Taha, 22/11/2026) */
+.cp-retirer{color:var(--discret)!important}
+.cp-retirer:active{color:var(--critique)!important}
