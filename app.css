@@ -1400,3 +1400,8 @@ html:has(.carte-fond.ouvert){background:#060706}
 .reglages{grid-template-columns:minmax(0,1fr)}
 .reglages > *{min-width:0}
 .reglages .periode input,.reglages .periode label{min-width:0}
+/* « Mon objectif » dans « Mes objectifs » : ajustement et début du suivi côte à côte, au-dessus des périodes */
+.objectif-reglages{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.objectif-reglages .champ{margin:0;display:grid;gap:5px;min-width:0}
+.objectif-reglages .champ small{display:none}
+.objectif-reglages .champ:has(#rPhase){grid-column:1 / -1}
