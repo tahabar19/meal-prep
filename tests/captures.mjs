@@ -65,13 +65,12 @@ try {
   // Les onglets et les pages de « Plus »
   await aller('#/semaine'); await photo('jour-aujourdhui');
   await aller('#/semaine?d=1'); await photo('jour-demain');
-  // La carte d'un plat (toucher un plat) puis sa fiche complète
+  // La carte d'un plat (toucher un plat)
   const plat = await js(`(document.querySelector('a.repas[href^="#/plat/"]') || {}).getAttribute?.('href')`);
   if (plat) {
     await aller('#/semaine');
     await js(`document.querySelector('a.repas[href^="#/plat/"]').click()`); await att(1000);
     await photo('carte-d-un-plat', { entiere: false }); await fermer();
-    await aller(plat); await photo('fiche-complete-d-un-plat');
   }
   // La feuille « Ajouter un repas »
   await aller('#/semaine');
@@ -80,15 +79,17 @@ try {
   await aller('#/catalogue'); await photo('catalogue');
   for (const [q, nom] of [['jour', 'aujourdhui'], ['semaine', 'semaine'], ['mois', 'mois']]) { await aller(`#/avancement?p=${q}`); await photo(`avancement-${nom}`); }
   for (const c of ['poids', 'biceps', 'tour']) { await aller(`#/suivi?c=${c}`); await photo(`suivi-${c}`); }
-  await aller('#/plus'); await photo('plus');
-  // (en mode flemmard, « cuisine » sans recette revient au Jour et « nouveau » montre la même page que « profils » : sautées si identiques)
+    // (en mode flemmard, « cuisine » sans recette revient au Jour : sautée)
   let derniere = '';
-  for (const v of ['historique', 'courses', 'cuisine', 'budget', 'vitamines', 'stock', 'journal', 'profil', 'profils', 'nouveau', 'reglages']) {
+  for (const v of ['historique', 'courses', 'cuisine', 'vitamines', 'stock', 'profil', 'reglages']) {
     await aller(`#/${v}`);
     const empreinte = await js(`location.hash.split('?')[0] + '|' + document.querySelector('main').innerText.slice(0, 400)`);
     if (empreinte.startsWith('#/semaine') || empreinte.split('|')[1] === derniere) { console.log(`  (${v} : même écran qu'une autre page, sautée)`); continue; }
     derniere = empreinte.split('|')[1]; await photo(v);
   }
+  // Budget : l'icône n'est montrée qu'à Taha ; on regarde la page comme lui (rien n'est enregistré)
+  await js(`(M.identVrai = M.ident, M.ident = 'taha', true)`); await aller('#/budget'); await photo('budget');
+  await js(`(M.ident = M.identVrai, true)`); await aller('#/semaine');
   // Une recette en mode cuisine
   const recette = plat && plat.replace('#/plat/', '#/cuisine/');
   if (recette) { await aller(recette); await photo('recette-en-cuisine'); }

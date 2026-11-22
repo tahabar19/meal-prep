@@ -185,10 +185,12 @@ try {
   });
 
   // Taha, 22/11/2026 : plus de barre « Quantité » sur la carte (Modifier les ingrédients suffit), et pas de défilement.
-  await test('Carte d\'un plat : ingrédients, sans barre de quantité, sans défiler', async () => {
+  // Taha, 22/11/2026 (soir) : plus d'ingrédients sur la carte du Jour, « Voir la recette » les donne.
+  await test('Carte d\'un plat : sans ingrédients ni barre de quantité, sans défiler', async () => {
     await aller('#/semaine');
     await B.js(`document.querySelector('.grille-plats a.repas').click()`);
-    vrai(await attendre(`document.querySelectorAll('.carte-plat .cp-ingredients li').length > 0`, 10000) >= 0, 'pas d\'ingrédients sur la carte');
+    vrai(await attendre(`!!document.querySelector('.carte-plat .cp-mange a[href^="#/cuisine/"]')`, 10000) >= 0, 'pas de « Voir la recette » sur la carte');
+    vrai(await B.js(`!document.querySelector('.carte-plat .cp-ingredients')`), 'les ingrédients sont encore sur la carte');
     vrai(await B.js(`!document.querySelector('.carte-plat .cp-quantite')`), 'la barre Quantité est encore là');
     await att(500);
     const d = await B.js(`(() => { const c = document.querySelector('.carte-plat'); return c.scrollHeight - c.clientHeight; })()`);

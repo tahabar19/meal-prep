@@ -102,6 +102,13 @@ def page():
          '<h1 tabindex="-1" style="margin-bottom:8px">L\'appli ne répond pas</h1>\n    <p>Vérifie ta connexion à internet, puis réessaie.</p>'),
         ('const boutonPdf = (quoi, texte = "Exporter en PDF") => `<a class="bouton sobre" href="/export/${quoi}.pdf" download>${icone("notebook")}${texte}</a>`;',
          'const boutonPdf = () => "";'),
+        # Pages retirées de l'appli en ligne (Taha, 22/11/2026 : « je ne vois pas comment y accéder ») : fiche complète
+        # d'un plat, page Plus, journal de l'appli, profils. Elles restent sur le site du PC. Une adresse vers elles
+        # ramène au Jour ; toucher un plat ouvre toujours sa carte, même sur grand écran.
+        ('  const r = route();\n  const changement = location.hash !== derniereAdresse;',
+         '  let r = route();\n  if (["plat", "plus", "journal", "profils", "nouveau"].includes(r.vue)) { history.replaceState(null, "", "#/semaine"); r = route(); }\n'
+         '  const changement = location.hash !== derniereAdresse;'),
+        ('if (plat && PETIT.matches && !ev.target.closest("#dialogue, .carte-fond"))', 'if (plat && !ev.target.closest("#dialogue, .carte-fond"))'),
     ])
     (APP / "app.js").write_text(js, encoding="utf-8")
     css = (SITE / "app.css").read_text(encoding="utf-8")

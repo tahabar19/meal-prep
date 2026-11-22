@@ -189,6 +189,7 @@ function comptesNav() {
   const aAcheter = E.courses && s.etat !== "commandee" && s.etat !== "terminee" ? E.courses.a_acheter.length : 0;
   return { courses: enSuivi() ? 0 : aAcheter, cuisine: s.etat !== "terminee" && (s.etat === "commandee" || Object.keys(s.prepares || {}).length) ? aFaire : 0 };
 }
+const BUDGET_POUR = ["taha"];
 function rendreNavigation(actif) {
   const comptes = comptesNav();
   const lien = (o, bas) => {
@@ -207,6 +208,17 @@ function rendreNavigation(actif) {
     document.querySelector(".entete-in").appendChild(profil);
   }
   profil.hidden = !(E && enSuivi());
+  // Budget : une icône en haut, à côté du profil, pour Taha seulement pour l'instant (Taha, 22/11/2026).
+  let budget = $("enteteBudget");
+  if (!budget) {
+    budget = document.createElement("a");
+    budget.id = "enteteBudget"; budget.className = "entete-profil entete-icone"; budget.href = "#/budget";
+    budget.setAttribute("aria-label", "Budget"); budget.title = "Budget";
+    document.querySelector(".entete-in").insertBefore(budget, profil);
+  }
+  budget.hidden = !(E && enSuivi() && BUDGET_POUR.includes(String((typeof M !== "undefined" && M.ident) || E.utilisateur.id || "").toLowerCase()));
+  budget.innerHTML = icone("wallet");
+  if (actif === "budget") budget.setAttribute("aria-current", "page"); else budget.removeAttribute("aria-current");
   profil.innerHTML = `${icone("user-circle")}<span>Profil</span>`;
   profil.setAttribute("aria-label", E ? `Profil de ${E.profil.nom}` : "Profil");
   if (actif === "profil") profil.setAttribute("aria-current", "page"); else profil.removeAttribute("aria-current");
@@ -1519,7 +1531,7 @@ function ficheRapide(id, ctx, depuis, vu = null) {
       </div>
       <p class="petit discret cp-info">${[vu ? "Ce que tu as mangé ce jour-là" : ctx ? (t !== 1 ? `Assiette à ${nombre(Math.round(t * 100))} % de la recette` : "Recette telle quelle") : "Une portion",
         r0.temps ? `${r0.temps} min` : "", r.ajusteeCeJour ? "ajustée ce jour" : ""].filter(Boolean).join(" · ")}</p>
-      ${(rIng.ing || []).length ? `<details class="cp-ingredients"${vu ? " open" : ""}><summary>Ingrédients${icone("caret-right")}</summary>
+      ${(rIng.ing || []).length && !(ctx && enSuivi()) ? `<details class="cp-ingredients"${vu ? " open" : ""}><summary>Ingrédients${icone("caret-right")}</summary>
         <div class="cp-ing-liste">${listeIngredients(rIng, tIng)}</div></details>` : ""}
       ${ctx && enSuivi() ? `<div class="cp-mange">${courante && ctx.n <= rangDuJour(s)
           ? `<button class="bouton${mange ? " second" : ""}" data-action="manger" data-jour="${ctx.n}" data-plat="${id}" data-annuler="${mange ? 1 : 0}">${icone("check")}${mange ? "Pas encore mangé" : "J'ai mangé"}</button>` : ""}
@@ -1970,7 +1982,7 @@ function vueRecette({ arg, params }) {
     const t = document.querySelector("[data-ing-total]"); t.hidden = !t.hidden;
     b.textContent = t.hidden ? `Voir les quantités à cuisiner pour les ${seance.repas}` : "Cacher"; }); });
   barre(seance && !ok ? `<div><b>${s.jours[n].jour}, ${combien}</b><span>Les ingrédients sortiront du stock</span></div>
-    <button class="bouton" data-action="cuisine" data-plat="${r.id}" data-jour="${n}">C'est cuisiné</button>` : "");
+    <button class="bouton" data-action="cuisine" data-plat="${r.id}" data-jour="${n}">${enSuivi() ? "J'ai mangé" : "C'est cuisiné"}</button>` : "");
   // Mode flemmard : pas de page Cuisine ; « Retour » ramène là d'où tu viens (Jour, Catalogue…) (Taha, 22/11/2026).
   if (enSuivi()) apresRendu.push(() => { const a = document.querySelector("a.retour[data-precedent]");
     if (a && adressePrecedente) a.addEventListener("click", ev => { ev.preventDefault(); RETOUR_ARRIERE = true; history.back(); }); });
@@ -3475,7 +3487,8 @@ let PAGE_DEPUIS_CARTE = null, RETOUR_ARRIERE = false;
 
 function rendre() {
   if (!E) return;
-  const r = route();
+  let r = route();
+  if (["plat", "plus", "journal", "profils", "nouveau"].includes(r.vue)) { history.replaceState(null, "", "#/semaine"); r = route(); }
   const changement = location.hash !== derniereAdresse;
   if (changement && derniereAdresse) POSITIONS.set(derniereAdresse, verrou.actif ? verrou.y : window.scrollY);   // carte ouverte : la page est figée
   const pc = changement ? PAGE_DEPUIS_CARTE : null, revientCarte = !!(pc && location.hash === pc.depuis);
@@ -3581,7 +3594,7 @@ const ACTIONS = {
   async cuisine(b) {
     const r = recette(b.dataset.plat), jour = Number(b.dataset.jour);
     const c = E.semaine.jours[jour].cuisine.find(x => x.id === r.id);
-    if (await confirmer({ titre: "C'est cuisiné ?", oui: "Oui, c'est cuisiné", non: "Pas encore",
+    if (await confirmer({ titre: enSuivi() ? "Tu l'as mangé ?" : "C'est cuisiné ?", oui: enSuivi() ? "Oui, mangé" : "Oui, c'est cuisiné", non: "Pas encore",
       texte: `Les ingrédients de « ${r.nom} » (${pourCombien(c, E.semaine.jours[Number(b.dataset.jour)]) || "ta part"}) sortent de ton stock.` }))
       agir("/api/prepare", { jour, plat: r.id }, enSuivi() ? `« ${r.nom} » : mangé.` : estRepas(r) ? "Stock mis à jour. Tu peux noter le plat." : "Stock mis à jour.");
   },
@@ -3732,7 +3745,7 @@ document.addEventListener("click", ev => {
   if (pas) { const l = { quantite: Number(pas.dataset.q), unite: pas.dataset.unite };
     return agir("/api/stock", { nom: pas.dataset.nom, unite: pas.dataset.unite, quantite: Math.max(0, Math.round((l.quantite + Number(pas.dataset.stockPas) * pasStock(l)) * 10) / 10) }, ""); }
   const plat = ev.target.closest('a.repas[href^="#/plat/"], a.rp-plat[href^="#/plat/"]');
-  if (plat && PETIT.matches && !ev.target.closest("#dialogue, .carte-fond")) {
+  if (plat && !ev.target.closest("#dialogue, .carte-fond")) {
     ev.preventDefault();
     const d = plat.dataset;
     const vu = d.kcal != null ? { kcal: +d.kcal, prot: +d.prot, gluc: +d.gluc, lip: +d.lip, quand: d.quand, date: d.date, moment: d.momentVu } : null;    // historique
