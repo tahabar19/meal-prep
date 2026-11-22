@@ -1590,6 +1590,8 @@ function ficheRapide(id, ctx, depuis, vu = null) {
     avantFermeture: () => { if (vv) { vv.removeEventListener("resize", caler); vv.removeEventListener("scroll", caler); } } };
   fond.addEventListener("click", ev => { if (ev.target === fond) fermerCarte(); });
   carte.querySelector(".cp-fermer").addEventListener("click", () => fermerCarte());
+  carte.querySelectorAll('a[href^="#/"]').forEach(x => x.addEventListener("click", () => {
+    PAGE_DEPUIS_CARTE = { id, ctx, vu, depuis: location.hash || "#/semaine", page: x.getAttribute("href") }; }));
   // L'action ouvre sa propre feuille ; « Annuler » (ou la croix, ou Échap) y ramène sur cette carte, un pas en arrière
   // seulement (Taha, 22/11/2026 : « les boutons Annuler reviennent trop »).
   carte.querySelectorAll("[data-action]").forEach(x => x.addEventListener("click", () => {
@@ -1959,7 +1961,7 @@ function vueRecette({ arg, params }) {
     <button class="bouton" data-action="cuisine" data-plat="${r.id}" data-jour="${n}">C'est cuisiné</button>` : "");
   // Mode flemmard : pas de page Cuisine ; « Retour » ramène là d'où tu viens (Jour, Catalogue…) (Taha, 22/11/2026).
   if (enSuivi()) apresRendu.push(() => { const a = document.querySelector("a.retour[data-precedent]");
-    if (a && adressePrecedente) a.addEventListener("click", ev => { ev.preventDefault(); history.back(); }); });
+    if (a && adressePrecedente) a.addEventListener("click", ev => { ev.preventDefault(); RETOUR_ARRIERE = true; history.back(); }); });
   return `${enSuivi() ? `<a class="retour" href="#/semaine" data-precedent>${icone("caret-left")}Retour</a>`
     : `<a class="retour" href="#/cuisine${n >= 0 ? `?jour=${n}` : ""}">${icone("caret-left")}Cuisine</a>`}
   <article class="fiche fiche-compacte">
@@ -2008,7 +2010,7 @@ function vueAvancement({ params }) {
     ${aide ? `<p>${aide}</p>` : ""}</div>`;
   // Le mois attend une semaine complète (7 journées finies ce mois-ci) : avant, la semaine dit déjà tout (Taha, 20/11/2026).
   const moisTropTot = p === "mois" && enSuivi() && (x.jours_finis || 0) < 7;
-  const suivi = x.jours_suivis > 0 && !moisTropTot, parJour = p === "jour" ? "" : " par jour, en moyenne";
+  const suivi = x.jours_suivis > 0 && !moisTropTot, parJour = p === "jour" ? "" : " / jour";
   const macro = (nom, valeur, but, prevu = null) => valeur == null ? "" : kpi(nom + (p === "jour" && prevuJour ? (nom === "Fibres" ? " mangées" : " mangés") : parJour), `${nombre(valeur)} g`,
     but ? `${nombre(Math.round(100 * valeur / but))} % de ton objectif.${prevu != null ? ` ${nombre(Math.round(100 * prevu / but))} % avec tout le prévu.` : ""}` : "Pas d'objectif fixé dans ton profil.",
     but ? Math.round(100 * valeur / but) : null, but && prevu != null ? Math.round(100 * prevu / but) : null);
@@ -2060,7 +2062,8 @@ function vueAvancement({ params }) {
     <a class="bouton second" href="#/cuisine">Aller à la cuisine</a></div>
     <dl class="kpis bloc">${argent}</dl>`}` : `
   ${prevuJour ? `<p class="legende-jauges legende-avancement"><span><i class="mange"></i>mangé</span><span><i></i>prévu</span></p>` : ""}
-  <dl class="kpis" style="margin-top:14px">
+  ${p === "jour" ? "" : `<p class="petit discret" style="margin:10px 0 -6px">Moyenne par jour.</p>`}
+  <dl class="kpis kpis-avancement" style="margin-top:14px">
     ${kpi(p === "jour" ? "Calories mangées" : "Calories" + parJour, `${nombre(x.kcal)} kcal`, `${nombre(pctK)} % de ton objectif${x.kcal > a.objectif.kcal * 1.05 ? ", au-dessus" : ""}.${prevuJour ? ` ${nombre(Math.round(100 * prevuJour.kcal / a.objectif.kcal))} % avec tout le prévu.` : ""}`, pctK, prevuJour ? Math.round(100 * prevuJour.kcal / a.objectif.kcal) : null)}
     ${kpi(p === "jour" ? "Protéines mangées" : "Protéines" + parJour, `${x.prot} g`, `${nombre(pctP)} % de ton objectif.${prevuJour ? ` ${nombre(Math.round(100 * prevuJour.prot / a.objectif.prot))} % avec tout le prévu.` : ""}`, pctP, prevuJour ? Math.round(100 * prevuJour.prot / a.objectif.prot) : null)}
     ${macro("Glucides", x.gluc, a.objectif.gluc, prevuJour ? prevuJour.gluc : null)}
@@ -2911,14 +2914,14 @@ function vueSuivi({ params }) {
   const aujourd = date === isoDuJour();
   return `<div class="m-tete"><div><h1 tabindex="-1">Mon suivi</h1>
       <p class="petit discret">${debut ? `Depuis le ${esc(dateLongueCourte(debut).replace(/^[a-zé]+ /i, ""))}${joursSuivi >= 0 ? `, jour ${joursSuivi + 1}` : ""} · ` : ""}${poids.length ? `Dernière pesée le ${esc(dateCourte(poids[0].date))}` : "Note ton poids chaque jour, à la même heure"}</p></div></div>
-    <div class="suivi-chiffres">
+    <div class="suivi-chiffres suivi-petit">
       <div class="fait"><b>${poids.length ? virgule(poids[0].poids) : "—"}<small> kg</small></b><span>poids</span></div>
       <div class="fait"><b>${signe(ecart(7))}<small>${ecart(7) == null ? "" : " kg"}</small></b><span>en 7 jours</span></div>
       <div class="fait"><b>${signe(depuisDebut())}<small>${depuisDebut() == null ? "" : " kg"}</small></b><span>depuis le début</span></div>
     </div>
     ${bic || tou || tor ? `<p class="petit discret chiffres suivi-mesures">${[bic ? `Biceps ${virgule(bic.biceps_avant ?? bic.biceps_apres)} cm` : "", tou ? `Hanches ${virgule(tou.tour_avant ?? tou.tour_apres)} cm` : "",
       tor ? `Torse ${virgule(tor.torse_avant ?? tor.torse_apres)} cm` : ""].filter(Boolean).join(" · ")}</p>` : ""}
-    <section class="bloc suivi-noter" aria-labelledby="tNoter">
+    <section class="bloc suivi-noter suivi-petit" aria-labelledby="tNoter">
       <div class="suivi-noter-tete"><h2 id="tNoter">${aujourd ? "Aujourd'hui" : esc(dateCourte(date))}</h2>
         <label class="date-discrete"><span class="sr">Jour</span><input id="su_date" name="date" type="date" value="${date}" max="${isoDuJour()}" form="formSuivi"></label></div>
       <form id="formSuivi" class="formulaire" novalidate>
@@ -2933,7 +2936,7 @@ function vueSuivi({ params }) {
         <button class="bouton large" type="submit">${icone("check")}Enregistrer</button>
       </form>
     </section>
-    <section class="bloc suivi-courbe" aria-labelledby="tCourbe">
+    <section class="bloc suivi-courbe suivi-petit" aria-labelledby="tCourbe">
       <h2 id="tCourbe" class="sr">Courbe</h2>
       <nav class="jours" aria-label="Courbe">${[["poids", "Poids"], ["biceps", "Biceps"], ["tour", "Hanches"], ["torse", "Torse"]].map(([c, nom]) =>
         `<a href="#/suivi?c=${c}${aujourd ? "" : `&date=${date}`}"${c === courbe ? ' aria-current="true"' : ""}>${nom}</a>`).join("")}</nav>
@@ -3282,11 +3285,19 @@ const VUES = { semaine: vueSemaine, plat: vuePlat, courses: vueCourses, cuisine:
                nouveau: vueNouveau, stock: vueStock, catalogue: vueCatalogue, journal: vueJournal, reglages: vueReglages, suivi: vueSuivi,
                historique: vueHistorique };
 let derniereAdresse = "", adressePrecedente = "";
+// Revenir d'un pas (Taha, 22/11/2026 : « le retour remet à la première page ») : la page d'où l'on vient garde sa
+// position, et une page ouverte depuis la carte d'un plat (« Voir la recette ») ramène sur cette carte.
+const POSITIONS = new Map();
+let PAGE_DEPUIS_CARTE = null, RETOUR_ARRIERE = false;
 
 function rendre() {
   if (!E) return;
   const r = route();
   const changement = location.hash !== derniereAdresse;
+  if (changement && derniereAdresse) POSITIONS.set(derniereAdresse, verrou.actif ? verrou.y : window.scrollY);   // carte ouverte : la page est figée
+  const pc = changement ? PAGE_DEPUIS_CARTE : null, revientCarte = !!(pc && location.hash === pc.depuis);
+  if (pc && !revientCarte && location.hash !== pc.page) PAGE_DEPUIS_CARTE = null;
+  if (revientCarte) { PAGE_DEPUIS_CARTE = null; RETOUR_ARRIERE = true; }
   rendreNavigation(ongletDe(r.vue));
   apresRendu = [];
   const NOMS = { semaine: "", plat: "Plat", courses: "Courses", cuisine: "Cuisine", plus: "Plus", catalogue: "Catalogue", avancement: "Avancement",
@@ -3304,7 +3315,10 @@ function rendre() {
   if (changement) {
     adressePrecedente = derniereAdresse;
     derniereAdresse = location.hash;
-    if (!((r.vue === "semaine" || (r.vue === "cuisine" && !r.arg)) && r.params.has("jour"))) window.scrollTo(0, 0);
+    if (RETOUR_ARRIERE) window.scrollTo(0, POSITIONS.get(location.hash) || 0);
+    else if (!((r.vue === "semaine" || (r.vue === "cuisine" && !r.arg)) && r.params.has("jour"))) window.scrollTo(0, 0);
+    RETOUR_ARRIERE = false;
+    if (revientCarte && recette(pc.id)) setTimeout(() => { if (!document.querySelector(".carte-fond") && !$("dialogue").open) ficheRapide(pc.id, pc.ctx, null, pc.vu); }, 0);
     if (titre && matchMedia("(pointer: fine)").matches) titre.focus({ preventScroll: true });
   }
   const suivi = $("suivi");
@@ -3486,6 +3500,9 @@ new MutationObserver(surveillerFenetres).observe(document.body, { childList: tru
 new MutationObserver(surveillerFenetres).observe($("dialogue"), { attributes: true, attributeFilter: ["open"] });
 document.addEventListener("click", ev => {
   // Sur le telephone, toucher un plat ouvre sa fiche en fenetre, pas une nouvelle page (Taha, 19/11/2026).
+  // « ‹ Profil », « ‹ Aujourd'hui »… : si l'on vient de cette page, on y revient d'un pas (même position), sans en empiler une.
+  const ret = ev.target.closest("a.retour[href]:not([data-precedent])");
+  if (ret && adressePrecedente && ret.getAttribute("href") === adressePrecedente) { ev.preventDefault(); RETOUR_ARRIERE = true; return history.back(); }
   const plat = ev.target.closest('a.repas[href^="#/plat/"], a.rp-plat[href^="#/plat/"]');
   if (plat && PETIT.matches && !ev.target.closest("#dialogue, .carte-fond")) {
     ev.preventDefault();

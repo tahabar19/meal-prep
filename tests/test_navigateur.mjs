@@ -412,6 +412,26 @@ try {
     vrai(await B.js(`![...document.querySelectorAll('.cat-liste a.rp-plat b')].some(b => b.textContent === ${JSON.stringify(nom)})`), `« ${nom} » est encore au catalogue`);
   });
 
+  // Taha, 22/11/2026 : « Voir la recette » puis Retour → la carte du plat, au même endroit (pas la première page)
+  await test('Retour de la recette : la carte du plat revient', async () => {
+    await aller('#/semaine');
+    await B.js(`window.scrollTo(0, 300)`); await att(200);
+    const y = await B.js(`window.scrollY`);
+    await B.js(`document.querySelector('.grille-plats a.repas').click()`);
+    vrai(await attendre(`document.querySelector('.carte-plat a[href^="#/cuisine/"]')`, 10000) >= 0, 'pas de « Voir la recette »');
+    await B.js(`document.querySelector('.carte-plat a[href^="#/cuisine/"]').click()`);
+    vrai(await attendre(`!!document.querySelector('.fiche-compacte')`, 10000) >= 0, 'la recette ne s\'ouvre pas');
+    await B.js(`document.querySelector('a.retour').click()`);
+    vrai(await attendre(`location.hash === '#/semaine' && !!document.querySelector('.carte-plat')`, 5000) >= 0, `retour : ${await B.js('location.hash')}, carte ${await B.js("!!document.querySelector('.carte-plat')")}`);
+    await fermerCarte(); await att(300);
+    vrai(Math.abs(await B.js(`window.scrollY`) - y) <= 5, `la page Jour n'est pas revenue au même endroit (${await B.js('window.scrollY')} au lieu de ${y})`);
+    // Profil → Réglages → « ‹ Profil » : un pas en arrière
+    await aller('#/profil'); await aller('#/reglages');
+    const avant = await B.js('history.length');
+    await B.js(`document.querySelector('a.retour').click()`); await att(600);
+    vrai(await B.js(`location.hash === '#/profil'`), 'Réglages ne revient pas au Profil');
+  });
+
   await test('Ajouter un repas : pas de Matin / Midi / Soir à choisir', async () => {
     await aller('#/semaine');
     await B.js(`document.querySelector('[data-action=noterRepas]').click()`);
@@ -476,6 +496,15 @@ try {
       vrai(bas <= 0, `la dernière vitamine est ${bas} px sous l'écran`);
     }
     await B.photo('vitamines-jour');
+  });
+
+  // Taha, 22/11/2026 : pas de barre de défilement quand tout tient (Profil…)
+  await test('Pas de défilement pour rien (Profil, Vitamines)', async () => {
+    for (const h of ['#/profil', '#/vitamines']) {
+      await aller(h); await att(500);
+      const d = await B.js(`document.documentElement.scrollHeight - innerHeight`);
+      vrai(d <= 1, `${h} défile de ${d} px`);
+    }
   });
 
   await test('Vitamines : Jour, Semaine, Mois', async () => {
