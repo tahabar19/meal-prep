@@ -3,7 +3,7 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-22-204424";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-22-205201";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const reponse = (status, corps) => new Response(JSON.stringify(corps), { status, headers: { "Content-Type": "application/json" } });
@@ -16,11 +16,12 @@ async function compte(action, corps = {}) {
   return erreur ? { erreur } : data;
 }
 
+const PHOTOS_V = "202611222052";                                // change quand les photos du catalogue changent (construire.py)
 function urlPhoto(r, largeur) {
   const id = String(r.photo_de || r.id);              // une copie « Banane (2) » a la photo de l'original
   if (id.startsWith("perso-")) return `${MP.url}/storage/v1/object/public/photos/${M.uid}/${encodeURIComponent(id)}.jpg?v=${r.photo}`;
   const l = [160, 480, 960].reduce((a, b) => (Math.abs(b - largeur) < Math.abs(a - largeur) ? b : a));
-  return `photos/${encodeURIComponent(id)}-${l}.jpg`;
+  return `photos/${encodeURIComponent(id)}-${l}.jpg?v=${PHOTOS_V}`;      // la version : de nouvelles photos se rechargent
 }
 
 function envoyer(message, transferts = []) {
