@@ -1891,13 +1891,10 @@ function vueRecette({ arg, params }) {
     <div class="fc-tete">${photo(r, 240, "carre", r.nom)}
       <div><h1 tabindex="-1">${esc(r.nom)}</h1>
         <p class="discret chiffres">${[`${nombre(r.kcal * facteur)} kcal`, `${nombre(r.prot * facteur)} g prot.`, r.temps ? `${r.temps} min` : "",
-          seance && facteur !== 1 ? `${nombre(facteur * 100)} % de la recette` : ""].filter(Boolean).join(" · ")}</p>
+          seance && facteur !== 1 ? `${nombre(facteur * 100)} %` : ""].filter(Boolean).join(" · ")}</p>
+        ${goute && estRepas(r) ? `<div class="etoiles fc-note" role="group" aria-label="Ta note, de 1 à 5 : elle décide si ce plat revient" title="Ta note : elle décide si ce plat revient">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-action="noter" data-plat="${r.id}" data-note="${i}"
+          class="${r.note && i <= Math.round(r.note) ? "pleine" : ""}" aria-label="${i} étoile${i > 1 ? "s" : ""} sur 5">${icone(r.note && i <= Math.round(r.note) ? "star-fill" : "star")}</button>`).join("")}</div>` : ""}
         ${enSuivi() ? "" : `<p class="discret petit">${seance ? `${s.jours[n].jour}, ` : ""}${combien}${seance && seance.pour_demain ? " : ce soir et demain midi" : ""}.</p>`}</div></div>
-    ${goute && estRepas(r) ? `<section aria-labelledby="tNote"><h2 id="tNote">Ta note</h2>
-      <p class="discret petit" style="margin:4px 0 6px">Elle décide si ce plat revient dans les prochaines semaines.</p>
-      <div class="etoiles" role="group" aria-label="Note de 1 à 5">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-action="noter" data-plat="${r.id}" data-note="${i}"
-        class="${r.note && i <= Math.round(r.note) ? "pleine" : ""}" aria-label="${i} étoile${i > 1 ? "s" : ""} sur 5">${icone(r.note && i <= Math.round(r.note) ? "star-fill" : "star")}</button>`).join("")}</div>
-      ${r.nb_notes ? `<p class="petit discret">Moyenne ${nombre(r.note, 1)} sur 5, ${r.nb_notes} note${r.nb_notes > 1 ? "s" : ""}.</p>` : ""}</section>` : ""}
     <section class="fc-bloc" aria-labelledby="tIng"><h2 id="tIng">Ingrédients</h2>
       <ul class="ingredients">${r.ing.map(i => `<li><span>${i.u === "qs" ? esc(i.n) : `<button type="button" class="lien" data-action="ingredient" data-nom="${esc(i.n)}"
         aria-label="Valeurs de ${esc(i.n)}">${esc(i.n)}</button>${(E.ingredients_perso || {})[i.n] ? ` <small class="discret">(${E.ingredients_perso[i.n].cree ? "créé" : "corrigé"} par toi)</small>` : ""}`}</span>
