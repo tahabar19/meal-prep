@@ -2329,9 +2329,7 @@ function formulaireProfil(avecCode) {
     ${champ("poids_kg", "Poids, en kilos", nombreChamp("poids_kg", 35, 250, 0.1, "70"))}
     ${champ("activite", "Activité", choix("activite", [["sedentaire", "Sédentaire, peu ou pas de sport"], ["leger", "Sport léger, 1 à 3 fois par semaine"], ["modere", "Sport modéré, 3 à 5 fois par semaine"], ["actif", "Sport intense, 6 à 7 fois par semaine"], ["intense", "Sport très intense ou métier physique"]]))}
     ${champ("objectif", "Objectif", choix("objectif", [["perte", "Perdre du poids"], ["maintien", "Garder mon poids"], ["prise", "Prendre du muscle"]]))}
-    <div class="options" style="margin-bottom:18px">
-      ${coche("fodmap", "Régime pauvre en FODMAP", "Seulement des plats pauvres en FODMAP dans tes semaines.", false)}
-    </div>
+    <div style="margin-bottom:18px"></div>
     <small id="eProfil" class="erreur" role="alert" style="display:block;margin-bottom:12px;color:var(--critique)"></small>
     <button class="bouton large" type="submit">Créer mon profil</button>
     <p class="petit discret" style="margin-top:14px">L'appli calcule tes calories, tes protéines et tes besoins en vitamines, puis compose tes deux premières semaines. Tout se change ensuite dans Réglages, sauf l'identifiant.</p>
