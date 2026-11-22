@@ -184,6 +184,31 @@ try {
     vrai(Math.abs(ec - 60) <= 2, `la carte n'est pas 0,8 cm sous le centre (${ec} px d'écart haut/bas au lieu de 60)`);   // Taha, 22/11/2026
     await B.photo('carte-plat');
     await fermerCarte();
+    // Taha, 22/11/2026 : jamais de barre pour monter et descendre, même sur un petit écran
+    await B.cdp('Emulation.setDeviceMetricsOverride', { width: 375, height: 600, deviceScaleFactor: 2, mobile: true });
+    await att(300);
+    await B.js(`document.querySelector('.grille-plats a.repas').click()`);
+    await attendre(`document.querySelector('.carte-plat')`, 10000); await att(500);
+    const p = await B.js(`(() => { const c = document.querySelector('.carte-plat'); return c.scrollHeight - c.clientHeight; })()`);
+    await B.photo('carte-plat-petit');
+    await fermerCarte();
+    await B.cdp('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+    await att(300);
+    vrai(p <= 1, `petit écran : la carte défile de ${p} px`);
+  });
+
+  // Taha, 22/11/2026 : « Créer mon propre plat » comme « Remplacer » (champ IA), et plus de « Jarvis » à l'écran
+  await test('Catalogue : créer un plat avec l\'IA, sans « Jarvis »', async () => {
+    await aller('#/catalogue');
+    vrai(await B.js(`!/Jarvis/.test(document.querySelector('main').innerText)`), '« Jarvis » dans le catalogue');
+    await B.js(`document.querySelector('[data-action=creerPlat]').click()`);
+    vrai(await attendre(`document.querySelector('#dialogue[open] .creer-plat #cpTexte, #dialogue[open] #ppIng, #dialogue[open] form')`, 10000) >= 0, 'rien ne s\'ouvre');
+    if (await B.js(`E.claude !== false`)) vrai(await B.js(`!!document.querySelector('#dialogue .creer-plat #cpTexte')`), 'pas le champ IA');
+    vrai(await B.js(`!/Jarvis/.test(document.getElementById('dialogue').innerText)`), '« Jarvis » dans « Créer un plat »');
+    await B.photo('creer-plat');
+    await B.js(`document.getElementById('dialogue').close()`);
+    await aller('#/semaine');
+    vrai(await B.js(`!/Jarvis/.test(document.querySelector('main').innerText)`), '« Jarvis » sur l\'écran Jour');
   });
 
   await test('Choisir un plat : ingrédients et quantité avant de valider', async () => {
