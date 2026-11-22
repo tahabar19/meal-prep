@@ -1358,3 +1358,14 @@ html:has(.carte-fond.ouvert){background:#060706}
 .p-vise{margin:8px 0 0;font-size:.82rem;color:var(--discret)}
 .p-vise b{color:var(--accent);font-weight:600}
 .p-vise small{font-size:.74rem}
+/* « Vérifie » : les aliments en plus petit (Taha, 22/11/2026 : « les champs aliments sont très grands ») */
+.item-note{grid-template-columns:minmax(0,1fr) 92px 30px!important;gap:4px 6px!important;padding:6px 0!important}
+.item-note .nr-nom{grid-column:1!important;min-height:34px!important;font-size:.9rem;font-weight:600}
+.item-note .nr-g{grid-column:2!important;grid-row:1;max-width:92px}
+.item-note .effacer{width:30px!important;height:30px!important}
+.item-note .effacer .ic{width:16px;height:16px}
+.item-note input{min-height:32px!important;padding:0 6px!important;font-size:.84rem}
+.item-note .nr-chiffres{gap:4px!important}
+.item-note .nr-chiffres input{min-height:28px!important;font-size:.78rem;text-align:center}
+.item-note .nr-chiffres label{font-size:.66rem!important}
+.item-note small{font-size:.68rem}
