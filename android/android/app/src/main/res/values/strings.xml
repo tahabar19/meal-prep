@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mon Meal Prep</string>
+    <string name="title_activity_main">Mon Meal Prep</string>
+    <string name="package_name">fr.monmealprep.app</string>
+    <string name="custom_url_scheme">fr.monmealprep.app</string>
+</resources>

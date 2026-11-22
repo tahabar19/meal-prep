@@ -1,0 +1,14 @@
+{
+  "appId": "fr.monmealprep.app",
+  "appName": "Mon Meal Prep",
+  "webDir": "www",
+  "server": {
+    "url": "https://tahabar19.github.io/meal-prep/",
+    "errorPath": "index.html",
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#111312"
+  }
+}

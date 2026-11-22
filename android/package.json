@@ -1,0 +1,12 @@
+{
+  "name": "mon-meal-prep-android",
+  "private": true,
+  "version": "1.0.0",
+  "description": "L'appli Android de Mon Meal Prep : elle ouvre le site en ligne (toujours à jour).",
+  "dependencies": {
+    "@capacitor/android": "6.2.0",
+    "@capacitor/app": "6.0.2",
+    "@capacitor/cli": "6.2.0",
+    "@capacitor/core": "6.2.0"
+  }
+}
