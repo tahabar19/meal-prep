@@ -1265,3 +1265,33 @@ details.idees-ligne .rp-liste{margin:2px 0 8px}
 /* « Retirer ce plat » : discret, rouge seulement au toucher (Taha, 22/11/2026) */
 .cp-retirer{color:var(--discret)!important}
 .cp-retirer:active{color:var(--critique)!important}
+/* Pas de défilement pour rien (Taha, 22/11/2026 : barre grise sur Profil) : la grande marge du bas seulement quand la
+   barre d'action du bas est affichée (« C'est cuisiné »…), sinon juste la place de la barre d'onglets. */
+@media (max-width:899px){
+  main{padding-bottom:calc(var(--nav-bas) + var(--bas) + 16px);min-height:0}
+  body:has(#barre:not([hidden])) main{padding-bottom:calc(var(--nav-bas) + var(--bas) + 112px)}
+}
+/* Avancement : des blocs plus petits (Taha, 22/11/2026) ; le graphe ne bouge pas */
+.kpis-avancement{gap:8px}
+.kpis-avancement > div{padding:9px 11px}
+.kpis-avancement dt{font-size:.72rem}
+.kpis-avancement dd{font-size:1.1rem!important;margin-top:1px}
+.kpis-avancement .piste{height:6px;margin-top:6px}
+.kpis-avancement p{margin-top:4px;font-size:.7rem!important;line-height:1.3}
+/* Suivi : des rubriques plus petites (Taha, 22/11/2026) */
+.suivi-chiffres.suivi-petit{gap:8px}
+.suivi-chiffres.suivi-petit .fait{padding:9px 10px}
+.suivi-chiffres.suivi-petit .fait b{font-size:1.1rem}
+.suivi-chiffres.suivi-petit .fait span{font-size:.72rem}
+section.suivi-noter.suivi-petit{margin-top:14px;padding:12px 14px!important}
+.suivi-noter.suivi-petit .suivi-noter-tete{margin-bottom:8px}
+.suivi-noter.suivi-petit h2{font-size:.98rem}
+.suivi-noter.suivi-petit .champ label{font-size:.76rem}
+.suivi-noter.suivi-petit input{min-height:38px!important;padding-top:6px;padding-bottom:6px;font-size:.92rem}
+.suivi-noter.suivi-petit .mesures{gap:8px;margin:8px 0}
+.suivi-noter.suivi-petit .avec-unite span{font-size:.75rem}
+.suivi-noter.suivi-petit p.petit{font-size:.72rem}
+.suivi-noter.suivi-petit details.seance summary{min-height:40px;font-size:.88rem}
+.suivi-noter.suivi-petit .bouton.large{min-height:44px;font-size:.92rem}
+section.suivi-courbe.suivi-petit{padding:10px 12px!important}
+.suivi-courbe.suivi-petit .jours a,.suivi-courbe.suivi-petit .jours button{min-height:34px;padding:0 12px;font-size:.82rem}
