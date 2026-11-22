@@ -1312,3 +1312,45 @@ section.suivi-courbe.suivi-petit{padding:10px 12px!important}
    est elle-même assombrie et floutée comme le reste de la page : plus de bande opaque. */
 body:has(.carte-fond.ouvert) .nav-bas{filter:brightness(.35) blur(3px);transition:filter .28s ease}
 html:has(.carte-fond.ouvert){background:#060706}
+/* Le stock à la maison (Taha, 22/11/2026) */
+.stock-ajout{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:4px 0 12px}
+.stock-bouton{display:grid;justify-items:center;gap:2px;padding:12px 6px;border:0;border-radius:var(--r-carte);background:var(--surface);
+  color:var(--encre);font:inherit;text-align:center;cursor:pointer}
+.stock-bouton .ic{width:22px;height:22px;color:var(--accent)}
+.stock-bouton span{font-weight:600;font-size:.92rem}
+.stock-bouton small{font-size:.68rem;color:var(--discret);line-height:1.2}
+.stock-bouton:active{background:var(--survol)}
+.stock-groupe{padding:10px 14px!important}
+.stock-groupe h2{margin:0 0 4px;font-size:.78rem!important;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--discret)}
+.stock-liste{list-style:none;margin:0;padding:0}
+.stock-liste li{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px}
+.stock-liste li + li{border-top:1px solid var(--filet-doux)}
+.stock-nom{flex:1;min-width:0;color:var(--encre);font-size:.92rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stock-q{display:flex;align-items:center;gap:4px;flex:none}
+.stock-q button{width:30px;height:30px;border:0;border-radius:50%;background:var(--surface-fort);color:var(--encre);font:inherit;font-size:1.05rem;cursor:pointer}
+.stock-saisie{width:64px;min-height:30px;padding:0 6px;border:1px solid var(--filet);border-radius:8px;background:var(--canvas);color:var(--encre);
+  font:inherit;font-size:.86rem;text-align:right;font-variant-numeric:tabular-nums}
+.stock-u{width:42px;font-size:.72rem;color:var(--discret)}
+.stock-part{flex:none;font-size:.74rem;color:var(--accent);font-variant-numeric:tabular-nums}
+.stock-faisable{padding:12px 14px!important}
+.stock-faisable h2{margin:0 0 6px;font-size:.98rem}
+.rp-stock{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--choisi);color:var(--accent)}
+.rp-stock .ic{width:13px;height:13px}
+.stock-verifs,.stock-props{list-style:none;margin:0;padding:0}
+.stock-verifs li{display:grid;grid-template-columns:24px minmax(0,1fr) 70px 76px;gap:6px;align-items:center;padding:6px 0;border-top:1px solid var(--filet-doux)}
+.stock-verifs li.retire{opacity:.45}
+.stock-verifs input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
+.stock-verifs .sv-nom{display:grid;gap:1px;min-width:0}
+.stock-verifs .sv-nom input{min-height:34px;padding:4px 8px;font-size:.88rem}
+.stock-verifs .sv-nom small{font-size:.68rem;color:var(--discret);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stock-verifs input[type=number],.stock-verifs select{min-height:34px;padding:4px 6px;font-size:.86rem}
+.stock-props li{padding:8px 0;border-top:1px solid var(--filet-doux)}
+.stock-props label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.stock-props input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none}
+.stock-props span{display:grid;gap:1px;font-size:.88rem}
+.stock-props s{color:var(--discret);font-size:.8rem}
+.stock-props b{color:var(--encre)}
+/* 6 onglets en bas : des libellés plus petits */
+.nav-bas a span:not(.compte){font-size:.62rem}
+.stock-liste .stock-saisie{width:62px!important;min-width:0;max-width:62px;flex:none;min-height:30px!important;height:30px;padding:0 6px!important}
+.stock-faisable .bouton{white-space:normal;line-height:1.2;text-align:center}
