@@ -11,7 +11,8 @@ const Graph = (() => {
     return e;
   };
   const nb = (x, d = 1) => (Math.round(x * 10 ** d) / 10 ** d).toLocaleString("fr-FR");
-  const jourCourt = d => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  // « ven 20 nov. » (Taha, 22/11/2026 : le jour de la semaine avec la date, sans point après le jour)
+  const jourCourt = d => new Date(d).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }).replace(/^(\p{L}+)\./u, "$1");
 
   function graduations(min, max, n = 4) {
     const brut = (max - min) / n || 1, p = 10 ** Math.floor(Math.log10(brut));
@@ -72,7 +73,7 @@ const Graph = (() => {
       el("text", { x: m.g - 8, y: Y(v) + 4, class: "axe", "text-anchor": "end" }, svg).textContent = nb(v, decimales && y1 - y0 < 8 ? decimales : 0);
     }
     // Les dates de l'axe : des jours entiers, chacun une seule fois (Taha, 20/11/2026 : « 16 nov » répété).
-    const JOUR = 864e5, nbJours = Math.round((x1 - x0) / JOUR), pasJours = Math.max(1, Math.ceil(nbJours / Math.max(2, Math.floor((L - m.g - m.d) / 64))));
+    const JOUR = 864e5, nbJours = Math.round((x1 - x0) / JOUR), pasJours = Math.max(1, Math.ceil(nbJours / Math.max(2, Math.floor((L - m.g - m.d) / 84))));
     const reperes = [];
     for (let k = nbJours; k >= 0; k -= pasJours) reperes.unshift(x0 + k * JOUR);      // le dernier jour a toujours sa date
     reperes.forEach((d, i) => {
