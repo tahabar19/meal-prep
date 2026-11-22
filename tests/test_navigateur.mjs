@@ -601,10 +601,16 @@ try {
   });
 
   await test('Réglages : blocs présents', async () => {
+    // Taha, 22/11/2026 (soir) : dans Profil, juste « Réglages » ; la page en lignes repliables, avec un résumé
     await aller('#/profil');
-    const t = await B.js(`document.querySelector('main').textContent`);
-    for (const mot of ['objectif', 'compte']) vrai(new RegExp(mot, 'i').test(t), `« ${mot} » absent de Profil/Réglages`);
+    vrai(await B.js(`document.querySelector('a[href="#/reglages"]').textContent.trim() === 'Réglages'`), 'le lien de Profil ne dit pas juste « Réglages »');
     await aller('#/reglages');
+    const t = await B.js(`document.querySelector('main').textContent`);
+    for (const mot of ['objectif', 'compte', 'même plat midi et soir']) vrai(new RegExp(mot, 'i').test(t), `« ${mot} » absent des Réglages`);
+    vrai(await B.js(`document.querySelectorAll('.reglages .bloc.pliable:not(.ouvert)').length >= 4`), 'les rubriques ne sont pas repliées');
+    vrai(await B.js(`document.documentElement.scrollHeight < 1400`), 'la page Réglages est encore trop longue');
+    await B.js(`document.querySelectorAll('.reg-tete').forEach(b => b.closest('section').classList.contains('ouvert') || b.click())`); await att(300);
+    vrai(await debordement() <= 0, 'la page Réglages déborde sur le côté');
     vrai(await attendre(`!!document.getElementById('fCoord') && !document.getElementById('fCoord').hidden`, 10000) >= 0, 'pas d\'email / téléphone dans Mon compte');
     vrai(await B.js(`/Intelligence artificielle/i.test(document.querySelector('main').textContent)`), 'pas de bloc IA');
     vrai(await B.js(`!!document.getElementById('mNouveauJauge')`), 'pas de jauge sur le nouveau mot de passe');

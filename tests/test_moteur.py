@@ -280,5 +280,29 @@ class J_Profil(unittest.TestCase):
             self.assertEqual(M.api("POST", "/api/profil/modifier", corps)[0], 400, corps)
 
 
+class K_MemePlat(unittest.TestCase):
+    """Réglage « Le même plat midi et soir » (Taha, 22/11/2026) : coupé, deux plats différents dès aujourd'hui
+    et dans les semaines composées ensuite ; remis, le soir reprend le plat du midi."""
+    def jours_a_venir(self):
+        return [j for j in M.etat()["semaine"]["jours"] if not j.get("retire") and "rien" not in (j["dej"], j["din"])]
+
+    def test_couper_puis_remettre(self):
+        S = M.serveur
+        try:
+            self.assertEqual(M.api("POST", "/api/reglages", {"meme_plat": False})[0], 200)
+            self.assertIs(M.etat()["reglages"].get("meme_plat"), False)
+            jours = self.jours_a_venir()
+            self.assertTrue(jours)
+            self.assertTrue(all(j["dej"] != j["din"] for j in jours), [(j["dej"], j["din"]) for j in jours])
+            self.assertTrue(all(j["kcal"] > 500 for j in jours))
+            plan, _ = S._composer(modes=["flemmard"])
+            self.assertTrue(all(j["dej"] != j["din"] for j in plan["jours"]), "nouvelle semaine : même plat midi et soir")
+        finally:
+            self.assertEqual(M.api("POST", "/api/reglages", {"meme_plat": True})[0], 200)
+        self.assertTrue(all(j["dej"] == j["din"] for j in self.jours_a_venir()))
+        plan, _ = S._composer(modes=["flemmard"])
+        self.assertTrue(all(j["dej"] == j["din"] for j in plan["jours"]))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2 if "-v" in sys.argv else 1, argv=[sys.argv[0]])
