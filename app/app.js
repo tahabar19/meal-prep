@@ -16,6 +16,7 @@ const DANS_PLUS = ["plus", "courses", "cuisine", "historique", "budget", "vitami
 const ONGLETS_FLEMMARD = [
   { id: "semaine", nom: "Jour", icone: "calendar-blank" },
   { id: "catalogue", nom: "Catalogue", icone: "couverts" },
+  { id: "stock", nom: "Stock", icone: "package" },
   { id: "avancement", nom: "Avancement", icone: "chart-bar" },
   { id: "vitamines", nom: "Vitamines", icone: "orange" },
   { id: "suivi", nom: "Suivi", icone: "chart-line" },
@@ -661,7 +662,7 @@ function ecartLisible(valeur, unite, bonSiPlus) {
 // compactes. La journée montrée est celle de l'écran Jour (ce que tu as noté en plus compris).
 const REMPLACER = { cle: "" };
 const TRIS_REMPLACER = [["objectif", "Pour ton objectif"], ["proches", "Mêmes calories"], ["proteines", "Plus de protéines"],
-  ["leger", "Plus léger"], ["aimes", "Tes préférés"]];
+  ["leger", "Plus léger"], ["aimes", "Tes préférés"], ["stock", "Avec mon stock"]];
 // La date d'un jour d'une semaine composée, et ce qui a été noté « en plus » ce jour-là (compté dans l'écran Jour).
 const dateDuPlan = (s, n) => { const d = new Date(s.debut + "T12:00"); d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -697,7 +698,8 @@ function demanderChangement(k, n, moment) {
   const aime = r => (r.gout === "tester" ? 3 : 0) + (r.nb_notes ? r.note : 0) + (r.perso ? 1 : 0);
   const ORDRES = { objectif: (a, b) => loin(a) - loin(b), proches: (a, b) => Math.abs(kc(a) - refK) - Math.abs(kc(b) - refK) || pr(b) - pr(a),
     proteines: (a, b) => pr(b) / Math.max(kc(b), 1) - pr(a) / Math.max(kc(a), 1), leger: (a, b) => kc(a) - kc(b),
-    aimes: (a, b) => aime(b) - aime(a) || loin(a) - loin(b) };
+    aimes: (a, b) => aime(b) - aime(a) || loin(a) - loin(b),
+    stock: (a, b) => ((E.stock_couvre || {})[b.id] || 0) - ((E.stock_couvre || {})[a.id] || 0) || loin(a) - loin(b) };
 
   const cle = `${k}|${n}|${moment}|${actuelId}`, revient = REMPLACER.cle === cle;
   if (!revient) Object.assign(REMPLACER, { cle, tri: obj.kcal ? "objectif" : "proches", cherche: "", nb: 20, defile: 0 });
@@ -717,7 +719,7 @@ function demanderChangement(k, n, moment) {
       <span class="rp-texte"><b>${esc(r.nom)}</b>
         <span class="rp-macros chiffres"><span><strong>${nombre(Math.round(kc(r)))}</strong> kcal</span><span><strong>${nombre(Math.round(pr(r)))} g</strong> prot.</span>${
           sansRepas || !dp ? "" : `<span class="rp-ecart${dp > 0 ? " plus" : ""}">${dp > 0 ? "+" : "−"}${nombre(Math.abs(dp))} g</span>`}</span></span>
-      ${tient ? `<span class="rp-tient" title="Ta journée tient l'objectif">${icone("check")}</span>` : ""}</button></li>`; };
+      ${(E.stock_couvre || {})[r.id] >= 0.8 ? `<span class="rp-stock" title="Faisable avec ton stock">${icone("package")}</span>` : tient ? `<span class="rp-tient" title="Ta journée tient l'objectif">${icone("check")}</span>` : ""}</button></li>`; };
   const maj = () => {
     const liste = tous.filter(passe).sort((a, b) => ORDRES[R.tri](a, b) || a.nom.localeCompare(b.nom, "fr"));
     const texte = R.cherche.trim();
@@ -2495,7 +2497,89 @@ function vueCatalogue({ params }) {
     : `<p class="discret">Aucune recette ne correspond.</p>`}
   ${lignes.length > 80 ? `<p class="discret petit" style="margin-top:14px">Les 80 premières sur ${lignes.length} : précise avec un filtre ou la recherche pour voir les autres.</p>` : ""}`;
 }
+// ---------- Le stock à la maison (Taha, 22/11/2026) : photo du frigo ou du placard, ticket de caisse, ou saisie ; l'IA lit,
+// tu vérifies, ça entre ; ce que tu manges en sort ; les plats faisables avec sont marqués, et les prochains jours peuvent
+// être refaits avec. ----------
+function rayonsDesIngredients() {
+  const r = {};
+  for (const x of E.recettes) for (const i of x.ing || []) if (i.a != null && r[i.n] == null) r[i.n] = i.a;
+  return r;
+}
+const pasStock = l => l.unite === "pièce" ? 1 : l.quantite > 1000 ? 100 : l.quantite > 200 ? 50 : 10;
+function vueStockMaison() {
+  barre("");
+  const st = E.stock || [], cherche = filtreStock.trim().toLowerCase(), rayons = rayonsDesIngredients(), groupes = new Map();
+  st.filter(l => !cherche || l.nom.toLowerCase().includes(cherche)).sort((a, b) => a.nom.localeCompare(b.nom, "fr")).forEach(l => {
+    const g = rayons[l.nom] != null && E.rayons && E.rayons[rayons[l.nom]] ? E.rayons[rayons[l.nom]] : "Autres";
+    groupes.set(g, [...(groupes.get(g) || []), l]); });
+  const faisables = Object.entries(E.stock_couvre || {}).filter(([id, p]) => p >= 0.8 && recette(id) && estRepas(recette(id)) && !estRetire(id) && !["extrariz", "rien"].includes(id))
+    .sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const ajout = `<div class="stock-ajout">
+      <label class="stock-bouton">${icone("image")}<span>Photo</span><small>frigo, placard</small><input type="file" accept="image/*" hidden data-stock-photo="photo"></label>
+      <label class="stock-bouton">${icone("receipt")}<span>Ticket</span><small>de caisse</small><input type="file" accept="image/*" hidden data-stock-photo="ticket"></label>
+      <button type="button" class="stock-bouton" data-action="stockTaper">${icone("notebook")}<span>Taper</span><small>6 œufs, riz 1 kg…</small></button></div>`;
+  return `<div class="m-tete"><div><h1 tabindex="-1">Mon stock</h1>
+      <p class="petit discret">${st.length ? `${st.length} produit${st.length > 1 ? "s" : ""} à la maison. Ce que tu marques mangé en sort tout seul.` : "Ajoute ce que tu as chez toi : l'appli te propose des repas avec."}</p></div></div>
+    ${ajout}
+    ${faisables.length ? `<section class="bloc stock-faisable" aria-labelledby="tFaisable"><h2 id="tFaisable">Faisable avec ton stock</h2>
+      <ul class="rp-liste">${faisables.map(([id, part]) => { const r = recette(id);
+        return `<li><a class="rp-plat" href="#/plat/${id}">${photo(r, 120, "carre")}<span class="rp-texte"><b>${esc(r.nom)}</b>${macrosLigne(r.kcal, r.prot)}</span>
+          <span class="stock-part">${nombre(Math.round(part * 100))} %</span></a></li>`; }).join("")}</ul>
+      <button type="button" class="bouton large" data-action="stockProposer" style="margin-top:10px">${icone("arrows-clockwise")}Refaire mes repas avec mon stock</button></section>` : ""}
+    ${st.length ? `<div class="champ formulaire" style="margin-top:14px"><label for="filtre" class="sr">Chercher dans le stock</label>
+        <input id="filtre" name="filtre" type="search" autocomplete="off" placeholder="Chercher : riz, lait…" value="${esc(filtreStock)}"></div>
+      ${[...groupes.entries()].map(([g, lignes]) => `<section class="bloc stock-groupe"><h2>${esc(g)}</h2><ul class="stock-liste">${lignes.map(l =>
+        `<li><span class="stock-nom">${esc(l.nom)}</span><span class="stock-q">
+          <button type="button" data-stock-pas="-1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Moins de ${esc(l.nom)}">−</button>
+          <input class="stock-saisie" type="number" inputmode="decimal" min="0" step="any" value="${Math.round(l.quantite * 10) / 10}" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" aria-label="Quantité de ${esc(l.nom)}, en ${esc(l.unite)}">
+          <span class="stock-u">${esc(l.unite === "pièce" ? (l.quantite > 1 ? "pièces" : "pièce") : l.unite)}</span>
+          <button type="button" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Plus de ${esc(l.nom)}">+</button></span></li>`).join("")}</ul></section>`).join("")
+        || `<p class="discret">Rien à ce nom.</p>`}` : ""}`;
+}
+async function stockAnalyser(corps, sorte) {
+  const d = $("dialogue");
+  d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">${icone("sparkle")} L'IA lit${sorte === "ticket" ? " le ticket" : sorte === "photo" ? " la photo" : " ta liste"}…</h2>
+    <p class="discret" role="status">Les produits, leurs quantités, et l'ingrédient de l'appli qui va avec. Tu vérifies ensuite.</p></div>`;
+  d.returnValue = ""; if (!d.open) d.showModal();
+  let rep;
+  try {
+    const r = await fetch("/api/stock/analyser", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...corps, sorte }) });
+    rep = await r.json();
+    if (!r.ok) { d.close("non"); return dire(rep.erreur || "L'IA n'a pas pu lire."); }
+  } catch (e) { d.close("non"); return dire("L'appli ne répond pas."); }
+  stockVerifier(rep.items, sorte);
+}
+function stockVerifier(items, sorte) {
+  const d = $("dialogue");
+  const unites = [["g", "g"], ["ml", "ml"], ["pièce", "pièce(s)"]];
+  d.innerHTML = `<form class="feuille formulaire" novalidate>
+    <h2 id="dialogueTitre">Vérifie avant d'ajouter</h2>
+    <p class="petit discret" style="margin:-4px 0 10px">${items.length} produit${items.length > 1 ? "s" : ""} lu${items.length > 1 ? "s" : ""}. Décoche ce qui n'est pas à toi, corrige une quantité.</p>
+    <ul class="stock-verifs">${items.map((x, k) => `<li>
+      <input type="checkbox" checked data-k="${k}" data-champ="garde" aria-label="Ajouter ${esc(x.nom)}">
+      <span class="sv-nom"><input type="text" value="${esc(x.nom)}" data-k="${k}" data-champ="nom" aria-label="Produit">
+        <small>${x.connu ? (x.lu && x.lu.toLowerCase() !== x.nom.toLowerCase() ? `lu : « ${esc(x.lu)} »` : "") : "pas dans tes recettes : gardé tel quel"}</small></span>
+      <input type="number" inputmode="decimal" min="0" step="any" value="${x.quantite}" data-k="${k}" data-champ="quantite" aria-label="Quantité">
+      <select data-k="${k}" data-champ="unite" aria-label="Unité">${unites.map(([v, t]) => `<option value="${v}"${v === x.unite ? " selected" : ""}>${t}</option>`).join("")}</select></li>`).join("")}</ul>
+    <small id="eStock" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
+    <div class="actions pied"><button class="bouton second" type="button" value="non">Annuler</button><button class="bouton" type="submit">Ajouter au stock</button></div></form>`;
+  d.querySelectorAll("[data-champ]").forEach(c => c.addEventListener("change", () => {
+    const x = items[Number(c.dataset.k)];
+    x[c.dataset.champ] = c.type === "checkbox" ? c.checked : c.dataset.champ === "quantite" ? Number(c.value) || 0 : c.value.trim();
+    c.closest("li").classList.toggle("retire", x.garde === false); }));
+  d.querySelector("[value=non]").addEventListener("click", () => d.close("non"));
+  d.querySelector("form").addEventListener("submit", async ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const gardes = items.filter(x => x.garde !== false && x.quantite > 0 && x.nom);
+    if (!gardes.length) { $("eStock").textContent = "Rien à ajouter : coche au moins un produit."; return; }
+    const ok = await appel("/api/stock/ajouter", { items: gardes, sorte });
+    if (ok === true) { d.close("oui"); rendre(); dire(`${gardes.length} produit${gardes.length > 1 ? "s" : ""} ajouté${gardes.length > 1 ? "s" : ""} au stock.`); }
+    else $("eStock").textContent = (ok && ok.erreur) || "Pas ajouté, réessaie.";
+  });
+  if (!d.open) d.showModal();
+}
 function vueStock() {
+  if (enSuivi()) return vueStockMaison();
   barre("");
   const lignes = E.stock.filter(l => l.nom.toLowerCase().includes(filtreStock.toLowerCase()));
   return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}
@@ -2653,11 +2737,11 @@ function vueHistorique() {
       <p class="actions" style="margin-top:8px"><button class="bouton sobre" data-action="noterRepas" data-date="${j.date}">${icone("cooking-pot")}Ajouter un repas ce jour-là</button></p>
     </details>`).join("")}</div>` : `<p class="discret">Rien pour l'instant : les jours apparaissent ici dès que tu notes tes repas.</p>`}`;
 }
-async function photoReduite(fichier) {
+async function photoReduite(fichier, max = 1600) {
   // L'iPhone donne des photos de plusieurs Mo : on les réduit (1600 px, JPEG) avant l'envoi.
   const url = await new Promise((ok, ko) => { const l = new FileReader(); l.onload = () => ok(l.result); l.onerror = ko; l.readAsDataURL(fichier); });
   const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
-  const echelle = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+  const echelle = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
   const c = document.createElement("canvas");
   c.width = Math.round(img.naturalWidth * echelle); c.height = Math.round(img.naturalHeight * echelle);
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
@@ -3504,6 +3588,40 @@ const ACTIONS = {
   },
   versCreation: vueCreation,
   versConnexion: () => vueConnexion(),
+  stockTaper: () => {
+    const d = $("dialogue");
+    d.innerHTML = `<form class="feuille formulaire" novalidate><h2 id="dialogueTitre">Ce que tu as chez toi</h2>
+      <div class="champ${E.claude === false ? "" : " champ-ia"}"><label for="stTexte">Tes produits ${E.claude === false ? "" : BADGE_IA}</label>
+        <textarea id="stTexte" rows="4" placeholder="6 œufs, riz basmati 1 kg, lait 1 l, 2 boîtes de thon, poulet 500 g"></textarea>
+        <small>Avec les quantités si tu les connais, séparés par des virgules.</small></div>
+      <div class="actions pied"><button class="bouton second" type="button" value="non">Annuler</button><button class="bouton" type="submit">Continuer</button></div></form>`;
+    d.querySelector("[value=non]").addEventListener("click", () => d.close("non"));
+    d.querySelector("form").addEventListener("submit", ev => { ev.preventDefault(); ev.stopPropagation();
+      const t = $("stTexte").value.trim(); if (t) stockAnalyser({ texte: t }, "texte"); });
+    d.returnValue = ""; if (!d.open) d.showModal();
+  },
+  async stockProposer() {
+    const d = $("dialogue");
+    d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">Tes prochains jours avec ton stock</h2><p class="discret" role="status">Je cherche…</p></div>`;
+    d.returnValue = ""; if (!d.open) d.showModal();
+    let props;
+    try { const r = await fetch("/api/stock/propositions", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      props = (await r.json()).propositions || []; } catch (e) { d.close("non"); return dire("L'appli ne répond pas."); }
+    const NOM = { pdj: "matin", dej: "midi", din: "soir" };
+    d.innerHTML = `<form class="feuille formulaire" novalidate><h2 id="dialogueTitre">Tes prochains jours avec ton stock</h2>
+      ${props.length ? `<p class="petit discret" style="margin:-4px 0 10px">À partir de demain. Décoche ce que tu veux garder ; les grammes se règlent sur ton objectif.</p>
+        <ul class="stock-props">${props.map((x, k) => `<li><label><input type="checkbox" checked data-k="${k}">
+          <span><small>${esc(x.nom_jour)} ${NOM[x.moment]}</small><s>${esc((recette(x.avant) || { nom: "rien" }).nom)}</s><b>${esc(recette(x.apres).nom)}</b>
+          <small class="stock-part">${nombre(Math.round(x.part * 100))} % en stock</small></span></label></li>`).join("")}</ul>`
+        : `<p class="dujour"><strong>Rien à changer.</strong> Tes prochains repas utilisent déjà ce que tu as, ou ton stock ne couvre pas encore un plat entier.</p>`}
+      <div class="actions pied"><button class="bouton second" type="button" value="non">${props.length ? "Annuler" : "Fermer"}</button>${props.length ? `<button class="bouton" type="submit">Refaire ces repas</button>` : ""}</div></form>`;
+    d.querySelector("[value=non]").addEventListener("click", () => d.close("non"));
+    if (props.length) d.querySelector("form").addEventListener("submit", async ev => { ev.preventDefault(); ev.stopPropagation();
+      const choix = props.filter((x, k) => d.querySelector(`[data-k="${k}"]`).checked);
+      if (!choix.length) return d.close("non");
+      d.close("oui");
+      agir("/api/stock/appliquer", { choix }, `${choix.length} repas refait${choix.length > 1 ? "s" : ""} avec ton stock.`); });
+  },
   oubliMdp: () => {
     $("contenu").innerHTML = `<button class="retour" data-action="versConnexion" style="border:0;background:none;cursor:pointer">${icone("caret-left")}Connexion</button>
       <div class="titre"><h1 tabindex="-1">Mot de passe oublié</h1><p>Écris ton identifiant ou ton email : un lien pour choisir un nouveau mot de passe part sur ton email.</p></div>
@@ -3583,6 +3701,9 @@ document.addEventListener("click", ev => {
   // « ‹ Profil », « ‹ Aujourd'hui »… : si l'on vient de cette page, on y revient d'un pas (même position), sans en empiler une.
   const ret = ev.target.closest("a.retour[href]:not([data-precedent])");
   if (ret && adressePrecedente && ret.getAttribute("href") === adressePrecedente) { ev.preventDefault(); RETOUR_ARRIERE = true; return history.back(); }
+  const pas = ev.target.closest("[data-stock-pas]");
+  if (pas) { const l = { quantite: Number(pas.dataset.q), unite: pas.dataset.unite };
+    return agir("/api/stock", { nom: pas.dataset.nom, unite: pas.dataset.unite, quantite: Math.max(0, Math.round((l.quantite + Number(pas.dataset.stockPas) * pasStock(l)) * 10) / 10) }, ""); }
   const plat = ev.target.closest('a.repas[href^="#/plat/"], a.rp-plat[href^="#/plat/"]');
   if (plat && PETIT.matches && !ev.target.closest("#dialogue, .carte-fond")) {
     ev.preventDefault();
@@ -3674,6 +3795,12 @@ document.addEventListener("change", ev => {
     if (liste === "secs") { cocher(i.dataset.coche, i.checked); return; }          // fruits secs : simple pense-bete, garde sur l'appareil
     const cible = liste === "marche" || (liste === "boucher" && E.rythme === "mois") ? "marche" : "panier";
     agir("/api/courses/cocher", { liste: cible, nom, coche: i.checked }, i.checked ? `« ${nom} » : tu en as déjà, l'appli ne l'achète pas.` : `« ${nom} » revient dans la liste.`);
+    return;
+  }
+  if (i.matches(".stock-saisie")) return agir("/api/stock", { nom: i.dataset.nom, unite: i.dataset.unite, quantite: Math.max(0, Number(i.value) || 0) }, "");
+  if (i.matches("[data-stock-photo]") && i.files && i.files[0]) {
+    const sorte = i.dataset.stockPhoto, f = i.files[0]; i.value = "";
+    photoReduite(f, sorte === "ticket" ? 2200 : 1600).then(ph => stockAnalyser({ photo: ph }, sorte)).catch(() => dire("Photo illisible."));
     return;
   }
   if (i.matches(".stock-ligne input"))

@@ -446,6 +446,32 @@ try {
     vrai(await B.js(`location.hash === '#/profil'`), 'Réglages ne revient pas au Profil');
   });
 
+  // Taha, 22/11/2026 : le stock à la maison (saisie → vérification → stock ; −/+ ; propositions)
+  await test('Stock : saisir, vérifier, ajouter, −/+, propositions', async () => {
+    await aller('#/stock');
+    vrai(await attendre(`!!document.querySelector('.stock-ajout') && !!document.querySelector('.nav-bas a[href="#/stock"]')`, 10000) >= 0, 'pas d\'onglet ou de page Stock');
+    await B.photo('stock-vide');
+    await B.js(`document.querySelector('[data-action=stockTaper]').click()`);
+    vrai(await attendre(`!!document.getElementById('stTexte')`, 5000) >= 0, 'pas de saisie');
+    await B.js(`document.getElementById('stTexte').value = '6 œufs, riz 1 kg, lait 1 l'; document.querySelector('#dialogue [type=submit]').click()`);
+    vrai(await attendre(`document.querySelectorAll('.stock-verifs li').length >= 3`, 30000) >= 0, 'pas de vérification des produits');
+    await B.photo('stock-verifier');
+    await viderToast();
+    await B.js(`document.querySelector('#dialogue [type=submit]').click()`);
+    vrai(/ajouté/.test(await toast()), 'pas ajouté au stock');
+    vrai(await attendre(`document.querySelectorAll('.stock-liste li').length >= 3`, 10000) >= 0, 'le stock ne montre pas les produits');
+    const avant = await B.js(`document.querySelector('.stock-saisie').value`);
+    await B.js(`document.querySelector('[data-stock-pas="1"]').click()`);
+    vrai(await attendre(`document.querySelector('.stock-saisie') && document.querySelector('.stock-saisie').value !== ${JSON.stringify(avant)}`, 10000) >= 0, '+ ne change rien');
+    await B.photo('stock-plein');
+    if (await B.js(`!!document.querySelector('[data-action=stockProposer]')`)) {
+      await B.js(`document.querySelector('[data-action=stockProposer]').click()`);
+      vrai(await attendre(`document.getElementById('dialogue').open && !/cherche/.test(document.getElementById('dialogue').textContent)`, 20000) >= 0, 'pas de propositions');
+      await B.photo('stock-propositions');
+      await B.js(`document.querySelector('#dialogue [value=non]').click()`);
+    }
+  });
+
   await test('Ajouter un repas : pas de Matin / Midi / Soir à choisir', async () => {
     await aller('#/semaine');
     await B.js(`document.querySelector('[data-action=noterRepas]').click()`);

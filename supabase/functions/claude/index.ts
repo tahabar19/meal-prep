@@ -21,7 +21,7 @@ const MODELE = "claude-sonnet-5-5"; // Sonnet (Taha, 20/11/2026 : « utilise Son
 // tâche nutrition demandée par l'appli, répond en JSON, dans des tailles bornées, avec un quota par personne.
 const QUOTAS: Record<string, [number, number]> = { messages: [40, 200], web: [400, 2000], cle: [10, 30] };   // par heure, par jour
 const TACHES: Record<string, string> = {
-  repas: "analyser ce qu'une personne a mangé (texte, photo d'assiette, d'étiquette ou de ticket de caisse) et en donner les aliments, leurs poids et leurs valeurs nutritionnelles, puis corriger ce repas à sa demande (ajouter, retirer ou changer un aliment, viser des calories ou des macros)",
+  repas: "analyser ce qu'une personne a mangé (texte, photo d'assiette, d'étiquette ou de ticket de caisse) et en donner les aliments, leurs poids et leurs valeurs nutritionnelles, puis corriger ce repas à sa demande (ajouter, retirer ou changer un aliment, viser des calories ou des macros) ; ou lire ce qu'elle a chez elle pour son stock de cuisine (photo de frigo ou de placard, ticket de caisse de supermarché, liste écrite) et en donner les aliments et leurs quantités",
   aide: "une petite aide de cuisine ou de nutrition demandée par l'appli : les valeurs d'un aliment, les ingrédients d'un plat, des mots de recherche ou le choix d'une photo de plat",
 };
 const consigne = (tache: string) => `Tu es la partie Claude de l'appli de nutrition « Mon Meal Prep ». Tu fais UNIQUEMENT cette tâche : ${TACHES[tache]}.
