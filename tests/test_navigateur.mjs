@@ -453,14 +453,11 @@ try {
     await aller('#/stock');
     vrai(await attendre(`!!document.querySelector('.stock-ajout') && !!document.querySelector('.nav-bas a[href="#/stock"]')`, 10000) >= 0, 'pas d\'onglet ou de page Stock');
     await B.photo('stock-vide');
-    await B.js(`document.querySelector('[data-action=stockTaper]').click()`);
-    vrai(await attendre(`!!document.getElementById('stTexte')`, 5000) >= 0, 'pas de saisie');
-    await B.js(`document.getElementById('stTexte').value = '6 œufs, riz 1 kg, lait 1 l'; document.querySelector('#dialogue [type=submit]').click()`);
-    vrai(await attendre(`document.querySelectorAll('.stock-verifs li').length >= 3`, 30000) >= 0, 'pas de vérification des produits');
-    await B.photo('stock-verifier');
+    // Taha, 22/11/2026 (soir) : une barre sous Photo / Ticket ; ce qui est tapé entre tout de suite au stock
+    vrai(await B.js(`!!document.getElementById('stTaper')`), 'pas de barre « ce que tu as acheté »');
     await viderToast();
-    await B.js(`document.querySelector('#dialogue [type=submit]').click()`);
-    vrai(/ajouté/.test(await toast()), 'pas ajouté au stock');
+    await B.js(`document.getElementById('stTaper').value = '6 œufs, riz 1 kg, lait 1 l'; document.querySelector('#fStockTaper [type=submit]').click()`);
+    vrai(/Ajouté/.test(await toast(30000)), 'pas ajouté au stock');
     vrai(await attendre(`document.querySelectorAll('.stock-liste li').length >= 3`, 10000) >= 0, 'le stock ne montre pas les produits');
     const avant = await B.js(`document.querySelector('.stock-saisie').value`);
     await B.js(`document.querySelector('[data-stock-pas="1"]').click()`);
