@@ -678,7 +678,7 @@ function demanderChangement(k, n, moment) {
   const fodmap = (s.modes || []).includes("fodmap");
   const permise = r => r.id !== actuelId && r.id !== "extrariz" && r.id !== "rien" && (!fodmap || (r.fodmap && !r.filtres.cru));
   // N'importe quel plat à n'importe quel repas (Taha, 19/11/2026) : en cherchant, tous les types ; sinon ceux de ce repas.
-  const tous = E.recettes.filter(r => ["collation", "plat", "petitdej"].includes(r.cat) && permise(r));
+  const tous = E.recettes.filter(r => ["collation", "plat", "petitdej"].includes(r.cat) && permise(r) && !estRetire(r.id));
   const possibles = tous.filter(r => r.cat === cat);
   const milieu = cle => { const v = possibles.map(r => r[cle]).sort((a, b) => a - b); return v[Math.floor(v.length / 2)] || 0; };
   const actuel = sansRepas ? { ...recette("rien"), kcal: milieu("kcal"), prot: milieu("prot") } : recette(actuelId);   // sans repas : un plat moyen
@@ -981,6 +981,8 @@ async function apercuChangement(k, operation, titre, retour) {
 }
 
 /* ------------------------------------------------------------ mon propre plat */
+// Les plats retirés pour de bon par la personne (Taha, 22/11/2026) : plus au catalogue ni dans les choix.
+const estRetire = id => (E.plats_retires || []).includes(id);
 function ingredientsConnus() {
   // Les ingredients du site et ceux crees par le profil, pour les listes de saisie.
   return [...new Set(E.recettes.filter(r => !r.perso).flatMap(r => r.ing.filter(i => i.u !== "qs").map(i => i.n))
@@ -1233,7 +1235,8 @@ async function demanderIngredient(o) {
 }
 
 /* ------------------------------------------------------------ ajuster les quantites d'une recette */
-const AVANT_POUBELLE = new Map();          // « plat|ingrédient » → sa quantité avant la poubelle (pour ↺)
+const AVANT_POUBELLE = new Map();
+let AJ_NOTE = null;                        // le dernier ingrédient ajouté, affiché une fois (avec « Retirer »)          // « plat|ingrédient » → sa quantité avant la poubelle (pour ↺)
 async function demanderAjustement(id, quantites = null, jour = null) {
   // jour = { k, n, retour } : pour ce jour-la seulement ; sinon la recette du profil, tous les jours.
   // Chaque changement est recalcule par le site ; rien n'est enregistre avant le bouton du bas.
@@ -1265,6 +1268,8 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   const sJ = jour ? planDe(jour.k) : null, plusJ = jour ? enPlusDuJour(sJ, jour.n) : null, objJ = sJ ? sJ.objectif || {} : {};
   const tuileJour = (nom, cle, unite) => { const base = (jj[cle] || 0) + plusJ[cle], delta = Math.round(a.apres[cle] * t) - Math.round(jour.depart[cle]);
     return `<div><span>${nom}</span><b class="chiffres">${nombre(Math.round(base + delta))}${objJ[cle] ? `<small> / ${nombre(objJ[cle])}</small>` : ""} ${unite}</b>${delta ? `<small class="ecart ${cle === "prot" ? (delta > 0 ? "aj-bon" : "aj-mauvais") : ""}">${delta > 0 ? "+" : "−"}${nombre(Math.abs(delta))} ${unite}</small>` : ""}</div>`; };
+  const note = AJ_NOTE && AJ_NOTE.id === id ? AJ_NOTE : null;
+  AJ_NOTE = null;
   const connusTous = ingredientsConnus(), dans = new Set(a.ingredients.filter(i => i.q > 0 || i.u === "qs").map(i => i.n));
   const sansAccents = x => String(x).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/œ/g, "oe").trim();
   d.innerHTML = `<form class="feuille aj-form" novalidate>
@@ -1281,11 +1286,12 @@ async function demanderAjustement(id, quantites = null, jour = null) {
         <span class="reglage"><button type="button" data-n="${n}" data-sens="-1" aria-label="Moins de ${esc(i.n)}">−</button>
           <input id="aj${n}" data-n="${n}" type="number" inputmode="decimal" min="0" step="${pas(i)}" value="${vu(i)}" aria-describedby="au${n}">
           <button type="button" data-n="${n}" data-sens="1" aria-label="Plus de ${esc(i.n)}">+</button><span class="unite" id="au${n}">${esc(i.u)}</span></span></li>`).join("")}</ul>
+    ${note ? `<p class="aj-note" role="status">${note.texte} <button type="button" class="lien" data-note-retirer>Retirer</button>${note.voir ? ` · <button type="button" class="lien" data-note-voir>Voir ses valeurs</button>` : ""}</p>` : ""}
     <div class="champ ing-cherche" style="margin-top:14px"><label for="ajNouveau" id="ajNouveauTitre">Ajouter un ingrédient</label>
       <div class="aj-ajout"><div class="rp-recherche${E.claude === false ? "" : " champ-ia"}">${icone(E.claude === false ? "magnifying-glass" : "sparkle")}<input id="ajNouveau" type="search" enterkeyhint="go" autocomplete="off"
-        placeholder="Quinoa, skyr Lidl…" aria-describedby="ajAide"></div><button type="button" class="bouton second" id="ajAjouter">Ajouter</button></div>
+        placeholder="Quinoa, skyr Lidl…" aria-describedby="ajAide"></div><button type="button" class="bouton second" id="ajAjouter"><span class="aj-ia-ic" hidden>${icone("sparkle")}</span>Ajouter</button></div>
       <ul class="ing-suggestions" id="ajSuggestions" aria-label="Ingrédients trouvés"></ul>
-      <small id="ajAide">Tape un nom : ${connusTous.length} ingrédients connus${E.claude === false ? "" : ", et l'IA crée les autres (valeurs de l'étiquette en ligne, sinon estimées)"}.</small></div>
+      <small id="ajAide">Tape un nom : ${connusTous.length} ingrédients connus${E.claude === false ? "" : ". Sinon, l'IA le retrouve ou le crée"}.</small></div>
     <div class="actions pied"><button class="bouton second" type="button" value="non">Annuler</button>
       ${change ? `<button class="bouton sobre" type="button" data-origine>${jour ? "Comme la recette" : "Recette d'origine"}</button>` : ""}
       <button class="bouton" type="submit">Valider</button></div></form>`;
@@ -1298,8 +1304,9 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   const origine = d.querySelector("[data-origine]");
   if (origine) origine.addEventListener("click", () => refaire({}));
   let remplace = null;                     // l'ingredient a remplacer, sinon on ajoute
-  const ajouterIngredient = nom => {
+  const ajouterIngredient = (nom, texte = null, voir = false) => {
     const q = { ...actuel };
+    AJ_NOTE = { id, texte: texte || `Ajouté : <b>${esc(nom)}</b>.`, voir: voir ? nom : null, avant: { ...actuel } };
     if (remplace) { q[remplace] = 0; q[nom] = { comme: remplace }; } else q[nom] = null;   // null : sa quantite habituelle
     refaire(q);
   };
@@ -1311,30 +1318,78 @@ async function demanderAjustement(id, quantites = null, jour = null) {
     const trouves = !mots.length ? [] : connusTous.filter(n => !dans.has(n) && mots.every(m => sansAccents(n).includes(m)))
       .sort((a, b) => (sansAccents(b).startsWith(t) - sansAccents(a).startsWith(t)) || a.length - b.length).slice(0, 8);
     const exact = connusTous.some(n => sansAccents(n) === t);
-    $("ajSuggestions").innerHTML = trouves.map(n => `<li><button type="button" data-ing="${esc(n)}">${esc(n)}${icone("plus")}</button></li>`).join("")
-      + (brut.length >= 2 && !exact ? `<li><button type="button" class="rp-ia" data-ing-ia="${esc(brut)}">${icone("sparkle")}<span>Créer « ${esc(brut.length > 40 ? brut.slice(0, 38) + "…" : brut)} »${E.claude === false ? "" : " avec l'IA"}
-          <small>${E.claude === false ? "Tu donnes ses valeurs pour 100 g" : "Ses valeurs : l'étiquette en ligne, sinon estimées"}</small></span>${icone("caret-right")}</button></li>` : "");
+    $("ajSuggestions").innerHTML = trouves.map(n => `<li><button type="button" data-ing="${esc(n)}">${esc(n)}${icone("plus")}</button></li>`).join("");
+    // L'icône violette : « Ajouter » passera par l'IA (le nom n'est pas mot à mot dans la liste).
+    const ia = E.claude !== false && brut.length >= 2 && !exact;
+    $("ajAjouter").classList.toggle("bouton-ia", ia);
+    d.querySelector(".aj-ia-ic").hidden = !ia;
   };
   $("ajNouveau").addEventListener("input", proposerIngredients);
   $("ajSuggestions").addEventListener("click", ev => {
     const b = ev.target.closest("button");
     if (!b) return;
     if (b.dataset.ing) return ajouterIngredient(b.dataset.ing);
-    if (b.dataset.ingIa) return creerIngredient(b.dataset.ingIa);
+    if (b.dataset.autre) return parIA(b.dataset.autre);
   });
-  // « Ajouter » ou Entrée : un ingrédient connu va dans la liste (on le voit avant de valider) ; sinon l'IA le crée.
+  // « Ajouter » (Taha, 22/11/2026) : 1. le nom exact → ajouté ; 2. une faute de frappe, un pluriel, l'ordre des mots →
+  // « Tu veux dire … ? », sans IA ; 3. sinon UN appel à l'IA, qui reçoit les ~30 noms proches : elle dit lequel c'est,
+  // ou crée l'ingrédient (étiquette en ligne, sinon estimation), enregistré tout de suite. On voit toujours ce qui est mis.
+  const PETITS = new Set(["de", "du", "des", "la", "le", "les", "et", "au", "aux", "d", "l", "a", "en", "avec", "un", "une"]);
+  const mots = x => sansAccents(x).replace(/[^a-z0-9]+/g, " ").split(" ").filter(m => m && !PETITS.has(m)).map(m => m.length > 3 ? m.replace(/[sx]$/, "") : m);
+  const cle = x => mots(x).sort().join(" ");
+  const ecart = (x, y) => { if (Math.abs(x.length - y.length) > 2) return 9;
+    let l = Array.from({ length: y.length + 1 }, (_, k) => k);
+    for (let i = 1; i <= x.length; i++) { const n = [i]; for (let k = 1; k <= y.length; k++) n[k] = Math.min(l[k] + 1, n[k - 1] + 1, l[k - 1] + (x[i - 1] === y[k - 1] ? 0 : 1)); l = n; }
+    return l[y.length]; };
+  const libres = () => connusTous.filter(n => !dans.has(n));
+  const prochesLocaux = brut => { const k = cle(brut); if (!k) return [];
+    const memes = libres().filter(n => cle(n) === k);
+    if (memes.length) return memes.slice(0, 3);
+    const tol = k.length <= 5 ? 1 : 2;
+    return libres().map(n => [n, ecart(k, cle(n))]).filter(([, e]) => e <= tol).sort((x, y) => x[1] - y[1]).slice(0, 3).map(([n]) => n); };
+  const paires = x => { const t = ` ${sansAccents(x)} `, p = new Set(); for (let i = 0; i < t.length - 1; i++) p.add(t.slice(i, i + 2)); return p; };
+  const ressemblance = (x, y) => { const a1 = paires(x), b1 = paires(y); let c = 0; a1.forEach(p => { if (b1.has(p)) c++; }); return 2 * c / (a1.size + b1.size || 1); };
+  const parIA = async brut => {
+    if (E.claude === false) return creerIngredient(brut);              // sans compte Claude : ses valeurs à la main
+    const bouton = $("ajAjouter"); bouton.disabled = true; bouton.lastChild.textContent = "L'IA cherche…";
+    const candidats = libres().map(n => [n, ressemblance(brut, n)]).sort((x, y) => y[1] - x[1]).slice(0, 30).map(([n]) => n);
+    let v;
+    try {
+      const r = await fetch("/api/ingredient/proposer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nom: brut, candidats }) });
+      const rep = await r.json();
+      if (!r.ok) { dire(rep.erreur || "L'IA n'a pas pu répondre."); return refaire(actuel); }
+      v = rep.ingredient;
+    } catch (e) { dire("L'appli ne répond pas."); return refaire(actuel); }
+    if (v.existant && connusTous.includes(v.existant))
+      return ajouterIngredient(v.existant, `Ajouté : <b>${esc(v.existant)}</b> (tu as écrit « ${esc(brut)} »).`);
+    const MAC = ["kcal", "prot", "gluc", "lip", "fib"];
+    if (MAC.some(m => v[m] == null)) return demanderIngredient({ nom: brut, creer: true, retour: () => refaire(actuel), apres: ajouterIngredient });   // l'IA n'a rien donné : à la main
+    const lue = v.etiquette != null ? (v.etiquettes || [])[v.etiquette] : null;
+    const corps = { nom: v.nom, u: v.u, q: v.q, a: v.a, prix: v.prix, ...Object.fromEntries(MAC.map(m => [m, v[m]])),
+      source: lue ? `étiquette ${lue.source} : ${lue.url}` : "proposé par l'IA", ...(v.vitamines ? { vitamines_claude: v.vitamines } : {}) };
+    const ok = await appel("/api/ingredient/enregistrer", corps);
+    if (ok !== true) { dire((ok && ok.erreur) || "Ingrédient pas enregistré."); return refaire(actuel); }
+    const nom = E.ingredient || v.nom;
+    ajouterIngredient(nom, `Nouvel ingrédient : <b>${esc(nom)}</b>, valeurs ${lue ? `de l'étiquette (${esc(lue.source)})` : "estimées par l'IA"}.`, true);
+  };
   const ajouterTape = () => {
     const brut = $("ajNouveau").value.trim();
     if (!brut) { $("ajNouveau").focus(); return; }
     const exact = connusTous.find(n => sansAccents(n) === sansAccents(brut));
     if (exact) return ajouterIngredient(exact);
-    const seul = connusTous.filter(n => !dans.has(n) && sansAccents(n).includes(sansAccents(brut)));
-    if (seul.length === 1) return ajouterIngredient(seul[0]);
-    $("ajNouveau").blur();
-    creerIngredient(brut);
+    const proches = prochesLocaux(brut);
+    if (!proches.length) { $("ajNouveau").blur(); return parIA(brut); }
+    $("ajSuggestions").innerHTML = `<li class="aj-veux-dire">Tu veux dire :</li>${proches.map(n => `<li><button type="button" data-ing="${esc(n)}">${esc(n)}${icone("plus")}</button></li>`).join("")}
+      <li><button type="button" class="rp-ia" data-autre="${esc(brut)}">${icone("sparkle")}<span>Non, c'est autre chose<small>L'IA le retrouve ou le crée</small></span>${icone("caret-right")}</button></li>`;
+    $("ajSuggestions").scrollIntoView({ block: "nearest", behavior: "smooth" });
   };
   $("ajAjouter").addEventListener("click", ajouterTape);
   $("ajNouveau").addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); ajouterTape(); } });
+  if (note) {
+    const r1 = d.querySelector("[data-note-retirer]"), r2 = d.querySelector("[data-note-voir]");
+    if (r1) r1.addEventListener("click", () => refaire(note.avant));
+    if (r2) r2.addEventListener("click", () => demanderIngredient({ nom: note.voir, retour: () => refaire(actuel) }));
+  }
   // La poubelle : l'ingrédient est retiré de l'assiette (quantité 0) ; « ↺ » le remet comme dans la recette.
   d.querySelectorAll("[data-retirer-ing]").forEach(b => b.addEventListener("click", ev => {
     ev.preventDefault();
@@ -1475,7 +1530,8 @@ function ficheRapide(id, ctx, depuis, vu = null) {
           <span><b>Modifier les ingrédients</b><small>Retirer, ajouter, changer, pour ce jour</small></span>${icone("caret-right")}</button>` : ""}
       </div>` : ctx ? "" : `${estRepas(r0) && !vu ? `<div class="cp-choix"><button type="button" data-action="ajuster" data-plat="${id}">${icone("sliders-horizontal")}
           <span><b>${r0.ajustee ? "Recette ajustée : modifier" : "Ajuster la recette"}</b><small>Les quantités, pour tous les jours</small></span>${icone("caret-right")}</button></div>` : ""}
-        <div class="cp-avis">${boutonsGout(r0)}</div>`}
+        <div class="cp-avis">${boutonsGout(r0)}</div>
+        ${estRepas(r0) && !vu ? `<p class="cp-equilibrer"><button type="button" class="bouton sobre cp-retirer" data-action="retirerPlat" data-plat="${id}">${icone("poubelle")}Retirer ce plat</button></p>` : ""}`}
       ${(() => {
         // Deux petits boutons discrets en bas de la carte (Taha, 20/11/2026) : équilibrer la journée, fixer le plat.
         // Tout plat se fixe, à son repas (Taha, 20/11/2026).
@@ -1534,9 +1590,22 @@ function ficheRapide(id, ctx, depuis, vu = null) {
     avantFermeture: () => { if (vv) { vv.removeEventListener("resize", caler); vv.removeEventListener("scroll", caler); } } };
   fond.addEventListener("click", ev => { if (ev.target === fond) fermerCarte(); });
   carte.querySelector(".cp-fermer").addEventListener("click", () => fermerCarte());
-  carte.querySelectorAll("[data-action]").forEach(x => x.addEventListener("click", () => fermerCarte(true)));   // l'action ouvre sa propre feuille
+  // L'action ouvre sa propre feuille ; « Annuler » (ou la croix, ou Échap) y ramène sur cette carte, un pas en arrière
+  // seulement (Taha, 22/11/2026 : « les boutons Annuler reviennent trop »).
+  carte.querySelectorAll("[data-action]").forEach(x => x.addEventListener("click", () => {
+    fermerCarte(true);
+    if (!["manger", "fixer", "noter"].includes(x.dataset.action)) { RETOUR_CARTE = { id, ctx, vu }; $("dialogue").returnValue = ""; }
+  }));
   carte.querySelector(".cp-fermer").focus({ preventScroll: true });
 }
+// La carte d'où vient la fenêtre ouverte : y revenir quand la fenêtre est annulée, pas quand elle est validée.
+let RETOUR_CARTE = null;
+$("dialogue").addEventListener("close", () => {
+  const r = RETOUR_CARTE, d = $("dialogue");
+  RETOUR_CARTE = null;
+  if (!r || d.returnValue === "oui") return;
+  setTimeout(() => { if (!d.open && !document.querySelector(".carte-fond") && recette(r.id)) ficheRapide(r.id, r.ctx, null, r.vu); }, 0);
+});
 function fermerCarte(tout_de_suite = false) {
   const e = fermerCarte.etat;
   if (!e) return;
@@ -2070,17 +2139,18 @@ function vueVitaminesMangees(params) {
   const codes = Object.keys(V.noms);
   const pct = c => V.besoins[c] ? Math.round(100 * (x.vitamines[c] || 0) / V.besoins[c]) : 0;
   const couvertes = codes.filter(c => pct(c) >= 100).length, basses = codes.filter(c => pct(c) < 80);
-  const manquent = E.vitamines_a_completer || [], suivi = params.get("vue") === "suivi", completer = params.get("completer") === "1";
+  const vue = ["semaine", "mois"].includes(params.get("vue")) ? params.get("vue") : params.get("vue") === "suivi" ? (params.get("p") === "30" ? "mois" : "semaine") : "jour";
+  const manquent = E.vitamines_a_completer || [], suivi = vue !== "jour", completer = params.get("completer") === "1";
   // Deux vues (Taha, 22/11/2026) : le jour, tout sur un écran ; « Sur la durée », ce qui te manque souvent.
   const onglets = `<div class="vit-titre"><h1 tabindex="-1">Vitamines</h1><nav class="jours vit-onglets" aria-label="Vue">
-    <a href="#/vitamines"${suivi ? "" : ' aria-current="true"'}>Jour</a><a href="#/vitamines?vue=suivi"${suivi ? ' aria-current="true"' : ""}>Sur la durée</a></nav></div>`;
+    ${[["jour", "Jour"], ["semaine", "Semaine"], ["mois", "Mois"]].map(([v, t]) => `<a href="#/vitamines${v === "jour" ? "" : `?vue=${v}`}"${v === vue ? ' aria-current="true"' : ""}>${t}</a>`).join("")}</nav></div>`;
   const aCompleter = manquent.length ? `<details class="bloc a-completer"${completer ? " open" : ""}><summary><span>${icone("warning-circle")}${manquent.length} aliment${manquent.length > 1 ? "s" : ""} sans vitamines : à compléter</span>${icone("caret-right")}</summary>
       <p class="petit discret">Tant qu'elles manquent, ces aliments comptent zéro vitamine. Branche ton compte Claude (Réglages) pour qu'il les estime, ou renseigne-les ici.</p>
       ${manquent.map((nom, i) => `<details class="completer"><summary>${esc(nom)}${icone("caret-right")}</summary>
         <form class="formulaire" data-completer="${esc(nom)}" data-i="${i}" novalidate>${champsVitamines(`cv${i}_`)}
           <small class="erreur" id="eCv${i}" style="display:block;color:var(--critique)"></small>
           <button class="bouton second" type="submit">Enregistrer</button></form></details>`).join("")}</details>` : "";
-  if (suivi) return onglets + vueVitaminesDuree(params, a, V, decaler) + aCompleter;
+  if (suivi) return onglets + vueVitaminesDuree(vue === "mois" ? 30 : 7, a, V, decaler) + aCompleter;
   return `${completer ? aCompleter : ""}${onglets}
   ${nav}
   ${!x.jours_suivis && !Object.values(x.vitamines_prevues || {}).some(v => v > 0) ? vide(dec ? "Rien de marqué mangé ce jour-là" : "Rien de mangé pour l'instant",
@@ -2094,11 +2164,9 @@ function vueVitaminesMangees(params) {
 // « Sur la durée » (Taha, 22/11/2026 : « voir les vitamines qui me manquent toujours, sans que ce soit trop sur les yeux ») :
 // les 7 ou 30 derniers jours finis où tu as marqué des plats mangés ; pour chaque vitamine, la moyenne et le nombre de
 // jours sous 80 % du besoin, les plus en manque en premier.
-function vueVitaminesDuree(params, a, V, decaler) {
-  const n = params.get("p") === "30" ? 30 : 7;
+function vueVitaminesDuree(n, a, V, decaler) {
   const dates = Array.from({ length: n }, (_, i) => decaler(a.aujourdhui, -1 - i)).filter(d => ((a.par_jour || {})[d] || {}).jours_suivis > 0);
-  const periodes = `<nav class="jours vit-periodes" aria-label="Période">${[[7, "7 derniers jours"], [30, "30 derniers jours"]].map(([v, t]) =>
-    `<a href="#/vitamines?vue=suivi${v === 30 ? "&p=30" : ""}"${v === n ? ' aria-current="true"' : ""}>${t}</a>`).join("")}</nav>`;
+  const periodes = "";
   if (!dates.length) return periodes + vide("Pas encore de journée finie", "Marque tes plats « mangé » : demain, cette page te dira ce qui te manque souvent.", "#/semaine", "Aller au jour");
   const codes = Object.keys(V.noms).filter(c => V.besoins[c]);
   const ligne = c => { const p = dates.map(d => 100 * ((a.par_jour[d].vitamines || {})[c] || 0) / V.besoins[c]);
@@ -2109,7 +2177,7 @@ function vueVitaminesDuree(params, a, V, decaler) {
   return `${periodes}
   <section class="bloc vit-jour" aria-labelledby="tDuree">
     <p class="vit-resume" id="tDuree">${souvent.length ? `Te manquent souvent : <b class="bas">${souvent.map(l => esc(court(l.c))).join(", ")}</b>` : "<b>Rien ne te manque souvent.</b>"}</p>
-    <p class="petit discret legende-prevu"><span>Moyenne par jour, sur ${dates.length} jour${dates.length > 1 ? "s" : ""} mangé${dates.length > 1 ? "s" : ""}</span></p>
+    <p class="petit discret legende-prevu"><span>Moyenne par jour sur les ${n} derniers jours (${dates.length} jour${dates.length > 1 ? "s" : ""} avec des plats mangés)</span></p>
     <ul class="barres compactes">${lignes.map(l => `<li class="${l.moy < 80 ? "bas" : ""}"${ROLE_VITAMINE[l.c] ? ` title="${esc(ROLE_VITAMINE[l.c])}"` : ""}><span>${esc(V.noms[l.c].nom)}</span>
       <span class="v"><b class="chiffres">${nombre(l.moy)} %</b>${l.bas ? ` · bas ${l.bas} j sur ${dates.length}` : ""}</span>
       <span class="piste" role="img" aria-label="${nombre(l.moy)} % du besoin en moyenne"><i style="width:${Math.min(100, l.moy)}%"></i></span></li>`).join("")}</ul>
@@ -2343,7 +2411,7 @@ function vueCatalogue({ params }) {
   const TRIS = [["nom", "Nom"], ["prix", "Prix"], ["prot", "Protéines"], ["kcal", "Calories"], ["temps", "Temps"]];
   // Type de repas et avis : de simples filtres (Taha, 19/11/2026), plus des onglets.
   const NOM_CAT = Object.fromEntries(CATS);
-  const repas = E.recettes.filter(estRepas), F = filtresCat, couvre = E.stock_couvre || {};
+  const repas = E.recettes.filter(r => estRepas(r) && !estRetire(r.id)), F = filtresCat, couvre = E.stock_couvre || {};
   const cherche = filtreCatalogue.trim().toLowerCase();
   const ordre = { nom: (a, b) => a.nom.localeCompare(b.nom, "fr"), prix: (a, b) => a.cout - b.cout, prot: (a, b) => b.prot - a.prot,
                   kcal: (a, b) => a.kcal - b.kcal, temps: (a, b) => (a.temps || 0) - (b.temps || 0) };
@@ -2570,7 +2638,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
   const sansAccent = x => String(x).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/œ/g, "oe").replace(/æ/g, "ae");
   const PETITS = new Set(["de", "du", "des", "la", "le", "les", "et", "au", "aux", "un", "une", "avec", "en", "a", "d", "l"]);
   const motsDe = x => sansAccent(x).split(/[^a-z0-9]+/).filter(m => m && !PETITS.has(m)).map(m => m.length > 3 ? m.replace(/[sx]$/, "") : m);
-  const tous = E.recettes.filter(r => ["plat", "petitdej", "collation"].includes(r.cat) || (r.cat === "fruit" && r.sec));
+  const tous = E.recettes.filter(r => (["plat", "petitdej", "collation"].includes(r.cat) || (r.cat === "fruit" && r.sec)) && !estRetire(r.id));
   const chercherPlats = t => {
     const mots = motsDe(t);
     if (!mots.length) return [];
@@ -3285,6 +3353,12 @@ const ACTIONS = {
     apercuChangement(k, { type: "reequilibrer", jour: n, moment: b.dataset.moment, plat: b.dataset.plat },
       `Équilibrer pour la journée`); },
   ajusterJour: b => demanderAjustement(b.dataset.plat, null, { k: Number(b.dataset.semaine), n: Number(b.dataset.jour) }),
+  async retirerPlat(b) {
+    const r = recette(b.dataset.plat);
+    if (!r || !await confirmer({ titre: "Retirer ce plat pour de bon ?", oui: "Retirer définitivement", non: "Annuler",
+      texte: `« ${r.nom} » ne reviendra plus dans ton catalogue, tes menus ni tes idées. Cette action est irréversible.` })) return;
+    agir("/api/plat/retirer", { plat: r.id }, `« ${r.nom} » retiré.`);
+  },
   retirerRepas: b => { const k = Number(b.dataset.semaine), n = Number(b.dataset.jour);
     apercuChangement(k, { type: "retirer", jour: n, moment: b.dataset.moment }, `Retirer « ${(recette(b.dataset.plat) || { nom: "ce repas" }).nom} » ?`); },
   appoint: () => agir("/api/appoint", {}, "Stock mis à jour avec ces produits."),

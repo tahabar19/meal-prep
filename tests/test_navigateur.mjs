@@ -345,7 +345,9 @@ try {
     vrai(await B.js(`document.querySelectorAll('#ajSuggestions [data-ing]').length`) > 0, 'rien pour « riz »');
     vrai(await B.js(`[...document.querySelectorAll('#ajSuggestions [data-ing]')].every(b => /riz/i.test(b.textContent))`), 'des ingrédients sans « riz »');
     await taper('licorne des bois');
-    vrai(await B.js(`!!document.querySelector('#ajSuggestions [data-ing-ia]')`), 'pas de « Créer avec l\'IA » pour un inconnu');
+    // Taha, 22/11/2026 : plus de « Créer X avec l'IA » ; le bouton Ajouter prend l'icône violette
+    vrai(await B.js(`!document.querySelector('#ajSuggestions [data-ing-ia]')`), 'encore « Créer avec l\'IA » dans la liste');
+    if (await B.js(`E.claude !== false`)) vrai(await B.js(`document.getElementById('ajAjouter').classList.contains('bouton-ia')`), 'pas d\'icône IA sur Ajouter pour un inconnu');
     await B.js(`document.getElementById('ajNouveau').scrollIntoView({ block: 'start' })`);
     await B.photo('ingredients-recherche');
     await taper('riz');
@@ -361,12 +363,53 @@ try {
       await taper(autre); await B.js(`document.getElementById('ajAjouter').click()`);
       vrai(await attendre(`document.querySelectorAll('.reglables > li').length === ${nb2 + 1}`, 15000) >= 0, `« ${autre} » : le bouton Ajouter ne l'ajoute pas`);
     }
+    // une faute de frappe : « Tu veux dire … ? », sans IA
+    const cible = await B.js(`ingredientsConnus().find(n => n.length > 7 && /^[a-z ]+$/i.test(n) && ![...document.querySelectorAll('.reglables label')].some(l => l.textContent.includes(n)))`);
+    if (cible) {
+      await taper(cible.slice(0, -1)); await B.js(`document.getElementById('ajAjouter').click()`);
+      vrai(await attendre(`[...document.querySelectorAll('#ajSuggestions [data-ing]')].some(b => b.textContent.trim() === ${JSON.stringify(cible)}) && !!document.querySelector('.aj-veux-dire')`, 5000) >= 0, `faute de frappe « ${cible.slice(0, -1)} » : pas de « Tu veux dire ${cible} »`);
+    }
     vrai(await B.js(`/Valider/.test(document.querySelector('#dialogue [type=submit]').textContent)`), 'le bouton n\'est pas « Valider »');
     await viderToast();
     await B.js(`document.querySelector('#dialogue [type=submit]').click()`);
     const msg = await toast();
     vrai(/modifié/.test(msg), `pas enregistré directement : « ${msg} »`);
     vrai(await B.js(`!document.getElementById('dialogue').open`), 'une fenêtre reste ouverte après Valider');
+  });
+
+  // Taha, 22/11/2026 : « Annuler » ramène un pas en arrière (la carte du plat), pas tout en haut
+  await test('Annuler revient à la carte du plat', async () => {
+    await aller('#/semaine');
+    await B.js(`document.querySelector('.grille-plats a.repas').click()`);
+    vrai(await attendre(`document.querySelector('.carte-plat [data-action=ajusterJour]')`, 10000) >= 0, 'pas de carte');
+    await B.js(`document.querySelector('.carte-plat [data-action=ajusterJour]').click()`);
+    vrai(await attendre(`document.querySelector('#dialogue[open] [value=non]')`, 10000) >= 0, 'pas de fenêtre');
+    await B.js(`document.querySelector('#dialogue [value=non]').click()`);
+    vrai(await attendre(`!!document.querySelector('.carte-plat') && !document.getElementById('dialogue').open`, 5000) >= 0, 'Annuler ne ramène pas à la carte');
+    await B.js(`document.querySelector('.carte-plat [data-action=changer]').click()`);
+    vrai(await attendre(`document.querySelector('#dialogue[open] [data-fermer]')`, 10000) >= 0, 'pas de Remplacer');
+    await B.js(`document.querySelector('#dialogue [data-fermer]').click()`);
+    vrai(await attendre(`!!document.querySelector('.carte-plat')`, 5000) >= 0, 'la croix de Remplacer ne ramène pas à la carte');
+    await fermerCarte();
+  });
+
+  // Taha, 22/11/2026 : « Retirer ce plat » du catalogue, avec confirmation
+  await test('Catalogue : retirer un plat pour de bon', async () => {
+    await aller('#/catalogue');
+    const nom = await B.js(`document.querySelector('.cat-liste a.rp-plat b').textContent`);
+    await B.js(`document.querySelector('.cat-liste a.rp-plat').click()`);
+    vrai(await attendre(`document.querySelector('.carte-plat [data-action=retirerPlat]')`, 10000) >= 0, 'pas de « Retirer ce plat »');
+    await B.js(`document.querySelector('.carte-plat [data-action=retirerPlat]').click()`);
+    vrai(await attendre(`document.getElementById('dialogue').open && /irréversible/.test(document.getElementById('dialogue').textContent)`, 5000) >= 0, 'pas de confirmation « irréversible »');
+    await B.js(`document.querySelector('#dialogue [value=non]').click()`);
+    vrai(await attendre(`!!document.querySelector('.carte-plat')`, 5000) >= 0, 'Annuler ne ramène pas à la carte');
+    await B.js(`document.querySelector('.carte-plat [data-action=retirerPlat]').click()`);
+    await attendre(`document.getElementById('dialogue').open`, 5000);
+    await viderToast();
+    await B.js(`document.querySelector('#dialogue [value=oui]').click()`);
+    vrai(/retiré/.test(await toast()), 'pas de message « retiré »');
+    await att(500);
+    vrai(await B.js(`![...document.querySelectorAll('.cat-liste a.rp-plat b')].some(b => b.textContent === ${JSON.stringify(nom)})`), `« ${nom} » est encore au catalogue`);
   });
 
   await test('Ajouter un repas : pas de Matin / Midi / Soir à choisir', async () => {
@@ -435,17 +478,17 @@ try {
     await B.photo('vitamines-jour');
   });
 
-  await test('Vitamines : sur la durée (7 et 30 jours)', async () => {
-    await aller('#/vitamines?vue=suivi');
-    vrai(await attendre(`document.querySelector('.vit-periodes')`, 10000) >= 0, 'pas de choix de période');
-    vrai(await B.js(`!!document.querySelector('.vit-onglets a[aria-current][href*="suivi"]')`), 'l\'onglet « Sur la durée » n\'est pas actif');
+  await test('Vitamines : Jour, Semaine, Mois', async () => {
+    await aller('#/vitamines?vue=semaine');
+    vrai(await attendre(`document.querySelectorAll('.vit-onglets a').length === 3`, 10000) >= 0, 'pas les 3 onglets Jour / Semaine / Mois');
+    vrai(await B.js(`!!document.querySelector('.vit-onglets a[aria-current][href*="semaine"]') && !document.querySelector('.vit-periodes')`), 'l\'onglet Semaine n\'est pas actif');
     if (await B.js(`document.querySelectorAll('.barres li').length`)) {
       vrai(await B.js(`document.querySelectorAll('.barres li').length === Object.keys(E.vitamines.noms).length`), 'il manque des vitamines');
       const moy = await B.js(`[...document.querySelectorAll('.barres .v b')].map(b => parseInt(b.textContent))`);
       vrai(moy.every((v, i) => !i || v >= moy[i - 1]), `pas triées du plus bas au plus haut : ${moy}`);
     }
-    await aller('#/vitamines?vue=suivi&p=30');
-    vrai(await B.js(`!!document.querySelector('.vit-periodes a[aria-current][href*="p=30"]')`), '30 jours pas choisi');
+    await aller('#/vitamines?vue=mois');
+    vrai(await B.js(`!!document.querySelector('.vit-onglets a[aria-current][href*="mois"]')`), 'Mois pas choisi');
     await B.photo('vitamines-duree');
     await aller('#/vitamines');
   });
