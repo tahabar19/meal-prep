@@ -423,5 +423,31 @@ class P_StockSeul(unittest.TestCase):
         self.assertFalse(all(j["dej"] in faisables for j in plan["jours"]), "décoché : toujours que le stock")
 
 
+class Q_PlatProche(unittest.TestCase):
+    """Créer un plat qui existe déjà (mêmes ingrédients) : pas de doublon, le plat existant à tes quantités (22/11/2026)."""
+    def test_pas_de_doublon(self):
+        from repas import journal_repas as J
+        S = M.serveur
+        table = S.nutriments().get("macros") or {}
+        P, nutr = S.P, S.nutriments()
+        rec = next(r for r in S.donnees_site()["recettes"] if not r.get("perso") and r["cat"] == "plat"
+                   and 2 <= len([i for i in r["ing"] if i["u"] != "qs"]) <= 6
+                   and all(i["u"] in ("g", "ml", "pièce") and i["n"] in table for i in r["ing"] if i["u"] != "qs"))
+        grammes = lambda i: i["q"] * 1.5 * (1 if i["u"] in ("g", "ml") else P.grammes({"n": i["n"], "q": 1, "u": i["u"]}, nutr))
+        items = [{**J.ligne(i["n"], grammes(i), {m: table[i["n"]][m] for m in J.MACROS}, None, "connu"), "aliment": i["n"]}
+                 for i in rec["ing"] if i["u"] != "qs"]
+        avant = len(S.plats_perso())
+        s, c, _ = M.api("POST", "/api/repas/au_menu", {"date": AUJ, "moment": "dej", "nom": "Mon plat à moi", "items": items,
+                                                       "seulement_plat": True})
+        self.assertEqual(s, 200, c)
+        self.assertTrue(c["au_menu"]["existant"], c["au_menu"])
+        self.assertEqual(len(S.plats_perso()), avant, "un plat a été créé quand même")
+        r = next(x for x in S.donnees_site()["recettes"] if x["id"] == c["au_menu"]["plat"])
+        self.assertEqual({i["n"] for i in r["ing"] if i["u"] != "qs"}, {i["n"] for i in rec["ing"] if i["u"] != "qs"})
+        for i in rec["ing"]:
+            if i["u"] != "qs":
+                self.assertAlmostEqual(c["au_menu"]["quantites"][i["n"]], i["q"] * 1.5, delta=max(0.6, i["q"] * 0.05))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2 if "-v" in sys.argv else 1, argv=[sys.argv[0]])
