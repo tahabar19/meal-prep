@@ -1413,3 +1413,6 @@ html:has(.carte-fond.ouvert){background:#060706}
 .stock-taper-ok.occupe{opacity:.5;animation:pulse 1s infinite alternate}
 #eStockTaper{display:block;min-height:1em;margin:2px 0 8px;color:var(--critique);font-size:.85rem}
 @keyframes pulse{from{opacity:.4}to{opacity:.8}}
+.stock-aide{min-height:0;margin:4px 4px 0;font-size:.85rem;color:var(--discret)}
+.stock-aide:empty{display:none}
+.stock-aide .lien{font-size:inherit}

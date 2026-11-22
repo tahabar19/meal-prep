@@ -453,11 +453,19 @@ try {
     await aller('#/stock');
     vrai(await attendre(`!!document.querySelector('.stock-ajout') && !!document.querySelector('.nav-bas a[href="#/stock"]')`, 10000) >= 0, 'pas d\'onglet ou de page Stock');
     await B.photo('stock-vide');
-    // Taha, 22/11/2026 (soir) : une barre sous Photo / Ticket ; ce qui est tapé entre tout de suite au stock
-    vrai(await B.js(`!!document.getElementById('stTaper')`), 'pas de barre « ce que tu as acheté »');
+    // Taha, 22/11/2026 (soir) : UNE barre sous Photo / Ticket : elle cherche dans le stock ; ce qui n'y est pas s'ajoute
+    vrai(await B.js(`!!document.querySelector('#fStockTaper #filtre') && document.querySelectorAll('#filtre').length === 1`), 'pas une seule barre chercher / ajouter');
     await viderToast();
-    await B.js(`document.getElementById('stTaper').value = '6 œufs, riz 1 kg, lait 1 l'; document.querySelector('#fStockTaper [type=submit]').click()`);
+    await B.js(`document.getElementById('filtre').value = '6 œufs, riz 1 kg, lait 1 l'; document.querySelector('#fStockTaper [type=submit]').click()`);
     vrai(/Ajouté/.test(await toast(30000)), 'pas ajouté au stock');
+    vrai(await attendre(`!!document.querySelector('.stock-liste li') && document.getElementById('filtre').value === ''`, 10000) >= 0, 'la barre ne se vide pas après l\'ajout');
+    const taper = async v => { await B.js(`(f => { f.value = ${JSON.stringify(v)}; f.dispatchEvent(new Event('input', { bubbles: true })); })(document.getElementById('filtre'))`); await att(400); };
+    await taper('oeufs');
+    vrai(await B.js(`[...document.querySelectorAll('.stock-liste .stock-nom')].every(n => /Œuf/i.test(n.textContent)) && document.querySelectorAll('.stock-liste li').length >= 1`), 'la recherche « oeufs » ne montre pas l\'œuf seul');
+    vrai(await B.js(`document.getElementById('stockAide').textContent.trim() === ''`), 'un aliment trouvé propose quand même de l\'ajouter');
+    await taper('quinoa');
+    vrai(await B.js(`/pas dans ton stock/.test(document.getElementById('stockAide').textContent)`), 'pas de « n\'est pas dans ton stock »');
+    await taper('');
     vrai(await attendre(`document.querySelectorAll('.stock-liste li').length >= 3`, 10000) >= 0, 'le stock ne montre pas les produits');
     const avant = await B.js(`document.querySelector('.stock-saisie').value`);
     await B.js(`document.querySelector('[data-stock-pas="1"]').click()`);

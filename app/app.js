@@ -2521,11 +2521,16 @@ function rayonsDesIngredients() {
 const enAffiche = l => l.unite === "g" || l.unite === "ml"
   ? { q: Math.round(l.quantite) / 1000, u: l.unite === "g" ? "kg" : "L", f: 1000 }
   : { q: Math.round(l.quantite * 10) / 10, u: l.unite === "pièce" ? (l.quantite > 1 ? "pièces" : "pièce") : l.unite, f: 1 };
+// Les mots d'une recherche dans le stock, sans quantités, unités, accents ni pluriel (« 6 Œufs » → ["oeuf"]).
+const motsStock = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/œ/g, "oe")
+  .split(/[^a-z]+/).filter(m => m.length > 2 && !["kg", "ml", "cl", "des", "les", "une", "pour", "avec", "boite", "boites", "paquet", "paquets", "pack", "brique"].includes(m))
+  .map(m => m.replace(/(?<=..)[sx]$/, ""));
 const pasStock = l => l.unite === "pièce" ? 1 : l.quantite > 1000 ? 100 : l.quantite > 200 ? 50 : 10;
 function vueStockMaison() {
   barre("");
-  const st = E.stock || [], cherche = filtreStock.trim().toLowerCase(), rayons = rayonsDesIngredients(), groupes = new Map();
-  st.filter(l => !cherche || l.nom.toLowerCase().includes(cherche)).sort((a, b) => a.nom.localeCompare(b.nom, "fr")).forEach(l => {
+  const st = E.stock || [], voulus = motsStock(filtreStock), rayons = rayonsDesIngredients(), groupes = new Map();
+  const trouves = st.filter(l => !voulus.length || voulus.every(m => motsStock(l.nom).some(n => n.startsWith(m))));
+  trouves.sort((a, b) => a.nom.localeCompare(b.nom, "fr")).forEach(l => {
     const g = rayons[l.nom] != null && E.rayons && E.rayons[rayons[l.nom]] ? E.rayons[rayons[l.nom]] : "Autres";
     groupes.set(g, [...(groupes.get(g) || []), l]); });
   const faisables = Object.entries(E.stock_couvre || {}).filter(([id, p]) => p >= 0.8 && recette(id) && estRepas(recette(id)) && !estRetire(id) && !["extrariz", "rien"].includes(id))
@@ -2535,9 +2540,12 @@ function vueStockMaison() {
       <label class="stock-bouton">${icone("receipt")}<span>Ticket</span><small>de caisse</small><input type="file" accept="image/*" hidden data-stock-photo="ticket"></label>
       </div>
     <form class="rp-recherche champ-ia stock-taper" id="fStockTaper" novalidate>${icone("sparkle")}
-      <input id="stTaper" type="text" enterkeyhint="send" autocomplete="off" maxlength="600"
-        placeholder="Ce que tu as acheté : 6 œufs, riz 1 kg…" aria-label="Ce que tu as acheté, ajouté au stock">
+      <input id="filtre" name="filtre" type="search" enterkeyhint="go" autocomplete="off" maxlength="600" value="${esc(filtreStock)}"
+        placeholder="Chercher ou ajouter : riz, 6 œufs…" aria-label="Chercher dans ton stock, ou ajouter ce que tu as acheté" aria-describedby="stockAide">
       <button type="submit" class="stock-taper-ok" aria-label="Ajouter au stock">${icone("plus")}</button></form>
+    <p class="stock-aide" id="stockAide" aria-live="polite">${!voulus.length ? "" : !trouves.length
+      ? `« ${esc(filtreStock.trim())} » n'est pas dans ton stock : <button type="submit" form="fStockTaper" class="lien">l'ajouter</button>`
+      : /\d/.test(filtreStock) ? `Entrée pour ajouter « ${esc(filtreStock.trim())} » à ton stock.` : ""}</p>
     <small class="erreur" id="eStockTaper" role="alert"></small>`;
   return `<div class="m-tete"><div><h1 tabindex="-1">Mon stock</h1>
       <p class="petit discret">${st.length ? `${st.length} produit${st.length > 1 ? "s" : ""} à la maison. Ce que tu marques mangé en sort tout seul.` : "Ajoute ce que tu as chez toi : l'appli te propose des repas avec."}</p></div></div>
@@ -2547,15 +2555,14 @@ function vueStockMaison() {
         return `<li><a class="rp-plat" href="#/plat/${id}">${photo(r, 120, "carre")}<span class="rp-texte"><b>${esc(r.nom)}</b>${macrosLigne(r.kcal, r.prot)}</span>
           <span class="stock-part">${nombre(Math.round(part * 100))} %</span></a></li>`; }).join("")}</ul>
       <button type="button" class="bouton large" data-action="stockProposer" style="margin-top:10px">${icone("arrows-clockwise")}Refaire mes repas avec mon stock</button></section>` : ""}
-    ${st.length ? `<div class="champ formulaire" style="margin-top:14px"><label for="filtre" class="sr">Chercher dans le stock</label>
-        <input id="filtre" name="filtre" type="search" autocomplete="off" placeholder="Chercher : riz, lait…" value="${esc(filtreStock)}"></div>
+    ${st.length ? `
       ${[...groupes.entries()].map(([g, lignes]) => `<section class="bloc stock-groupe"><h2>${esc(g)}</h2><ul class="stock-liste">${lignes.map(l =>
         `<li><span class="stock-nom">${esc(l.nom)}</span><span class="stock-q">
           <button type="button" data-stock-pas="-1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Moins de ${esc(l.nom)}">−</button>
           <input class="stock-saisie" type="number" inputmode="decimal" min="0" step="any" value="${enAffiche(l).q}" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-facteur="${enAffiche(l).f}" aria-label="Quantité de ${esc(l.nom)}, en ${esc(enAffiche(l).u)}">
           <span class="stock-u">${esc(enAffiche(l).u)}</span>
           <button type="button" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Plus de ${esc(l.nom)}">+</button></span></li>`).join("")}</ul></section>`).join("")
-        || `<p class="discret">Rien à ce nom.</p>`}` : ""}`;
+        || ""}` : ""}`;
 }
 async function stockAnalyser(corps, sorte) {
   const d = $("dialogue");
@@ -3337,15 +3344,19 @@ document.addEventListener("click", ev => {
 document.addEventListener("submit", async ev => {
   if (ev.target.id !== "fStockTaper") return;
   ev.preventDefault();
-  const champ = $("stTaper"), b = ev.target.querySelector("button"), texte = champ.value.trim();
+  const champ = $("filtre"), b = ev.target.querySelector("button"), texte = champ.value.trim();
   $("eStockTaper").textContent = "";
   if (!texte) return champ.focus();
+  // Ce qui est déjà dans le stock se voit et se modifie dans la liste ; on n'ajoute que le reste (ou une quantité tapée).
+  const voulus = motsStock(texte), deja = (E.stock || []).some(l => voulus.every(m => motsStock(l.nom).some(n => n.startsWith(m))));
+  if (deja && !/\d/.test(texte)) return champ.blur();
   champ.disabled = b.disabled = true; b.classList.add("occupe");
   const rep = await appel("/api/stock/taper", { texte });
   if (rep === true && E.stock_ajout) {
     const a = E.stock_ajout;
+    filtreStock = "";
     rendre();
-    dire(`Ajouté : ${a.ajoutes.map(x => `${x.nom} ${quantite(x.quantite, x.unite)}`).join(", ")}${a.incompris.length ? ` · pas compris : ${a.incompris.join(", ")}` : ""}`);
+    dire(`Ajouté : ${a.ajoutes.map(x => { const e = enAffiche(x); return `${x.nom} ${nombre(e.q, e.q % 1 ? 2 : 0).replace(/(,\d*?)0+$/, "$1").replace(/,$/, "")} ${e.u}`; }).join(", ")}${a.incompris.length ? ` · pas compris : ${a.incompris.join(", ")}` : ""}`);
     return;                                          // la page est redessinée avec le stock à jour
   }
   champ.disabled = b.disabled = false; b.classList.remove("occupe");
