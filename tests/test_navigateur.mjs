@@ -83,6 +83,20 @@ try {
     await connexion('mauvais-mot-de-passe');
     vrai(await attendre(`(document.querySelector('#fConnexion .erreur, #fConnexion [role=alert]') || {}).textContent`, 20000) >= 0, "aucun message d'erreur");
     vrai(await B.js(`!!document.getElementById('fConnexion')`), "l'appli s'est ouverte");
+    // Taha, 22/11/2026 : identifiant OU email ; mot de passe oublié ; inscription avec email et mot de passe solide
+    vrai(await B.js(`/email/i.test(document.querySelector('label[for=ident]').textContent)`), 'pas « Identifiant ou email »');
+    await B.js(`document.querySelector('[data-action=oubliMdp]').click()`);
+    vrai(await attendre(`!!document.getElementById('fOubli')`, 5000) >= 0, 'pas de page « Mot de passe oublié »');
+    await B.js(`document.getElementById('oQui').value = 'zz-essai'; document.querySelector('#fOubli [type=submit]').click()`);
+    vrai(await attendre(`document.getElementById('eOubli').textContent.length > 5`, 20000) >= 0, 'pas de réponse au mot de passe oublié');
+    await B.js(`document.querySelector('[data-action=versConnexion]').click()`);
+    await B.js(`document.querySelector('[data-action=versCreation]').click()`);
+    vrai(await attendre(`!!document.getElementById('pEmail') && !!document.getElementById('pMdpJauge')`, 5000) >= 0, 'inscription sans email ou sans jauge');
+    await B.js(`(() => { const i = document.getElementById('pMdp'); i.value = 'abc'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    vrai(await B.js(`/faible/i.test(document.getElementById('pMdpForce').textContent)`), 'la jauge ne dit pas « faible »');
+    await B.js(`(() => { const i = document.getElementById('pMdp'); i.value = 'Lune-Verte-Kiwi-48'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    vrai(await B.js(`/solide/i.test(document.getElementById('pMdpForce').textContent)`), 'la jauge ne dit pas « solide »');
+    await B.js(`document.querySelector('[data-action=versConnexion]').click()`);
   });
 
   await test('Connexion et écran Jour', async () => {
@@ -561,7 +575,11 @@ try {
   await test('Réglages : blocs présents', async () => {
     await aller('#/profil');
     const t = await B.js(`document.querySelector('main').textContent`);
-    for (const mot of ['objectif', 'Claude', 'compte']) vrai(new RegExp(mot, 'i').test(t), `« ${mot} » absent de Profil/Réglages`);
+    for (const mot of ['objectif', 'compte']) vrai(new RegExp(mot, 'i').test(t), `« ${mot} » absent de Profil/Réglages`);
+    await aller('#/reglages');
+    vrai(await attendre(`!!document.getElementById('fCoord') && !document.getElementById('fCoord').hidden`, 10000) >= 0, 'pas d\'email / téléphone dans Mon compte');
+    vrai(await B.js(`/Intelligence artificielle/i.test(document.querySelector('main').textContent)`), 'pas de bloc IA');
+    vrai(await B.js(`!!document.getElementById('mNouveauJauge')`), 'pas de jauge sur le nouveau mot de passe');
   });
 
   await test('Réouverture rapide (dernière journée gardée)', async () => {

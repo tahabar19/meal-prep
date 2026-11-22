@@ -63,6 +63,49 @@ function adresseApi(brut: unknown): string | null {
   return `${u.origin}${chemin}`;
 }
 type Connexion = { cle: string; endpoint: string | null; modele: string | null; bearer: boolean };
+
+// ---------- Les clés sont chiffrées dans la base (AES-GCM, clé dans les secrets de la fonction) ----------
+// Taha, 22/11/2026 : « chiffrement ». Une clé lue en clair (d'avant) est rechiffrée à la première lecture.
+const b64 = (u: Uint8Array) => { let s = ""; for (const x of u) s += String.fromCharCode(x); return btoa(s); };
+const deb64 = (t: string) => Uint8Array.from(atob(t), (c) => c.charCodeAt(0));
+let cleAes: CryptoKey | null | undefined;
+async function aes(): Promise<CryptoKey | null> {
+  if (cleAes === undefined) {
+    const brut = Deno.env.get("CLE_CHIFFREMENT");
+    cleAes = brut ? await crypto.subtle.importKey("raw", deb64(brut), "AES-GCM", false, ["encrypt", "decrypt"]) : null;
+  }
+  return cleAes;
+}
+async function chiffrer(t: string): Promise<string> {
+  const k = await aes();
+  if (!k) return t;
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  return `v1:${b64(iv)}:${b64(new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, k, new TextEncoder().encode(t))))}`;
+}
+async function dechiffrer(t: string): Promise<string> {
+  if (!t.startsWith("v1:")) return t;
+  const k = await aes();
+  if (!k) throw new Error("Clé de chiffrement absente.");
+  const [, iv, c] = t.split(":");
+  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: deb64(iv) }, k, deb64(c)));
+}
+async function connexionDe(admin: any, uid: string): Promise<Connexion | null> {
+  const { data: k } = await admin.from("cles_claude").select("cle, endpoint, modele, bearer").eq("user_id", uid).maybeSingle();
+  if (!k) return null;
+  if (!k.cle.startsWith("v1:") && await aes())
+    await admin.from("cles_claude").update({ cle: await chiffrer(k.cle) }).eq("user_id", uid);
+  return { ...k, cle: await dechiffrer(k.cle) };
+}
+// ---------- L'IA par défaut : celle de Taha, pour la famille (Taha, 22/11/2026) ----------
+// Sans clé à soi, on passe par celle du compte nommé dans CLAUDE_PARTAGE (son identifiant), avec les mêmes limites.
+async function connexionPartagee(admin: any, uid: string): Promise<Connexion | null> {
+  const ident = Deno.env.get("CLAUDE_PARTAGE");
+  if (!ident) return null;
+  const { data: moi } = await admin.from("profils").select("identifiant").eq("id", uid).maybeSingle();
+  if (!moi || moi.identifiant.startsWith("zz-")) return null;      // les comptes d'essai n'utilisent pas la clé de Taha
+  const { data: p } = await admin.from("profils").select("id").eq("identifiant", ident).maybeSingle();
+  return p ? await connexionDe(admin, p.id) : null;
+}
 const client = (k: Connexion) => new Anthropic({
   ...(k.bearer ? { apiKey: null, authToken: k.cle } : { apiKey: k.cle }),
   ...(k.endpoint ? { baseURL: k.endpoint } : {}),
@@ -159,14 +202,21 @@ Deno.serve(async (req) => {
         if (!(e instanceof Anthropic.AuthenticationError) || !endpoint) return json({ erreur: erreurClaude(e) }, 400);
         try { await essai(true); bearer = true; } catch (e2) { return json({ erreur: erreurClaude(e2) }, 400); }
       }
-      const { error } = await admin.from("cles_claude").upsert({ user_id: user.id, cle, endpoint, modele, bearer, maj: new Date().toISOString() });
+      const { error } = await admin.from("cles_claude").upsert({ user_id: user.id, cle: await chiffrer(cle), endpoint, modele, bearer, maj: new Date().toISOString() });
       if (error) return json({ erreur: error.message }, 500);
       return json({ ok: true, endpoint, modele });
     }
 
+    // ---------- Ce que la personne utilise : sa clé, sinon l'IA partagée ----------
+    if (corps.action === "infos") {
+      const { data: k } = await admin.from("cles_claude").select("endpoint, modele").eq("user_id", user.id).maybeSingle();
+      const partage = !k && !!(await connexionPartagee(admin, user.id));
+      return json({ propre: k || null, partage, modele: MODELE });
+    }
+
     if (corps.action === "messages") {
-      const { data: k } = await admin.from("cles_claude").select("cle, endpoint, modele, bearer").eq("user_id", user.id).maybeSingle();
-      if (!k) return json({ erreur: "Connecte d'abord ton compte Claude (Plus → Réglages).", sans_cle: true }, 400);
+      const k = (await connexionDe(admin, user.id)) || (await connexionPartagee(admin, user.id));
+      if (!k) return json({ erreur: "Connecte d'abord ton compte Claude (Réglages).", sans_cle: true }, 400);
       let blocs: any[];
       try { blocs = contenu(corps.contenu); } catch (e) { return json({ erreur: (e as Error).message }, 400); }
       const tache = TACHES[corps.tache] ? corps.tache : "aide";

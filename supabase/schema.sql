@@ -84,3 +84,19 @@ create table if not exists public.usage_claude (
 );
 alter table public.usage_claude enable row level security;
 create index if not exists usage_claude_user_quand on public.usage_claude (user_id, quand desc);
+
+-- ---------- Comptes renforcés (Taha, 22/11/2026) : email et téléphone, essais de connexion ----------
+-- L'email sert à se connecter et à recevoir « mot de passe oublié » ; il n'est lisible que par soi.
+alter table public.profils add column if not exists email text;
+alter table public.profils add column if not exists telephone text;
+create unique index if not exists profils_email on public.profils (lower(email)) where email is not null;
+-- Les essais de connexion (identifiant ou email, réussis ou non) : au-delà de 8 échecs en 15 min, on attend.
+-- Seule la fonction « compte » (clé de service) y touche.
+create table if not exists public.essais_connexion (
+  id bigint generated always as identity primary key,
+  cle text not null,
+  quand timestamptz not null default now(),
+  reussi boolean not null default false
+);
+alter table public.essais_connexion enable row level security;
+create index if not exists essais_connexion_cle_quand on public.essais_connexion (cle, quand desc);
