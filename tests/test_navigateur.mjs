@@ -606,6 +606,12 @@ try {
     vrai(await attendre(`!!document.getElementById('fCoord') && !document.getElementById('fCoord').hidden`, 10000) >= 0, 'pas d\'email / téléphone dans Mon compte');
     vrai(await B.js(`/Intelligence artificielle/i.test(document.querySelector('main').textContent)`), 'pas de bloc IA');
     vrai(await B.js(`!!document.getElementById('mNouveauJauge')`), 'pas de jauge sur le nouveau mot de passe');
+    // Taha, 22/11/2026 : le poids visé à la fin de chaque période
+    if (await B.js(`!!document.querySelector('.periode')`)) {
+      await att(300);
+      vrai(await B.js(`[...document.querySelectorAll('.p-vise')].some(p => /kg/.test(p.textContent))`), 'pas de poids visé sous les périodes');
+      await B.js(`document.querySelector('.periode').scrollIntoView({ block: 'center' })`); await B.photo('periodes-poids');
+    }
   });
 
   await test('Réouverture rapide (dernière journée gardée)', async () => {

@@ -1354,3 +1354,7 @@ html:has(.carte-fond.ouvert){background:#060706}
 .nav-bas a span:not(.compte){font-size:.62rem}
 .stock-liste .stock-saisie{width:62px!important;min-width:0;max-width:62px;flex:none;min-height:30px!important;height:30px;padding:0 6px!important}
 .stock-faisable .bouton{white-space:normal;line-height:1.2;text-align:center}
+/* Poids visé à la fin de chaque période (Taha, 22/11/2026) */
+.p-vise{margin:8px 0 0;font-size:.82rem;color:var(--discret)}
+.p-vise b{color:var(--accent);font-weight:600}
+.p-vise small{font-size:.74rem}
