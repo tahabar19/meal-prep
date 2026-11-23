@@ -734,6 +734,21 @@ try {
     await B.js(`document.querySelector('[data-manque-fermer]').click()`); await att(200);
   });
 
+  await test('Langues : anglais, puis arabe de droite à gauche', async () => {
+    // (Taha, 23/11/2026) Le choix est gardé sur le téléphone ; la page se recharge dans la langue.
+    for (const [l, mot, sens] of [['en', /Progress/, 'ltr'], ['ar', /[\u0600-\u06FF]/, 'rtl']]) {
+      await B.js(`localStorage.setItem('mp-langue', '${l}'); location.hash = '#/semaine'; location.reload()`);
+      vrai(await attendre(`typeof I18N !== 'undefined' && I18N.pret === true && I18N.exact.size > 500 && !!document.querySelector('.nav-bas')`, 60000) >= 0, `${l} : la traduction ne se charge pas`);
+      await attendre(`!document.querySelector('.ouverture:not(.fini)')`, 15000); await att(1200);
+      const nav = await B.js(`document.querySelector('.nav-bas').innerText`);
+      vrai(mot.test(nav) && !/Avancement/.test(nav), `${l} : les onglets ne sont pas traduits (${nav.replace(/\n/g, ' ')})`);
+      vrai(await B.js(`document.documentElement.dir`) === sens, `${l} : mauvais sens de lecture`);
+      await B.photo(`langue-${l}`);
+    }
+    await B.js(`localStorage.setItem('mp-langue', 'fr'); location.reload()`);
+    vrai(await attendre(`!!document.querySelector('.nav-bas') && /Avancement/.test(document.querySelector('.nav-bas').innerText)`, 60000) >= 0, 'le retour au français ne marche pas');
+  });
+
   await test('Partage : un lien reçu ouvre la création du plat', async () => {
     // « Partager avec Mon Meal Prep » (Taha, 23/11/2026) : ?texte=… est gardé, l'adresse nettoyée, la création lancée.
     await B.js(`location.href = location.pathname + '?texte=' + encodeURIComponent('Regarde ça https://www.tiktok.com/@chef/video/1')`);

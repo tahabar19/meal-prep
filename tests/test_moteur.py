@@ -500,6 +500,40 @@ class O_StockTaper(unittest.TestCase):
             plats = [x for x in S.plats_perso() if x["nom"] != "Curry de poulet coco"]
             S._ecrire_p("plats_perso.json", plats)
 
+    def test_plats_crees_traduits(self):
+        # Les plats créés sont traduits par l'IA (Taha, 23/11/2026) : nom, étapes, ingrédients créés ; une fois.
+        S, demandes = M.serveur, []
+        avant = S._lire_p("plats_perso.json", [])
+        S._ecrire_p("plats_perso.json", avant + [{"id": "perso-essai-trad", "cat": "plat", "nom": "Galette maison du dimanche", "perso": True,
+            "kcal": 500, "prot": 30, "gluc": 50, "lip": 10, "fib": 3, "ing": [{"n": "Œuf", "q": 2, "u": "pièce", "a": 3}],
+            "etapes": ["Mélange tout.", "Cuis 5 min."], "temps": 10}])
+        vrai = S._claude_json
+        def repondre(demande, timeout=60):
+            demandes.append(demande)
+            import json as j, re as r
+            textes = j.loads(r.search(r"\[.*\]", demande, r.S).group(0))
+            return {t: {"en": "EN " + t, "ar": "AR " + t, "es": "ES " + t} for t in textes}
+        S._claude_json = repondre
+        try:
+            e = M.etat()
+            self.assertGreaterEqual(e["a_traduire"], 3)
+            for _ in range(20):                                   # 40 textes par appel
+                s, c, _ = M.api("POST", "/api/traductions/completer", {})
+                self.assertEqual(s, 200, c)
+                if not S.a_traduire():
+                    break
+            d = S.traductions()
+            self.assertEqual(d["Galette maison du dimanche"]["es"], "ES Galette maison du dimanche")
+            self.assertIn("Cuis 5 min.", d)
+            self.assertNotIn("Œuf", d)                             # déjà dans le dictionnaire de l'appli
+            n = len(demandes)
+            M.api("POST", "/api/traductions/completer", {})
+            self.assertEqual(len(demandes), n, "déjà traduit : pas d'appel de plus")
+        finally:
+            S._claude_json = vrai
+            S._ecrire_p("plats_perso.json", avant)
+            S._ecrire_p("traductions.json", {})
+
     def test_flou_part_a_claude_en_court(self):
         S, demandes = M.serveur, []
         def repondre(consigne, photo):
