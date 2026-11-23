@@ -2776,7 +2776,7 @@ function marquerStock(racine) {
     if (a.closest(".stock-faisable, .histo-plats") || carte.classList.contains("cuisine-fait")) return;
     carte.classList.add("stock-cadre", !m.length ? "stock-ok" : m.length <= 2 ? "stock-peu" : "stock-loin");
     if (m.length) a.insertAdjacentHTML("beforeend", `<span class="manque" role="button" tabindex="0" data-manque="${esc(id)}"
-      aria-label="${m.length} ingrédient${m.length > 1 ? "s" : ""} manquant${m.length > 1 ? "s" : ""}">${m.length} manque${m.length > 1 ? "nt" : ""}</span>`);
+      aria-label="${m.length} ingrédient${m.length > 1 ? "s" : ""} manquant${m.length > 1 ? "s" : ""} : toucher pour voir">${m.length} manque${m.length > 1 ? "nt" : ""}<small>touche pour voir</small></span>`);
   });
 }
 let marquage = 0;
@@ -2884,7 +2884,7 @@ function vueStockMaison({ params } = {}) {
       apresRendu.push(() => document.querySelectorAll("details[data-rayon]").forEach(d => d.addEventListener("toggle", () =>
         d.open ? STOCK_OUVERTS.add(d.dataset.rayon) : STOCK_OUVERTS.delete(d.dataset.rayon))));
       const finir = (E.a_finir || []).filter(x => chez.some(l => l.nom === x.nom));
-      const quand = x => x.reste < 0 ? "à vérifier" : x.reste === 0 ? "aujourd'hui" : x.reste === 1 ? "demain" : `dans ${x.reste} jours`;
+      const quand = x => x.reste < 0 ? "a peut-être expiré" : x.reste === 0 ? "expire aujourd'hui" : x.reste === 1 ? "expire demain" : `expire dans ${x.reste} jours`;
       return `${finir.length && !voulus.length ? `<section class="bloc a-finir" aria-labelledby="tFinir"><h2 id="tFinir">${icone("warning-circle")}À finir bientôt</h2>
         <ul>${finir.map(x => `<li><span><b>${esc(x.nom)}</b><small>${x.ouvert != null ? (x.ouvert ? `ouvert il y a ${x.ouvert} jour${x.ouvert > 1 ? "s" : ""}` : "ouvert aujourd'hui") : `entré il y a ${x.depuis} jour${x.depuis > 1 ? "s" : ""}`}</small></span><span class="af-quand${x.reste <= 0 ? " urgent" : ""}">${quand(x)}</span></li>`).join("")}</ul>
         <button type="button" class="bouton large second" data-action="platsAFinir">${icone("cooking-pot")}Des plats pour les finir</button></section>` : ""}
@@ -2914,15 +2914,15 @@ function vueCourses() {
   const nb = `<span class="lc-nb"><button type="button" data-action="lcNb" data-pas="-1" aria-label="Un produit de moins">−</button>
       <input id="lcNb" type="number" inputmode="numeric" min="1" max="50" value="${LC_NB.n}" aria-label="Nombre de produits à proposer">
       <button type="button" data-action="lcNb" data-pas="1" aria-label="Un produit de plus">+</button></span>`;
-  const idees = `<section class="bloc lc-idees" aria-labelledby="tIdees"><h2 id="tIdees">${icone("sparkle")}Des idées</h2>
-      ${aStock ? `<p class="lc-aide">Les produits qui te permettent de cuisiner le plus de plats avec ce que tu as déjà.</p>
+  const idees = `<section class="bloc lc-idees" aria-labelledby="tIdees"><h2 id="tIdees">${icone("shopping-cart-simple")}Les plus utiles</h2>
+      ${aStock ? `<p class="lc-aide">Choisis combien : l'appli ajoute les produits qui te font cuisiner le plus de plats avec ce que tu as déjà.</p>
       <div class="lc-remplir">${nb}<button type="button" class="bouton${l.length ? " second" : ""}" data-action="lcRemplir">${l.length ? "Ajouter à ma liste" : "Remplir ma liste"}</button></div>`
       : `<p class="lc-aide">Ajoute d'abord ce que tu as dans « Mon stock » : l'appli te dira quoi acheter pour cuisiner plus.</p>`}</section>`;
   // Ajouter à la main : les ingrédients de l'appli qui commencent par ce qu'on tape.
   const mots = motsStock(filtreCourses), tous = Object.keys(rayonsDesIngredients()).sort((a, b) => a.localeCompare(b, "fr"));
   const trouves = mots.length ? tous.filter(n => !l.some(x => x.nom === n) && mots.every(m => motsStock(n).some(k => k.startsWith(m)))).slice(0, 8) : [];
   const unite = nom => { for (const x of E.recettes) for (const i of x.ing || []) if (i.n === nom && i.u !== "qs") return i.u; return "g"; };
-  const ajout = `<div class="lc-ajout"><div class="champ-ia rp-recherche">${icone("plus")}<input id="filtreCourses" type="search" autocomplete="off" enterkeyhint="done"
+  const ajout = `<div class="lc-ajout"><div class="rp-recherche lc-champ">${icone("plus")}<input id="filtreCourses" type="search" autocomplete="off" enterkeyhint="done"
       placeholder="Ajouter un produit : riz, lait…" value="${esc(filtreCourses)}" aria-label="Ajouter un produit à ma liste"></div>
     ${trouves.length ? `<div class="stock-puces">${trouves.map(n => { const u = unite(n);
       return `<button type="button" class="stock-puce" data-action="lcAjouter" data-nom="${esc(n)}" data-unite="${esc(u)}" data-q="${u === "g" ? 500 : u === "ml" ? 1000 : 1}">${esc(n)}${icone("plus")}</button>`; }).join("")}</div>`
@@ -2951,7 +2951,7 @@ function vueCourses() {
         <summary><span class="sr-nom">${esc(g)}</span><small>${ns.length}</small>${icone("caret-right")}</summary>
         <div class="stock-puces">${ns.map(n => { const u = unite(n);
           return `<button type="button" class="stock-puce" data-action="lcAjouter" data-nom="${esc(n)}" data-unite="${esc(u)}" data-q="${u === "g" ? 500 : u === "ml" ? 1000 : 1}" aria-label="Mettre ${esc(n)} sur ma liste">${esc(n)}${icone("plus")}</button>`; }).join("")}</div></details>`).join("")}</div></details>` : "";
-  return liste + idees + tousProduits;
+  return idees + liste + tousProduits;          // le nombre à choisir d'abord (Taha, 23/11/2026)
 }
 
 const LC_NB = { n: (() => { try { const v = parseInt(localStorage.getItem("mp-lc-nb"), 10); return v >= 1 && v <= 50 ? v : 8; } catch (e) { return 8; } })() };

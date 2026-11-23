@@ -81,7 +81,7 @@ try {
   for (const c of ['poids', 'biceps', 'tour']) { await aller(`#/suivi?c=${c}`); await photo(`suivi-${c}`); }
     // (en mode flemmard, « cuisine » sans recette revient au Jour : sautée)
   let derniere = '';
-  for (const v of ['historique', 'courses', 'cuisine', 'vitamines', 'stock', 'profil', 'reglages']) {
+  for (const v of ['historique', 'courses', 'cuisine', 'vitamines', 'stock', 'profil', 'reglages', 'famille']) {
     await aller(`#/${v}`);
     const empreinte = await js(`location.hash.split('?')[0] + '|' + document.querySelector('main').innerText.slice(0, 400)`);
     if (empreinte.startsWith('#/semaine') || empreinte.split('|')[1] === derniere) { console.log(`  (${v} : même écran qu'une autre page, sautée)`); continue; }
