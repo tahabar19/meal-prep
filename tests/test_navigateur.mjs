@@ -456,7 +456,7 @@ try {
     // Taha, 22/11/2026 (soir) : UNE barre sous Photo / Ticket : elle cherche dans le stock ; ce qui n'y est pas s'ajoute
     vrai(await B.js(`!!document.querySelector('#fStockTaper #filtre') && document.querySelectorAll('#filtre').length === 1`), 'pas une seule barre chercher / ajouter');
     await viderToast();
-    await B.js(`document.getElementById('filtre').value = '6 œufs, riz 1 kg, lait 1 l'; document.querySelector('#fStockTaper [type=submit]').click()`);
+    await B.js(`document.getElementById('filtre').value = '6 œufs, riz 1 kg, lait 1 l'; document.getElementById('fStockTaper').requestSubmit()`);
     vrai(/Ajouté/.test(await toast(30000)), 'pas ajouté au stock');
     vrai(await attendre(`!!document.querySelector('.stock-liste li') && document.getElementById('filtre').value === ''`, 10000) >= 0, 'la barre ne se vide pas après l\'ajout');
     const taper = async v => { await B.js(`(f => { f.value = ${JSON.stringify(v)}; f.dispatchEvent(new Event('input', { bubbles: true })); })(document.getElementById('filtre'))`); await att(400); };

@@ -1055,22 +1055,27 @@ function demanderPlatPerso(ctx, saisie = { nom: "", ingredients: [], telQuel: tr
     return { nom, telQuel, ingredients, quantites: q, unites: u };
   };
   const CATS = { plat: "un plat", petitdej: "un petit-déjeuner", collation: "une collation" };
-  d.innerHTML = `<form class="feuille formulaire" novalidate>
-    <h2 id="dialogueTitre">Mon propre plat</h2>
-    <p class="petit discret" style="margin:-4px 0 14px">Écris ce que tu manges, avec les quantités si tu les connais : « café au lait Tassimo », « 2 œufs, pain pita 70 g ». L'appli met exactement ça, rien de plus.</p>
+  // Refaite (Taha, 23/11/2026 : « la page créer mon propre plat est nulle ») : même en-tête que les autres fenêtres,
+  // textes courts, rubriques.
+  d.innerHTML = `<form class="feuille formulaire form-propre" novalidate>
+    <div class="rp-tete"><div><p class="rp-sur">${ctx.remplace ? "Remplacer" : CATS[ctx.cat] ? "Créer " + CATS[ctx.cat] : "Catalogue"}</p><h2 id="dialogueTitre">Mon propre plat</h2></div>
+      <button type="button" class="rp-fermer" data-fermer-pp aria-label="Fermer">${icone("x")}</button></div>
+    <p class="fp-intro">Ce que tu manges, avec les quantités si tu les connais. L'appli met exactement ça.</p>
     <div class="champ"><label for="ppNom">Nom du plat <small>(facultatif)</small></label>
       <input id="ppNom" name="nom" type="text" maxlength="80" autocomplete="off" placeholder="Poulet riz de ma mère" value="${esc(saisie.nom)}"></div>
     <div class="champ"><label for="ppIng">Ingrédients</label>
       <div class="ajout"><input id="ppIng" type="text" list="ppConnus" autocomplete="off" placeholder="Café au lait Tassimo, 2 œufs, riz 80 g…">
         <button class="bouton second" type="button" id="ppAjouter">Ajouter</button></div>
       <datalist id="ppConnus">${connus.map(n => `<option value="${esc(n)}">`).join("")}</datalist>
-      <small>Un par un, ou plusieurs séparés par des virgules, « et » ou « + ». Sans quantité, l'appli met une portion habituelle, que tu règles à l'écran suivant. La marque ou le magasin ne gênent pas (« Skyr – Lidl »). Un produit inconnu ? Tu pourras le créer avec Claude.</small></div>
+      <small>Un par un ou séparés par des virgules. Sans quantité : une portion habituelle, réglable ensuite.</small></div>
     <div class="gouts" id="ppListe" aria-label="Ingrédients choisis">${saisie.ingredients.map((n, i) => `<button type="button" data-oter="${i}" aria-label="Retirer ${esc(n)}">${esc(n)}${qs[n] != null ? ` · ${nombre(qs[n])}${unites[n] && unites[n] !== "pièce" ? " " + unites[n] : ""}` : ""}${icone("x")}</button>`).join("")}</div>
     <div class="options" style="margin-top:14px"><label class="option"><input type="checkbox" id="ppCompleter"${saisie.telQuel ? "" : " checked"}>
-      <span><b>L'IA complète la recette ${BADGE_IA}</b><small>Seulement si tu le veux : il ajoute ce qui manque (matière grasse, épices, accompagnement) et règle les quantités sur ${ctx.remplace ? `« ${esc(recette(ctx.remplace).nom)} »` : "ton objectif"}. Il faut alors un nom de plat.</small></span></label></div>
+      <span><b>L'IA complète la recette ${BADGE_IA}</b><small>Ajoute ce qui manque (matière grasse, épices…) et règle les quantités sur ${ctx.remplace ? `« ${esc(recette(ctx.remplace).nom)} »` : "ton objectif"}. Il faut un nom de plat.</small></span></label></div>
     <small id="ePerso" class="erreur" role="alert" style="display:block;margin-top:12px;color:var(--critique)">${erreur}</small>
     <div class="actions pied"><button class="bouton second" type="button" value="non">${ctx.retour ? "Retour" : "Annuler"}</button>
       <button class="bouton" type="submit">Voir le plat</button></div></form>`;
+  const fermerPP = d.querySelector("[data-fermer-pp]");
+  if (fermerPP) fermerPP.addEventListener("click", () => ctx.retour ? ctx.retour() : d.close("non"));
   const lire = () => ({ nom: $("ppNom").value.trim(), ingredients: saisie.ingredients, telQuel: !$("ppCompleter").checked, unites: saisie.unites,
     quantites: Object.fromEntries(Object.entries(saisie.quantites || {}).map(([n, q]) => [n, unites[n] != null ? { q, u: unites[n] } : q])) });
   const ajouter = () => {
@@ -1199,10 +1204,11 @@ async function demanderIngredient(o) {
   const champ = (id, libelle, valeur, unite) => `<div class="champ" style="margin:0"><label for="${id}">${libelle}</label>
     <input id="${id}" type="text" inputmode="decimal" autocomplete="off" value="${valeur == null ? "" : String(valeur).replace(".", ",")}" placeholder="${unite}"></div>`;
   const MAC = [["kcal", "Calories", "kcal"], ["prot", "Protéines", "g"], ["gluc", "Glucides", "g"], ["lip", "Lipides", "g"], ["fib", "Fibres", "g"]];
-  d.innerHTML = `<form class="feuille formulaire" novalidate>
-    <h2 id="dialogueTitre">${o.creer ? "Nouvel ingrédient" : esc(v.nom)}</h2>
-    ${o.creer ? `<p class="petit discret" style="margin:-4px 0 12px" id="inOrigine">${origine(v.etiquette)}</p>`
-      : `<p class="petit discret" style="margin:-4px 0 12px">${v.nb_plats ? `Utilisé dans ${v.nb_plats} plat${v.nb_plats > 1 ? "s" : ""} : ${v.nb_plats > 1 ? "ils seront recalculés" : "il sera recalculé"} pour toi.` : "Utilisé dans aucun plat pour l'instant."}
+  d.innerHTML = `<form class="feuille formulaire form-propre" novalidate>
+    <div class="rp-tete"><div><p class="rp-sur">${o.creer ? "Nouvel ingrédient" : "Ingrédient"}</p><h2 id="dialogueTitre">${esc(o.creer ? (o.nom || "Nouvel ingrédient") : v.nom)}</h2></div>
+      <button type="button" class="rp-fermer" data-fermer-in aria-label="Fermer">${icone("x")}</button></div>
+    ${o.creer ? `<p class="fp-intro" id="inOrigine">${origine(v.etiquette)}</p>`
+      : `<p class="fp-intro">${v.nb_plats ? `Utilisé dans ${v.nb_plats} plat${v.nb_plats > 1 ? "s" : ""} : ${v.nb_plats > 1 ? "ils seront recalculés" : "il sera recalculé"} pour toi.` : "Utilisé dans aucun plat pour l'instant."}
         ${v.corrige ? " Tu as déjà corrigé ces valeurs." : v.cree ? " Ingrédient créé par toi." : " Valeurs du site (ordres de grandeur des tables CIQUAL)."}</p>`}
     ${o.creer && (v.deja || []).length ? `<div class="dujour" style="margin-bottom:12px"><strong>Tu l'as peut-être déjà.</strong>
       ${v.deja.map(n => `<span style="display:block;margin-top:6px">${esc(n)} : <button type="button" class="lien" data-deja="${esc(n)}">prendre celui-ci</button>
@@ -1212,15 +1218,17 @@ async function demanderIngredient(o) {
       <ul class="lignes">${v.etiquettes.map((e, i) => `<li><span><a href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${esc(e.nom)}</a>
         <small class="discret" style="display:block">${esc(e.source)} · pour 100 g : ${nombre(e.kcal)} kcal, ${String(e.prot).replace(".", ",")} g de protéines${e.portion_g ? ` · portion ${nombre(e.portion_g)} g` : ""}${e.attention ? ` · ${esc(e.attention)}` : ""}</small></span>
         <button type="button" class="lien" data-etiquette="${i}">prendre ces valeurs</button></li>`).join("")}</ul></details>` : ""}
+    ${nouveau ? `<p class="fp-rubrique">L'aliment</p>` : ""}
     ${o.creer ? `<div class="champ"><label for="inNom">Nom</label><input id="inNom" type="text" maxlength="80" autocomplete="off" value="${esc(v.nom)}" required></div>` : ""}
-    ${nouveau ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:14px">
+    ${nouveau ? `<div class="fp-grille">
       <div class="champ" style="margin:0"><label for="inU">Unité</label><select id="inU"><option value="g"${u === "g" ? " selected" : ""}>grammes</option><option value="ml"${u === "ml" ? " selected" : ""}>millilitres</option></select></div>
       ${champ("inQ", "Une portion", v.q, u)}
       <div class="champ" style="margin:0"><label for="inA">Rayon</label><select id="inA">${E.rayons.map((n, k) => `<option value="${k}"${k === Number(v.a) ? " selected" : ""}>${esc(n)}</option>`).join("")}</select></div>
       ${champ("inPrix", "Prix au kilo (€)", v.prix, "€")}</div>` : ""}
-    <h3 style="margin-bottom:8px">Pour 100 ${u}</h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:12px">${MAC.map(([k, nom, un]) => champ("in_" + k, `${nom} (${un})`, val[k], un)).join("")}</div>
-    ${nouveau && E.claude === false ? champsVitamines("inV_") : ""}
+    <p class="fp-rubrique" id="inPour">Pour 100 ${u}</p>
+    <div class="fp-macros">${MAC.map(([k, nom, un]) => champ("in_" + k, `${nom} <small>${un}</small>`, val[k], un)).join("")}</div>
+    ${nouveau && E.claude === false ? `<details class="fp-vit"><summary><span class="fp-vit-t">Vitamines pour 100 g</span><small>facultatif, 0 si tu ne sais pas</small>${icone("caret-right")}</summary>
+      ${champsVitamines("inV_", Object.fromEntries(Object.keys(UNITES_VIT).map(x => [x, 0])))}</details>` : ""}
     ${!o.creer && v.corrige && v.site ? `<p class="petit discret" style="margin-top:10px">Valeurs du site : ${v.site.kcal} kcal, ${String(v.site.prot).replace(".", ",")} g de protéines, ${String(v.site.gluc).replace(".", ",")} g de glucides, ${String(v.site.lip).replace(".", ",")} g de lipides.
       <button type="button" class="lien" id="inRetablir">Revenir à ces valeurs</button></p>` : ""}
     ${!o.creer && v.cree ? `<p class="petit" style="margin-top:10px"><button type="button" class="lien" id="inRetablir">Supprimer cet ingrédient</button></p>` : ""}
@@ -1241,7 +1249,9 @@ async function demanderIngredient(o) {
   d.querySelectorAll("[data-deja]").forEach(b => b.addEventListener("click", () => o.apres ? o.apres(b.dataset.deja) : d.close("non")));
   d.querySelectorAll("[data-modifier]").forEach(b => b.addEventListener("click", () =>
     demanderIngredient({ nom: b.dataset.modifier, retour: () => demanderIngredient(o), apres: o.apres })));
-  if ($("inU")) $("inU").addEventListener("change", () => { d.querySelector("h3").textContent = "Pour 100 " + $("inU").value; });
+  if ($("inU")) $("inU").addEventListener("change", () => { $("inPour").textContent = "Pour 100 " + $("inU").value; });
+  const fermerIn = d.querySelector("[data-fermer-in]");
+  if (fermerIn) fermerIn.addEventListener("click", fermer);
   if ($("inRetablir")) $("inRetablir").addEventListener("click", async () => {
     if (await appel("/api/ingredient/retirer", { nom: v.nom }) !== true) return;
     d.close("oui"); rendre(); dire(v.cree ? "Ingrédient supprimé." : "Valeurs du site rétablies.");
@@ -1586,6 +1596,10 @@ function ficheRapide(id, ctx, depuis, vu = null) {
   const vv = window.visualViewport, carte = fond.querySelector(".carte-plat");
   // Jamais de défilement dans la carte (Taha, 22/11/2026) : sur un petit écran, la photo rapetisse, puis les étiquettes
   // et la ligne d'info s'effacent ; 0,8 cm sous le centre seulement s'il reste la place.
+  // La photo entière, sans recadrage (Taha, 23/11/2026 : « dézoome, qu'on voie tout le plat ») : sur un fond de la
+  // même photo, floutée.
+  const imPhoto = carte.querySelector(".cp-photo .photo img");
+  if (imPhoto) carte.querySelector(".cp-photo .photo").style.setProperty("--fond-photo", `url("${(imPhoto.currentSrc || imPhoto.src).replace(/"/g, "%22")}")`);
   const tenir = () => {
     const ph = carte.querySelector(".cp-photo .photo"), caches = carte.querySelectorAll(".cp-etiquettes, .cp-info"), sous = carte.querySelectorAll(".cp-choix small");
     sous.forEach(x => { x.hidden = false; });
@@ -2717,7 +2731,8 @@ document.addEventListener("click", ev => {
   montrerManque("À acheter pour les repas du", new Date(d + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()),
     (E.manque_jours[d] || []).map(x => [x.nom, x.quantite, x.unite]));
 }, true);
-const pasStock = l => l.unite === "pièce" ? 1 : l.quantite > 1000 ? 100 : l.quantite > 200 ? 50 : 10;
+// Des pas qui comptent (Taha, 23/11/2026 : « la granularité est trop petite ») : un verre pour les liquides, 100 g sinon.
+const pasStock = l => l.unite === "ml" ? 250 : l.unite === "g" ? (l.quantite >= 2000 ? 250 : 100) : 1;
 function vueStockMaison() {
   barre("");
   const st = E.stock || [], voulus = motsStock(filtreStock), rayons = rayonsDesIngredients(), groupes = new Map();
@@ -2743,8 +2758,7 @@ function vueStockMaison() {
   // La barre chercher / ajouter vient sous « Refaire mes repas avec mon stock » (Taha, 22/11/2026).
   const barreStock = `<form class="rp-recherche champ-ia stock-taper" id="fStockTaper" novalidate>${icone("sparkle")}
       <input id="filtre" name="filtre" type="search" enterkeyhint="go" autocomplete="off" maxlength="600" value="${esc(filtreStock)}"
-        placeholder="Chercher ou ajouter : riz, 6 œufs…" aria-label="Chercher dans ton stock, ou ajouter ce que tu as acheté" aria-describedby="stockAide">
-      <button type="submit" class="stock-taper-ok" aria-label="Ajouter au stock">${icone("plus")}</button></form>
+        placeholder="Chercher ou ajouter : riz, 6 œufs…" aria-label="Chercher dans ton stock, ou ajouter ce que tu as acheté" aria-describedby="stockAide"></form>
     <p class="stock-aide" id="stockAide" aria-live="polite">${!voulus.length ? "" : !trouves.some(l => l.quantite > 0)
       ? `« ${esc(filtreStock.trim())} » n'est pas dans ton stock : <button type="submit" form="fStockTaper" class="lien">l'ajouter</button>`
       : /\d/.test(filtreStock) ? `Entrée pour ajouter « ${esc(filtreStock.trim())} » à ton stock.` : ""}</p>
@@ -3579,7 +3593,7 @@ document.addEventListener("submit", async ev => {
   // Ce qui est déjà dans le stock se voit et se modifie dans la liste ; on n'ajoute que le reste (ou une quantité tapée).
   const voulus = motsStock(texte), deja = (E.stock || []).some(l => voulus.every(m => motsStock(l.nom).some(n => n.startsWith(m))));
   if (deja && !/\d/.test(texte)) return champ.blur();
-  champ.disabled = b.disabled = true; b.classList.add("occupe");
+  champ.disabled = true; if (b) { b.disabled = true; b.classList.add("occupe"); }
   const rep = await appel("/api/stock/taper", { texte });
   if (rep === true && E.stock_ajout) {
     const a = E.stock_ajout;
@@ -3588,7 +3602,7 @@ document.addEventListener("submit", async ev => {
     dire(`Ajouté : ${a.ajoutes.map(x => { const e = enAffiche(x); return `${x.nom} ${nombre(e.q, e.q % 1 ? 2 : 0).replace(/(,\d*?)0+$/, "$1").replace(/,$/, "")} ${e.u}`; }).join(", ")}${a.incompris.length ? ` · pas compris : ${a.incompris.join(", ")}` : ""}`);
     return;                                          // la page est redessinée avec le stock à jour
   }
-  champ.disabled = b.disabled = false; b.classList.remove("occupe");
+  champ.disabled = false; if (b) { b.disabled = false; b.classList.remove("occupe"); }
   if (rep && rep.erreur) $("eStockTaper").textContent = rep.erreur;
 });
 document.addEventListener("submit", async ev => {
@@ -4058,7 +4072,7 @@ document.addEventListener("click", ev => {
   const pas = ev.target.closest("[data-stock-pas]");
   if (pas) { const l = { quantite: Number(pas.dataset.q), unite: pas.dataset.unite };
     // Un ingrédient ajouté depuis « À ajouter » : 100 g, 100 ml ou 1 pièce, à régler ensuite.
-    const premier = l.quantite === 0 && Number(pas.dataset.stockPas) > 0 ? (["g", "ml"].includes(l.unite) ? 100 : 1) : null;
+    const premier = l.quantite === 0 && Number(pas.dataset.stockPas) > 0 ? pasStock(l) : null;
     return agir("/api/stock", { nom: pas.dataset.nom, unite: pas.dataset.unite, quantite: premier ?? Math.max(0, Math.round((l.quantite + Number(pas.dataset.stockPas) * pasStock(l)) * 10) / 10) },
       premier ? `${pas.dataset.nom} ajouté : règle sa quantité dans « Chez toi ».` : ""); }
   const plat = ev.target.closest('a.repas[href^="#/plat/"], a.rp-plat[href^="#/plat/"]');

@@ -1624,3 +1624,47 @@ body:has(.auth)::before{display:none}
 @keyframes ouvMotifs{to{opacity:.14}}
 @keyframes ouvGlisse{from{transform:translate3d(0,0,0)}to{transform:translate3d(-40px,-40px,0)}}
 @media (prefers-reduced-motion:reduce){.ouverture::before{animation:none;opacity:.14}}
+/* Carte d'un plat : la photo entière, sur la même photo floutée (Taha, 23/11/2026) */
+.cp-photo .photo:not(.vide){position:relative;background:#151615;isolation:isolate}
+.cp-photo .photo:not(.vide)::before{content:"";position:absolute;inset:-24px;z-index:-1;background:var(--fond-photo) center/cover no-repeat;filter:blur(20px) brightness(.5) saturate(1.1)}
+.cp-photo .photo:not(.vide) img{object-fit:contain!important}
+/* Stock : la barre sans bouton + */
+#fStockTaper{padding-right:14px}
+/* « Mon propre plat » et « Nouvel ingrédient » refaits (Taha, 23/11/2026 : « nulles ») */
+.form-propre .rp-tete{margin-bottom:6px}
+.fp-intro{margin:0 0 16px;color:var(--discret);font-size:.82rem;line-height:1.45}
+.fp-intro a{color:var(--accent)}
+.fp-rubrique{margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--filet-doux);color:var(--accent);font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.form-propre .fp-rubrique:first-of-type{margin-top:4px;padding-top:0;border-top:0}
+.form-propre .champ{gap:6px;margin-bottom:12px}
+.form-propre .champ label{font-size:.76rem;font-weight:500;color:var(--texte)}
+.form-propre .champ label small{color:var(--discret);font-weight:400}
+.form-propre .champ > small{font-size:.72rem;line-height:1.4;color:var(--discret)}
+.form-propre input:not([type=checkbox]):not([type=radio]),.form-propre select{min-height:44px;border-radius:12px;font-size:1rem}
+.form-propre .ajout{display:flex;gap:8px}
+.form-propre .ajout input{flex:1;min-width:0}
+.form-propre .ajout .bouton{min-height:44px;padding:0 14px;font-size:.84rem}
+.form-propre .gouts{margin:2px 0 4px}
+.form-propre .option{padding:12px 14px;border-radius:14px}
+.form-propre .option b{font-size:.86rem}
+.form-propre .option small{font-size:.74rem}
+.fp-grille{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;margin-bottom:2px}
+.fp-grille .champ{margin-bottom:12px!important}
+.fp-macros{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.fp-macros .champ{margin:0!important}
+.fp-macros input{text-align:right}
+.fp-vit{margin-top:16px;border-top:1px solid var(--filet-doux);padding-top:4px}
+.fp-vit > summary{display:flex;align-items:center;gap:8px;min-height:44px}
+.fp-vit > summary .fp-vit-t{flex:1;font-size:.84rem;font-weight:500;color:var(--encre)}
+.fp-vit > summary small{color:var(--discret);font-size:.72rem;font-weight:400}
+.fp-vit > h3,.fp-vit > p{display:none}
+.form-propre .actions.pied .bouton{min-height:46px;font-size:.9rem}
+.cp-photo .photo:not(.vide) img{background:transparent!important;position:relative}
+/* Les champs de date ne débordent plus (Taha, 23/11/2026, iPhone : « Début de mon suivi », « Du… Au… ») */
+input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;max-width:100%;width:100%;box-sizing:border-box;display:block}
+input[type=date]::-webkit-date-and-time-value{text-align:left;margin:0}
+input[type=date]::-webkit-datetime-edit{padding:0}
+.periode-dates{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.periode-dates label{display:grid;gap:4px;min-width:0;font-size:.76rem;color:var(--discret)}
+.objectif-reglages > .champ,.champs2 > .champ{min-width:0}
+.date-discrete input[type=date]{width:auto!important;display:inline-block}
