@@ -2778,15 +2778,24 @@ function vueStockMaison() {
     ${ajout}
 
     ${(() => {
+      // Ma liste de courses (Taha, 23/11/2026) : ce qu'on a choisi ; on coche ce qu'on a acheté, on valide, ça entre au stock.
+      const l = E.liste_courses || [];
+      if (!l.length) return "";
+      for (const n of [...LC_COCHES]) if (!l.some(x => x.nom === n)) LC_COCHES.delete(n);
+      return `<section class="bloc liste-courses" aria-labelledby="tListe"><h2 id="tListe">Ma liste<span>${l.length}</span></h2>
+        <ul>${l.map(x => `<li><label><input type="checkbox" data-lc="${esc(x.nom)}"${LC_COCHES.has(x.nom) ? " checked" : ""}><i aria-hidden="true">${icone("check")}</i>
+          <span class="lc-nom">${esc(x.nom)}</span><span class="lc-q chiffres">${quantite(x.quantite, x.unite)}</span></label>
+          <button type="button" class="lc-x" data-action="lcRetirer" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" aria-label="Retirer ${esc(x.nom)} de la liste">${icone("x")}</button></li>`).join("")}</ul>
+        <button type="button" class="bouton large" id="lcValider" data-action="lcValider"${LC_COCHES.size ? "" : " disabled"}>${lcTexte()}</button></section>`; })()}
+    ${(() => {
       const c = coursesMalines();
       if (!c.length) return "";
       const total = new Set(c.flatMap(x => x.plats)).size;
-      return `<section class="bloc stock-malin" aria-labelledby="tMalin"><h2 id="tMalin">À acheter pour plus de plats</h2>
-        <p class="petit discret">Ton top ${c.length} : ${total} plat${total > 1 ? "s" : ""} de plus avec ton stock.</p>
-        <ul class="malin-liste">${c.map(x => { const ids = x.plats.length ? x.plats : x.aide;
-          return `<li><span class="malin-nom"><b>${esc(x.nom)}</b><small>${esc(ids.slice(0, 2).map(id => recette(id).nom).join(", "))}${ids.length > 2 ? "…" : ""}</small></span>
-          <span class="malin-n">${x.plats.length ? `+${x.plats.length} plat${x.plats.length > 1 ? "s" : ""}` : `dans ${x.aide.length} plat${x.aide.length > 1 ? "s" : ""}`}</span>
-          <button type="button" class="malin-ajout" data-stock-pas="1" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" data-q="0" aria-label="J'ai acheté ${esc(x.nom)} : l'ajouter au stock">${icone("plus")}</button></li>`; }).join("")}</ul></section>`; })()}
+      // Sobre (Taha, 23/11/2026 : « trop de texte ») : des pastilles, le nom et ce qu'il ouvre ; toucher = acheté, au stock.
+      return `<section class="bloc stock-malin" aria-labelledby="tMalin"><h2 id="tMalin">À acheter<span>+${total} plat${total > 1 ? "s" : ""}</span></h2>
+        <div class="malin-puces">${c.map(x => { const pris = (E.liste_courses || []).some(l => l.nom === x.nom);
+          return `<button type="button" class="malin-puce" data-action="malinListe" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" data-q="${x.q}" aria-pressed="${pris}"
+          aria-label="${esc(x.nom)}${x.plats.length ? `, ${x.plats.length} plat${x.plats.length > 1 ? "s" : ""} de plus` : ""} : ${pris ? "retirer de" : "mettre sur"} ta liste de courses">${pris ? icone("check") : ""}${esc(x.nom)}${x.plats.length ? `<b>+${x.plats.length}</b>` : ""}</button>`; }).join("")}</div></section>`; })()}
     ${barreStock}
     ${(() => {
       // Deux parties (Taha, 23/11/2026 : « beaucoup d'ingrédients, plus facile pour le user ») : ce que tu as, en
@@ -2811,6 +2820,8 @@ function vueStockMaison() {
     })()}`;
 }
 const STOCK_OUVERTS = new Set();
+const LC_COCHES = new Set();                 // cochés sur ma liste de courses, pas encore validés
+const lcTexte = () => LC_COCHES.size ? `${icone("check")}Valider ${LC_COCHES.size} achat${LC_COCHES.size > 1 ? "s" : ""}` : "Coche ce que tu as acheté";
 // La liste de courses qui ouvre le plus de plats avec ce qu'on a déjà (Taha, 23/11/2026) : à chaque tour, le produit
 // qui rend faisables le plus de plats (à égalité, celui qui rapproche le plus d'autres plats) ; toujours un top 10
 // (Taha, 23/11/2026), même quand les derniers ne font que rapprocher des plats.
@@ -2818,7 +2829,7 @@ function coursesMalines(max = 10) {
   if (!(E.stock || []).length || !E.stock_manque) return [];
   const ok = id => { const r = recette(id); return r && estRepas(r) && !estRetire(id) && r.gout !== "non" && !["extrariz", "rien"].includes(id); };
   const reste = Object.entries(E.stock_manque).filter(([id]) => ok(id))
-    .map(([id, m]) => ({ id, m: new Map(m.map(([n, , u]) => [n, u])) }));
+    .map(([id, m]) => ({ id, m: new Map(m.map(([n, q, u]) => [n, [q, u]])) }));
   const choix = [];
   while (choix.length < max) {
     const score = new Map();
@@ -2829,9 +2840,12 @@ function coursesMalines(max = 10) {
     }
     const [nom, x] = [...score.entries()].sort((a, b) => b[1].finis - a[1].finis || b[1].proches - a[1].proches)[0] || [];
     if (!nom) break;
-    const unite = reste.find(r => r.m.has(nom)).m.get(nom), plats = [], aide = [];
-    for (const r of reste) if (r.m.delete(nom)) (r.m.size ? aide : plats).push(r.id);
-    choix.push({ nom, unite, plats, aide });
+    const unite = reste.find(r => r.m.has(nom)).m.get(nom)[1], plats = [], qs = [], qa = [], aide = [];
+    for (const r of reste) { const v = r.m.get(nom); if (r.m.delete(nom)) (r.m.size ? (aide.push(r.id), qa) : (plats.push(r.id), qs)).push(v[0]); }
+    // Assez pour une portion de chaque plat qu'il ouvre (sinon, du plus gourmand de ceux qu'il rapproche), arrondi.
+    const brut = qs.length ? qs.reduce((a, b) => a + b, 0) : Math.max(...qa);
+    const q = unite === "g" || unite === "ml" ? Math.max(50, Math.ceil(brut / 50) * 50) : Math.max(1, Math.ceil(brut));
+    choix.push({ nom, unite, q, plats, aide });
     for (let i = reste.length - 1; i >= 0; i--) if (!reste[i].m.size) reste.splice(i, 1);
   }
   return choix;
@@ -4087,6 +4101,15 @@ const ACTIONS = {
     b.dataset.fixe === "1" ? "Fixé : il revient chaque jour." : "Ce plat n'est plus fixe."),
   reessayer: demarrer,
   // Des pages de 5, ‹ et › (Taha, 23/11/2026 : « voir 5 de plus, c'est lourd »).
+  malinListe: b => b.getAttribute("aria-pressed") === "true"
+    ? agir("/api/liste_courses", { nom: b.dataset.nom, unite: b.dataset.unite, retirer: true }, "")
+    : agir("/api/liste_courses", { nom: b.dataset.nom, unite: b.dataset.unite, quantite: Number(b.dataset.q) }, `${b.dataset.nom} : sur ta liste.`),
+  lcRetirer: b => { LC_COCHES.delete(b.dataset.nom); return agir("/api/liste_courses", { nom: b.dataset.nom, unite: b.dataset.unite, retirer: true }, ""); },
+  lcValider: async () => {
+    const noms = [...LC_COCHES], n = noms.length;
+    if (!n) return;
+    if (await agir("/api/liste_courses/valider", { noms }, `${n} produit${n > 1 ? "s" : ""} au stock.`)) LC_COCHES.clear();
+  },
   pageCat: b => { filtresCat.debut = Math.max(0, filtresCat.debut + Number(b.dataset.pas)); rendre(); },
   garderPlat: async b => { if (await agir("/api/plat/garder", { plat: b.dataset.plat }, "Ajouté à tes plats.")) fermerCarte(); },
 };
@@ -4212,6 +4235,11 @@ document.addEventListener("submit", async ev => {
 });
 document.addEventListener("change", ev => {
   const i = ev.target;
+  if (i.dataset.lc != null) {
+    i.checked ? LC_COCHES.add(i.dataset.lc) : LC_COCHES.delete(i.dataset.lc);
+    const b = $("lcValider"); if (b) { b.disabled = !LC_COCHES.size; b.innerHTML = lcTexte(); }
+    return;
+  }
   if (i.id === "triCat") { Object.assign(filtresCat, { tri: i.value, sens: i.value === "prot" ? -1 : 1, debut: 0 }); rendre(); return; }
   if (i.dataset.coche) {
     const [liste, ...reste] = i.dataset.coche.split("|"), nom = reste.join("|");
