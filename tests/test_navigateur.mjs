@@ -579,13 +579,16 @@ try {
   // Taha, 22/11/2026 : le catalogue en liste, comme « Remplacer par un autre plat ».
   await test('Catalogue : liste, recherche, fiche', async () => {
     await aller('#/catalogue');
-    // 5 à la fois, « Voir 5 de plus » (Taha, 23/11/2026).
+    // 5 à la fois (Taha, 23/11/2026).
     const n5 = await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`);
     vrai(n5 === 5, `${n5} plats au départ, 5 attendus`);
-    await B.js(`document.querySelector('[data-action="plusCat"]').click()`); await att(300);
-    const n10 = await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`);
-    vrai(n10 === 10, `${n10} plats après « Voir 5 de plus »`);
+    // Pages de 5 : › puis ‹ (Taha, 23/11/2026).
     const premier = await B.js(`document.querySelector('.cat-liste b').textContent`);
+    await B.js(`document.querySelector('[data-action="pageCat"][data-pas="5"]').click()`); await att(300);
+    const suivant = await B.js(`document.querySelector('.cat-liste b').textContent`);
+    vrai(suivant !== premier && await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`) === 5, `page suivante : ${suivant}`);
+    await B.js(`document.querySelector('[data-action="pageCat"][data-pas="-5"]').click()`); await att(300);
+    vrai(await B.js(`document.querySelector('.cat-liste b').textContent`) === premier, 'page précédente');
     await B.js(`document.querySelector('.tri-sens').click()`); await att(300);
     const premierInverse = await B.js(`document.querySelector('.cat-liste b').textContent`);
     vrai(premier !== premierInverse && await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`) === 5, `décroissant : ${premier} / ${premierInverse}`);

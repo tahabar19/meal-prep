@@ -1675,9 +1675,11 @@ input[type=date]::-webkit-datetime-edit{padding:0}
   background:none;color:var(--encre);font:inherit;font-size:.8rem;cursor:pointer}
 .tri-sens .ic{transform:rotate(-90deg);color:var(--accent);transition:transform .2s}
 .tri-sens.bas .ic{transform:rotate(90deg)}
-.cat-plus{display:flex;justify-content:center;margin:14px 0 4px}
-.cat-plus .bouton{display:inline-flex;align-items:center;gap:8px}
-.cat-plus small{color:var(--discret);font-size:.74rem;font-weight:400}
+.cat-pages{display:flex;align-items:center;justify-content:center;gap:14px;margin:12px 0 4px}
+.cat-pages button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--filet);border-radius:50%;background:none;color:var(--encre);cursor:pointer}
+.cat-pages button:disabled{opacity:.3;cursor:default}
+.cat-pages span{min-width:96px;text-align:center;font-size:.86rem}
+.cat-pages small{color:var(--discret);font-size:.76rem}
 .stock-malin{padding:12px 14px!important}
 .stock-malin > p{margin:2px 0 6px}
 .malin-liste{list-style:none;margin:0;padding:0}
