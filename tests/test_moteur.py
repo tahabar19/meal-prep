@@ -460,6 +460,46 @@ class O_StockTaper(unittest.TestCase):
         for cle, q in ((("Œuf", "pièce"), 6), (("Riz basmati", "g"), 1000), (("Lait", "ml"), 1000)):
             self.assertAlmostEqual(apres.get(cle, 0) - avant.get(cle, 0), q, delta=0.01, msg=cle)
 
+    def test_recette_depuis_un_lien(self):
+        # Un lien de recette (Taha, 23/11/2026) : l'appli lit le lien, l'IA fait un plat pour une portion avec ses
+        # étapes ; le plat va dans tes plats (pas caché), avec son lien, et se règle comme les autres (pas « tel quel »).
+        S, demandes, lus = M.serveur, [], []
+        def repondre(consigne, photo):
+            demandes.append(consigne)
+            return {"nom": "Curry de poulet coco", "moment": "din", "remarque": "Pour 4, divisé par 4.", "temps": 30,
+                    "etapes": ["Coupe le poulet.", "Fais-le dorer.", "Ajoute le lait de coco et mijote 20 min."],
+                    "items": [{"nom": "Blanc de poulet", "g": 150, "connu": "Blanc de poulet", "source": "connu"},
+                              {"nom": "Lait de coco", "g": 100, "connu": "Lait de coco", "source": "connu"},
+                              {"nom": "Riz basmati", "g": 70, "connu": "Riz basmati", "source": "connu"}]}
+        vrais = S._claude_avec_photo, S.claude_disponible, S._lire_recette
+        S._claude_avec_photo, S.claude_disponible = repondre, lambda: True
+        S._lire_recette = lambda url: lus.append(url) or {"site": "TikTok", "titre": "", "texte": "Curry coco pour 4 : 600 g poulet, 400 ml lait de coco #food", "auteur": "chef"}
+        try:
+            s, c, _ = M.api("POST", "/api/repas/analyser", {"texte": "", "lien": "https://www.tiktok.com/@chef/video/1", "description": ""})
+            self.assertEqual(s, 200, c)
+            p = c["proposition"]
+            self.assertEqual(lus, ["https://www.tiktok.com/@chef/video/1"])
+            self.assertIn("600 g poulet", demandes[0])
+            self.assertEqual(len(p["recette"]["etapes"]), 3)
+            items = [{k: x.get(k) for k in ("nom", "g", "kcal", "prot", "gluc", "lip", "fib", "pour100", "aliment", "plat", "source")} for x in p["items"]]
+            s, c, _ = M.api("POST", "/api/repas/au_menu", {"date": M.etat()["journal_repas"]["aujourdhui"], "moment": "din", "nom": p["nom"],
+                                                         "items": items, "seulement_plat": True, "recette": p["recette"]})
+            self.assertEqual(s, 200, c)
+            plat = next(x for x in S.plats_perso() if x["nom"] == "Curry de poulet coco")
+            self.assertEqual(plat["etapes"][0], "Coupe le poulet.")
+            self.assertEqual(plat["source"]["site"], "TikTok")
+            self.assertFalse(plat.get("tel_quel"))
+            self.assertNotIn(plat["id"], S.plats_caches())
+            # Une page illisible : on demande la description.
+            S._lire_recette = lambda url: {"site": "Instagram", "titre": "", "texte": ""}
+            s, c, _ = M.api("POST", "/api/repas/analyser", {"texte": "", "lien": "https://www.instagram.com/p/x/"})
+            self.assertNotEqual(s, 200)
+            self.assertIn("description", c.get("erreur", ""))
+        finally:
+            S._claude_avec_photo, S.claude_disponible, S._lire_recette = vrais
+            plats = [x for x in S.plats_perso() if x["nom"] != "Curry de poulet coco"]
+            S._ecrire_p("plats_perso.json", plats)
+
     def test_flou_part_a_claude_en_court(self):
         S, demandes = M.serveur, []
         def repondre(consigne, photo):

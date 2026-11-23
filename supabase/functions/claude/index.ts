@@ -2,6 +2,7 @@
 // Actions :
 //   "cle"      connecter sa clé (+ adresse d'API compatible + modèle), vérifiée par un vrai essai
 //   "messages" une question à Claude (texte, photo) avec SA clé ; renvoie le texte de la réponse
+//   "recette_lien"  le titre et le texte d'une recette vue en ligne (oEmbed, balises de partage, fiche Recipe)
 //   "web"      lire une page ou une image publique (étiquettes Open Food Facts / auchan.fr, banques de photos) :
 //              le moteur de l'appli, qui tourne dans le navigateur, ne peut pas lire ces sites lui-même.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -21,7 +22,7 @@ const MODELE = "claude-sonnet-5-5"; // Sonnet (Taha, 20/11/2026 : « utilise Son
 // tâche nutrition demandée par l'appli, répond en JSON, dans des tailles bornées, avec un quota par personne.
 const QUOTAS: Record<string, [number, number]> = { messages: [40, 200], web: [400, 2000], cle: [10, 30], image: [8, 25] };   // par heure, par jour
 const TACHES: Record<string, string> = {
-  repas: "analyser ce qu'une personne a mangé (texte, photo d'assiette, d'étiquette ou de ticket de caisse) et en donner les aliments, leurs poids et leurs valeurs nutritionnelles, puis corriger ce repas à sa demande (ajouter, retirer ou changer un aliment, viser des calories ou des macros) ; ou lire ce qu'elle a chez elle pour son stock de cuisine (photo de frigo ou de placard, ticket de caisse de supermarché, liste écrite) et en donner les aliments et leurs quantités",
+  repas: "analyser ce qu'une personne a mangé (texte, photo d'assiette, d'étiquette ou de ticket de caisse) et en donner les aliments, leurs poids et leurs valeurs nutritionnelles, puis corriger ce repas à sa demande (ajouter, retirer ou changer un aliment, viser des calories ou des macros) ; ou transformer une recette (texte d'un site, description d'une vidéo de cuisine Instagram, TikTok, YouTube…) en plat pour une portion avec ses aliments, poids et étapes ; ou lire ce qu'elle a chez elle pour son stock de cuisine (photo de frigo ou de placard, ticket de caisse de supermarché, liste écrite) et en donner les aliments et leurs quantités",
   aide: "une petite aide de cuisine ou de nutrition demandée par l'appli : les valeurs d'un aliment, les ingrédients d'un plat, des mots de recherche ou le choix d'une photo de plat",
 };
 const consigne = (tache: string) => `Tu es la partie Claude de l'appli de nutrition « Mon Meal Prep ». Tu fais UNIQUEMENT cette tâche : ${TACHES[tache]}.
@@ -165,6 +166,79 @@ async function lire(url: string, binaire: boolean) {
   return { status: r.status, type: r.headers.get("content-type") || "", base64: btoa(s) };
 }
 
+// ---------- Une recette vue en ligne (Taha, 23/11/2026 : « un lien Insta, FB, YouTube, TikTok… et l'appli crée la recette ») ----
+// Seulement ce que les sites donnent publiquement : oEmbed (YouTube, TikTok), balises de partage (og:), fiche Recipe
+// (JSON-LD des sites de recettes). Jamais la page brute : un texte borné. Sans rien de lisible, la page demande de
+// coller la description.
+const entites = (t: string) => t.replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+  .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
+function meta(html: string, nom: string): string {
+  for (const re of [new RegExp(`<meta[^>]+(?:property|name)=["']${nom}["'][^>]*content=["']([^"']*)["']`, "i"),
+                    new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${nom}["']`, "i")]) {
+    const m = html.match(re);
+    if (m) return entites(m[1]).trim();
+  }
+  return "";
+}
+function recetteJsonLd(html: string): { titre: string; texte: string } | null {
+  for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+    let d: any;
+    try { d = JSON.parse(m[1].trim()); } catch { continue; }
+    const pile = [d];
+    while (pile.length) {
+      const x = pile.shift();
+      if (Array.isArray(x)) { pile.push(...x); continue; }
+      if (!x || typeof x !== "object") continue;
+      if (x["@graph"]) pile.push(x["@graph"]);
+      const types = [].concat(x["@type"] || []);
+      if (!types.includes("Recipe")) continue;
+      const etapes = (v: any): string[] => Array.isArray(v) ? v.flatMap(etapes) : typeof v === "string" ? [v]
+        : v && typeof v === "object" ? (v.itemListElement ? etapes(v.itemListElement) : v.text ? [String(v.text)] : []) : [];
+      const lignes = [x.recipeYield ? `Pour : ${[].concat(x.recipeYield).join(", ")}` : "",
+        "Ingrédients :", ...[].concat(x.recipeIngredient || []).map((i: any) => `- ${i}`),
+        "Étapes :", ...etapes(x.recipeInstructions).map((e, k) => `${k + 1}. ${e}`)];
+      return { titre: String(x.name || ""), texte: entites(lignes.filter(Boolean).join("\n")) };
+    }
+  }
+  return null;
+}
+async function recetteLien(brut: unknown) {
+  let u = adressePublique(brut);
+  const ua = { "User-Agent": "Mozilla/5.0 (compatible; mon-meal-prep/1.0)", "Accept-Language": "fr-FR,fr;q=0.9" };
+  const page = async (url: string | URL) => {
+    const r = await fetch(url, { headers: ua, redirect: "follow", signal: AbortSignal.timeout(15000) });
+    const t = (await r.text()).slice(0, 3_000_000);
+    return { ok: r.ok, url: r.url, t };
+  };
+  const json = async (url: string) => { try { const r = await fetch(url, { headers: ua, signal: AbortSignal.timeout(10000) }); return r.ok ? await r.json() : null; } catch { return null; } };
+  let h = u.hostname.toLowerCase();
+  if (/^(vm|vt)\.tiktok\.com$/.test(h)) { try { const p = await page(u); u = adressePublique(p.url); h = u.hostname.toLowerCase(); } catch { /* lien court illisible */ } }
+  const site = /youtu/.test(h) ? "YouTube" : /tiktok/.test(h) ? "TikTok" : /instagram/.test(h) ? "Instagram" : /facebook|fb\.watch/.test(h) ? "Facebook" : h.replace(/^www\./, "");
+  let titre = "", texte = "", auteur = "", image = "";
+  if (/(^|\.)youtube\.com$|^youtu\.be$/.test(h)) {
+    const o = await json(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(u.href)}`);
+    if (o) { titre = o.title || ""; auteur = o.author_name || ""; image = o.thumbnail_url || ""; }
+  } else if (/(^|\.)tiktok\.com$/.test(h)) {
+    const o = await json(`https://www.tiktok.com/oembed?url=${encodeURIComponent(u.href)}`);
+    if (o) { texte = o.title || ""; auteur = o.author_name || ""; image = o.thumbnail_url || ""; }
+  }
+  if (!texte) {
+    try {
+      const p = await page(u);
+      const r = recetteJsonLd(p.t);
+      if (r) { titre = titre || r.titre; texte = r.texte; }
+      else {
+        const desc = meta(p.t, "og:description") || meta(p.t, "description") || meta(p.t, "twitter:description");
+        if (desc && !/^(log ?in|connecte|sign up|create an account)/i.test(desc)) texte = desc;
+        titre = titre || meta(p.t, "og:title") || entites((p.t.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || "").trim();
+      }
+      image = image || meta(p.t, "og:image");
+    } catch { /* page illisible : on garde ce que l'oEmbed a donné */ }
+  }
+  if (/^(instagram|facebook|tiktok|youtube)$/i.test(titre.trim()) || /log ?in|connexion/i.test(titre)) titre = "";
+  return { site, titre: titre.slice(0, 200), texte: texte.slice(0, 8000), auteur: auteur.slice(0, 80), image: image.slice(0, 500) };
+}
+
 // ---------- La photo d'un nouveau plat, créée par Gemini « Nano Banana » (Taha, 22/11/2026) ----------
 // Toujours le même modèle de consigne, celui des photos du catalogue : les photos restent unifiées. La consigne est
 // faite ICI à partir du nom et des ingrédients (bornés) : la page ne peut pas faire dessiner autre chose avec la clé.
@@ -221,7 +295,7 @@ Deno.serve(async (req) => {
       if (!Deno.env.get("GEMINI_API_KEY")) return json({ erreur: "Pas de clé Gemini.", sans_cle: true }, 400);
     }
     let appel = 0;
-    if (["web", "web_lot", "cle", "messages", "image"].includes(corps.action) && !(appel = await quota(admin, user.id, corps.action === "web_lot" ? "web" : corps.action)))
+    if (["web", "web_lot", "recette_lien", "cle", "messages", "image"].includes(corps.action) && !(appel = await quota(admin, user.id, ["web_lot", "recette_lien"].includes(corps.action) ? "web" : corps.action)))
       return json({ erreur: "Trop de demandes pour l'instant : réessaie dans un moment." }, 429);
 
     // ---------- La conso de chaque compte : pour l'admin seulement ----------
@@ -238,6 +312,11 @@ Deno.serve(async (req) => {
         if (!data || data.length < 1000) break;
       }
       return json({ profils, lignes });
+    }
+
+    if (corps.action === "recette_lien") {
+      try { return json(await recetteLien(corps.url)); }
+      catch (e) { return json({ erreur: (e as Error).message }, 400); }
     }
 
     if (corps.action === "web") {

@@ -629,9 +629,14 @@ try {
       return Math.max(Math.abs(r.left + r.width / 2 - i.left - i.width / 2), Math.abs(r.top + r.height / 2 - i.top - i.height / 2)); }))`);
     vrai(decale <= 1.5, `flèche décalée de ${decale} px dans son cercle`);
     await B.js(`document.querySelector('.filtres-bascule').click()`); await att(300);
-    await B.js(`document.querySelector('.filtre-groupe button').click()`); await att(300); await B.photo('catalogue-filtres');
+    await B.js(`document.querySelector('.ft-choix button').click()`); await att(300); await B.photo('catalogue-filtres');
     await B.js(`document.querySelector('[data-cle=raz]') && document.querySelector('[data-cle=raz]').click()`); await att(200);
-    if (await B.js(`!!document.querySelector('.filtre-groupe')`)) { await B.js(`document.querySelector('.filtres-bascule').click()`); await att(300); }
+    if (await B.js(`!!document.querySelector('.ft-choix')`)) { await B.js(`document.querySelector('.filtres-bascule').click()`); await att(300); }
+    // « Créer un plat » avec un lien de recette (Taha, 23/11/2026) : le champ du lien, la description qui apparaît.
+    await B.js(`(() => { const c = E.claude; E.claude = true; creerPlatIA(); E.claude = c; const l = document.getElementById('cpLien'); l.value = 'https://www.tiktok.com/@chef/video/1'; l.dispatchEvent(new Event('input')); })()`); await att(300);
+    vrai(await B.js(`!!document.getElementById('cpLien') && !document.getElementById('cpDesc').hidden`), 'pas de champ pour le lien de recette');
+    await B.photo('creer-plat-lien');
+    await B.js(`document.getElementById('dialogue').close()`); await att(200);
     const premier = await B.js(`document.querySelector('.cat-liste b').textContent`);
     await B.js(`document.querySelector('[data-action="pageCat"][data-pas="5"]').click()`); await att(300);
     const suivant = await B.js(`document.querySelector('.cat-liste b').textContent`);

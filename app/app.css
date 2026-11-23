@@ -1838,3 +1838,57 @@ body:has(.bi) main{padding-bottom:calc(var(--nav-bas) + var(--bas) + 190px)}
 /* le message passe au-dessus de la carte des produits choisis */
 .barre:has(.bi):not([hidden]) ~ .toast{bottom:calc(var(--nav-bas) + var(--bas) + 250px)}
 @media (min-width:900px){.barre:has(.bi):not([hidden]) ~ .toast{bottom:260px}}
+
+/* Créer un plat depuis le lien d'une recette (Taha, 23/11/2026) */
+.creer-plat .cp-ou{display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--discret);font-size:.74rem;text-transform:uppercase;letter-spacing:.08em}
+.creer-plat .cp-ou::before,.creer-plat .cp-ou::after{content:"";flex:1;height:1px;background:var(--filet)}
+.creer-plat .cp-lien input{padding-right:16px;border:1.5px dashed var(--filet)}
+.creer-plat .cp-lien input:focus{border-style:solid;border-color:var(--discret);box-shadow:none}
+.creer-plat .cp-sites{margin:6px 2px 0;font-size:.72rem;color:var(--discret)}
+.creer-plat .cp-desc{width:100%;margin-top:10px;min-height:72px;padding:10px 12px;border:1px solid var(--filet);border-radius:var(--r-ctl);
+  background:var(--surface-fort);color:var(--encre);font:inherit;font-size:16px;resize:vertical}
+.creer-plat .cp-desc[hidden]{display:none}
+.cp-source{margin:4px 0 8px}
+.cp-source a{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--discret);text-decoration:none}
+.cp-source a:hover{color:var(--encre)}
+.cp-source .ic{width:14px;height:14px}
+.nr-etapes{margin-top:12px;border:1px solid var(--filet-doux);border-radius:var(--r-ctl);background:var(--surface-fort)}
+.nr-etapes summary{display:flex;align-items:center;gap:8px;min-height:42px;padding:0 12px;cursor:pointer;list-style:none;font-size:.86rem;color:var(--encre)}
+.nr-etapes summary::-webkit-details-marker{display:none}
+.nr-etapes summary small{margin-left:auto;color:var(--discret);font-size:.74rem}
+.nr-etapes summary .ic{width:15px;height:15px}
+.nr-etapes summary .ic:last-child{color:var(--discret);transition:transform .15s}
+.nr-etapes[open] summary .ic:last-child{transform:rotate(90deg)}
+.nr-etapes ol{margin:0;padding:0 14px 12px 32px;font-size:.84rem;color:var(--texte);line-height:1.45}
+.nr-etapes li + li{margin-top:5px}
+
+/* Filtres du catalogue, v3 (Taha, 23/11/2026 : « trop d'espacement, pas de gras, pas de texte collé, moderne ») :
+   une rangée d'onglets, un seul groupe ouvert, les filtres actifs en pastilles qu'on retire. Aucun gras. */
+#contenu .filtres.ft{padding:4px 12px 10px;border:1px solid var(--filet-doux);background:var(--surface)}
+#contenu .ft h2{margin:0;font-weight:400}
+#contenu .ft .filtres-bascule{min-height:40px;gap:8px;font-size:.88rem;font-weight:500;letter-spacing:0}
+#contenu .ft .filtres-bascule .ic{width:16px;height:16px}
+.ft-nb{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--sur-accent);font-size:.68rem;font-weight:500}
+.ft-raz{border:0;background:none;color:var(--discret);font:inherit;font-size:.78rem;font-weight:400;cursor:pointer;padding:6px 2px}
+.ft-raz:hover{color:var(--encre)}
+.ft-actifs{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 8px}
+.ft-actifs button{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 8px 0 11px;border:0;border-radius:var(--r-pilule);
+  background:rgba(200,240,75,.12);color:var(--encre);font:inherit;font-size:.76rem;font-weight:400;cursor:pointer}
+.ft-actifs button .ic{width:11px;height:11px;color:var(--accent)}
+.ft-onglets{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;margin:0 -12px;padding:0 12px;border-bottom:1px solid var(--filet-doux)}
+.ft-onglets::-webkit-scrollbar{display:none}
+.ft-onglets button{position:relative;flex:none;display:inline-flex;align-items:center;gap:5px;height:36px;padding:0 10px;border:0;background:none;
+  color:var(--discret);font:inherit;font-size:.8rem;font-weight:400;cursor:pointer;transition:color .15s}
+.ft-onglets button:hover{color:var(--texte)}
+.ft-onglets button[aria-selected="true"]{color:var(--encre)}
+.ft-onglets button[aria-selected="true"]::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;background:var(--accent)}
+.ft-onglets i{font-style:normal;font-size:.66rem;color:var(--accent)}
+#contenu .ft-choix{display:flex;flex-wrap:wrap;gap:6px;padding:10px 0 2px}
+#contenu .ft-choix button{min-height:30px;padding:0 12px;border:1px solid var(--filet);border-radius:var(--r-pilule);background:transparent;
+  color:var(--texte);font-size:.78rem;font-weight:400;transition:background .15s,border-color .15s,color .15s}
+#contenu .ft-choix button:hover{background:var(--survol)}
+#contenu .ft-choix button[aria-pressed="true"]{border-color:rgba(200,240,75,.45);background:rgba(200,240,75,.1);color:var(--encre);font-weight:400}
+#contenu .ft-choix button .ic{display:none}
+#contenu .ft-choix #ingCat{width:100%;height:36px;min-height:0;padding:0 14px;border-radius:var(--r-pilule);font-size:16px}
+#contenu .ft .tri{margin-top:8px;padding-top:8px;border-top:1px solid var(--filet-doux)}
+#contenu .ft .tri label{font-weight:400}
