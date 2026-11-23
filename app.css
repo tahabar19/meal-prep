@@ -1473,3 +1473,27 @@ html:has(.carte-fond.ouvert){background:#060706}
 /* Stock : les ingrédients à 0 restent, grisés (Taha, 23/11/2026) */
 .stock-zero .stock-nom,.stock-zero .stock-saisie,.stock-zero .stock-u{opacity:.45}
 .stock-zero button[disabled]{opacity:.3;cursor:default}
+/* Typographie unifiée sur le téléphone (Taha, 23/11/2026 : « même police, mêmes tailles pour le même niveau ;
+   j'aime les petites tailles du catalogue, des vitamines, de l'avancement »). Échelle : titre de page 26 px,
+   titre de section 15 px, texte 14 px, texte secondaire 13 px, légendes 12 px, gros chiffres 18 px. */
+@media (max-width:899px){
+  #contenu h1,#contenu .vit-titre h1{font-size:1.625rem}
+  #contenu .bloc > h2,#contenu section > h2,#contenu .vide h2,#contenu .suivi-noter-tete h2,#contenu h2.titre-section{font-size:.9375rem;font-weight:600;letter-spacing:-.01em}
+  #contenu .vide{padding:20px 18px}
+  #contenu .vide p{font-size:.8125rem;margin:6px 0 14px}
+  #contenu .petit{font-size:.8125rem}
+  #contenu .reste-jour{font-size:.875rem}
+  #contenu .lignes li > span,#contenu .menu a > span{font-size:.875rem}
+  #contenu .lignes li small,#contenu .menu a small{font-size:.75rem}
+  #contenu .reg-tete span,#contenu .reglages b{font-size:.875rem}
+  #contenu .completer summary,#contenu .formulaire h3{font-size:.875rem}
+  #contenu .date-discrete span{font-size:.875rem}
+  #contenu .fait b,#contenu .suivi-chiffres .fait b,#contenu .kpis dd,#contenu .reperes dd,#contenu .jauge b.chiffres{font-size:1.125rem}
+  #contenu .reg-fin .bouton{font-size:.875rem}
+  #contenu a.rappel{justify-content:flex-start;text-align:left;font-size:.8125rem;padding:10px 12px}
+  #contenu a.rappel > span{display:block;flex:1;min-width:0;max-width:none;text-align:left}
+  #contenu a.rappel > .ic{flex:none;width:18px;height:18px}
+  #contenu .jours a,#contenu .jours button{font-size:.85rem}
+  #contenu .m-actions .bouton,#contenu .vide .bouton,#contenu .formulaire .bouton,#contenu .actions .bouton,#contenu .bouton.large{font-size:.875rem;min-height:44px}
+  #contenu .jour-histo > summary b{font-size:.9375rem;font-weight:650}
+}
