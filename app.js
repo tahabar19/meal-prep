@@ -2758,15 +2758,29 @@ function vueStockMaison() {
           <span class="stock-part">${nombre(Math.round(part * 100))} %</span></a></li>`; }).join("")}</ul>
       <button type="button" class="bouton large" data-action="stockProposer" style="margin-top:10px">${icone("arrows-clockwise")}Refaire mes repas avec mon stock</button></section>` : ""}
     ${barreStock}
-    ${trouves.length ? `
-      ${[...groupes.entries()].sort((a, b) => (a[0] === "Autres") - (b[0] === "Autres")).map(([g, lignes]) => `<section class="bloc stock-groupe"><h2>${esc(g)}</h2><ul class="stock-liste">${lignes.map(l =>
-        `<li${l.quantite > 0 ? "" : ' class="stock-zero"'}><span class="stock-nom">${esc(l.nom)}</span><span class="stock-q">
-          <button type="button" data-stock-pas="-1"${l.quantite > 0 ? "" : " disabled"} data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Moins de ${esc(l.nom)}">−</button>
+    ${(() => {
+      // Deux parties (Taha, 23/11/2026 : « beaucoup d'ingrédients, plus facile pour le user ») : ce que tu as, en
+      // lignes à régler ; le reste, rangé par rayon et replié, en pastilles qu'un toucher ajoute au stock.
+      const ordre = ([a], [b]) => (a === "Autres") - (b === "Autres") || a.localeCompare(b, "fr");
+      const parRayon = liste => { const m = new Map(); for (const l of liste) { const g = rayons[l.nom] != null && E.rayons && E.rayons[rayons[l.nom]] ? E.rayons[rayons[l.nom]] : "Autres"; m.set(g, [...(m.get(g) || []), l]); } return [...m.entries()].sort(ordre); };
+      const chez = trouves.filter(l => l.quantite > 0), reste = trouves.filter(l => !(l.quantite > 0));
+      const ligne = l => `<li><span class="stock-nom">${esc(l.nom)}</span><span class="stock-q">
+          <button type="button" data-stock-pas="-1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Moins de ${esc(l.nom)}">−</button>
           <input class="stock-saisie" type="number" inputmode="decimal" min="0" step="any" value="${enAffiche(l).q}" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-facteur="${enAffiche(l).f}" aria-label="Quantité de ${esc(l.nom)}, en ${esc(enAffiche(l).u)}">
           <span class="stock-u">${esc(enAffiche(l).u)}</span>
-          <button type="button" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Plus de ${esc(l.nom)}">+</button></span></li>`).join("")}</ul></section>`).join("")
-        || ""}` : ""}`;
+          <button type="button" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Plus de ${esc(l.nom)}">+</button></span></li>`;
+      apresRendu.push(() => document.querySelectorAll("details[data-rayon]").forEach(d => d.addEventListener("toggle", () =>
+        d.open ? STOCK_OUVERTS.add(d.dataset.rayon) : STOCK_OUVERTS.delete(d.dataset.rayon))));
+      return `<h2 class="stock-titre">Chez toi <span>${chez.length}</span></h2>
+      ${chez.length ? parRayon(chez).map(([g, lignes]) => `<section class="bloc stock-groupe"><h3>${esc(g)}</h3><ul class="stock-liste">${lignes.map(ligne).join("")}</ul></section>`).join("")
+        : `<p class="petit discret stock-vide">${voulus.length ? "Rien de cela chez toi." : "Rien pour l'instant : ajoute avec une photo, un ticket, la barre, ou touche un ingrédient juste en dessous."}</p>`}
+      ${reste.length ? `<h2 class="stock-titre">À ajouter <span>${reste.length}</span></h2><p class="petit discret stock-astuce">Touche un ingrédient pour l'ajouter, puis règle sa quantité.</p>
+      <div class="stock-rayons">${parRayon(reste).map(([g, lignes]) => `<details class="stock-rayon" data-rayon="${esc(g)}"${voulus.length || STOCK_OUVERTS.has(g) ? " open" : ""}>
+        <summary><span class="sr-nom">${esc(g)}</span><small>${lignes.length}</small>${icone("caret-right")}</summary>
+        <div class="stock-puces">${lignes.map(l => `<button type="button" class="stock-puce" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="0" aria-label="Ajouter ${esc(l.nom)} au stock">${esc(l.nom)}${icone("plus")}</button>`).join("")}</div></details>`).join("")}</div>` : ""}`;
+    })()}`;
 }
+const STOCK_OUVERTS = new Set();
 async function stockAnalyser(corps, sorte) {
   const d = $("dialogue");
   d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">${icone("sparkle")} L'IA lit${sorte === "ticket" ? " le ticket" : sorte === "photo" ? " la photo" : " ta liste"}…</h2>
@@ -4043,7 +4057,10 @@ document.addEventListener("click", ev => {
   if (ret && adressePrecedente && ret.getAttribute("href") === adressePrecedente) { ev.preventDefault(); RETOUR_ARRIERE = true; return history.back(); }
   const pas = ev.target.closest("[data-stock-pas]");
   if (pas) { const l = { quantite: Number(pas.dataset.q), unite: pas.dataset.unite };
-    return agir("/api/stock", { nom: pas.dataset.nom, unite: pas.dataset.unite, quantite: Math.max(0, Math.round((l.quantite + Number(pas.dataset.stockPas) * pasStock(l)) * 10) / 10) }, ""); }
+    // Un ingrédient ajouté depuis « À ajouter » : 100 g, 100 ml ou 1 pièce, à régler ensuite.
+    const premier = l.quantite === 0 && Number(pas.dataset.stockPas) > 0 ? (["g", "ml"].includes(l.unite) ? 100 : 1) : null;
+    return agir("/api/stock", { nom: pas.dataset.nom, unite: pas.dataset.unite, quantite: premier ?? Math.max(0, Math.round((l.quantite + Number(pas.dataset.stockPas) * pasStock(l)) * 10) / 10) },
+      premier ? `${pas.dataset.nom} ajouté : règle sa quantité dans « Chez toi ».` : ""); }
   const plat = ev.target.closest('a.repas[href^="#/plat/"], a.rp-plat[href^="#/plat/"]');
   if (plat && !ev.target.closest("#dialogue, .carte-fond")) {
     ev.preventDefault();
