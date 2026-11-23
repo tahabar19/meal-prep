@@ -1682,7 +1682,6 @@ input[type=date]::-webkit-datetime-edit{padding:0}
 .cat-pages small{color:var(--discret);font-size:.76rem}
 .stock-malin{padding:12px 14px 14px!important;margin-bottom:22px}
 .stock-malin h2{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 10px}
-.stock-malin h2 span{font-size:.78rem;font-weight:500;color:var(--accent);font-variant-numeric:tabular-nums}
 .malin-puces{display:flex;flex-wrap:wrap;gap:6px}
 .malin-puce{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid var(--filet);border-radius:var(--r-pilule);
   background:transparent;color:var(--texte);font:inherit;font-size:.82rem;cursor:pointer}
@@ -1720,3 +1719,11 @@ input[type=date]::-webkit-datetime-edit{padding:0}
 .lc-x{display:grid;place-items:center;flex:none;width:30px;height:30px;padding:0;border:0;background:none;color:var(--discret);cursor:pointer}
 .lc-x .ic{width:15px;height:15px}
 .liste-courses .bouton:disabled{opacity:.45}
+.malin-aide{margin:-4px 0 10px;font-size:.78rem;line-height:1.35;color:var(--discret)}
+.malin-aide b{color:var(--accent);font-weight:600}
+.malin-nb{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--filet);border-radius:var(--r-pilule)}
+.malin-nb button{min-height:0;height:24px;padding:0 9px;border:0;border-radius:var(--r-pilule);background:none;color:var(--discret);font:inherit;font-size:.74rem;font-weight:500;cursor:pointer}
+.malin-nb button[aria-pressed="true"]{background:var(--surface-fort);color:var(--encre)}
+#contenu .malin-nb button{min-height:0;padding:0 9px}
+.malin-puce .ic:last-child{opacity:.75}
+.stock-malin h2{align-items:center}
