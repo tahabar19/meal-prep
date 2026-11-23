@@ -73,12 +73,13 @@ const Graph = (() => {
       el("text", { x: m.g - 8, y: Y(v) + 4, class: "axe", "text-anchor": "end" }, svg).textContent = nb(v, decimales && y1 - y0 < 8 ? decimales : 0);
     }
     // Les dates de l'axe : des jours entiers, chacun une seule fois (Taha, 20/11/2026 : « 16 nov » répété).
-    const JOUR = 864e5, nbJours = Math.round((x1 - x0) / JOUR), pasJours = Math.max(1, Math.ceil(nbJours / Math.max(2, Math.floor((L - m.g - m.d) / 84))));
+    const JOUR = 864e5, nbJours = Math.round((x1 - x0) / JOUR), pasJours = Math.max(1, Math.ceil(nbJours / Math.max(2, Math.floor((L - m.g - m.d) / 40))));
     const reperes = [];
     for (let k = nbJours; k >= 0; k -= pasJours) reperes.unshift(x0 + k * JOUR);      // le dernier jour a toujours sa date
     reperes.forEach((d, i) => {
       const bord = X(d) < m.g + 24 ? "start" : X(d) > L - m.d - 24 ? "end" : "middle";
-      el("text", { x: X(d), y: H - 6, class: "axe", "text-anchor": bord }, svg).textContent = jourCourt(d);
+      // Sur l'axe, le numéro du jour seulement ; la date entière est dans la bulle du point touché (Taha, 23/11/2026).
+      el("text", { x: X(d), y: H - 6, class: "axe", "text-anchor": bord }, svg).textContent = new Date(d).getDate();
     });
     if (aujourdhui && +new Date(aujourdhui) >= x0 && +new Date(aujourdhui) <= x1) {
       el("line", { x1: X(aujourdhui), x2: X(aujourdhui), y1: m.h, y2: H - m.b, class: "repere" }, svg);

@@ -36,7 +36,7 @@ let apresRendu = [];     // graphiques a tracer une fois la vue posee dans la pa
 let filtreStock = "";
 let filtreCatalogue = "";
 const filtresCat = { cats: new Set(), avis: "", regimes: new Set(), atouts: new Set(), proteines: new Set(), origines: new Set(), prix: 0, temps: 0,
-                     stock: false, tri: "nom", ouvert: matchMedia("(min-width: 900px)").matches };   // filtres du catalogue
+                     stock: false, tri: "nom", sens: 1, nb: 5, ouvert: matchMedia("(min-width: 900px)").matches };   // filtres du catalogue
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -1018,7 +1018,8 @@ async function apercuChangement(k, operation, titre, retour) {
 
 /* ------------------------------------------------------------ mon propre plat */
 // Les plats retirés pour de bon par la personne (Taha, 22/11/2026) : plus au catalogue ni dans les choix.
-const estRetire = id => (E.plats_retires || []).includes(id);
+// Un plat noté un jour depuis « Ajouter un repas » reste hors de tes plats tant que tu ne l'y mets pas (Taha, 23/11/2026).
+const estRetire = id => (E.plats_retires || []).includes(id) || !!(recette(id) || {}).cache;
 function ingredientsConnus() {
   // Les ingredients du site et ceux crees par le profil, pour les listes de saisie.
   return [...new Set(E.recettes.filter(r => !r.perso).flatMap(r => r.ing.filter(i => i.u !== "qs").map(i => i.n))
@@ -1580,6 +1581,8 @@ function ficheRapide(id, ctx, depuis, vu = null) {
           <span><b>${r0.ajustee ? "Recette ajustée : modifier" : "Ajuster la recette"}</b><small>Les quantités, pour tous les jours</small></span>${icone("caret-right")}</button></div>` : ""}
         <div class="cp-avis">${boutonsGout(r0)}</div>
         ${estRepas(r0) && !vu ? `<p class="cp-equilibrer"><button type="button" class="bouton sobre cp-retirer" data-action="retirerPlat" data-plat="${id}">${icone("poubelle")}Retirer ce plat</button></p>` : ""}`}
+      ${r0.cache ? `<div class="cp-choix cp-garder"><button type="button" data-action="garderPlat" data-plat="${id}">${icone("plus")}
+          <span><b>Ajouter à mes plats</b><small>Pour le retrouver et le reprendre</small></span>${icone("caret-right")}</button></div>` : ""}
       ${(() => {
         // Deux petits boutons discrets en bas de la carte (Taha, 20/11/2026) : équilibrer la journée, fixer le plat.
         // Tout plat se fixe, à son repas (Taha, 20/11/2026).
@@ -1706,6 +1709,7 @@ function vuePlat({ arg }) {
       <a class="bouton" href="#/cuisine/${r.id}">Voir la recette</a>
       ${estRepas(r) ? `<button class="bouton second" data-action="ajuster" data-plat="${r.id}">${icone("sliders-horizontal")}Ajuster ou changer les ingrédients</button>` : ""}
       ${choix && estRepas(r) && !entame ? `<button class="bouton second" data-action="ecarter" data-plat="${r.id}">Écarter ce plat</button>` : ""}
+      ${r.cache ? `<button class="bouton second" data-action="garderPlat" data-plat="${r.id}">${icone("plus")}Ajouter à mes plats</button>` : ""}
       ${r.perso && !choix ? `<button class="bouton sobre" data-action="supprimerPlat" data-plat="${r.id}">${icone("x")}Supprimer mon plat</button>` : ""}
     </div>
   </article>`;
@@ -2633,13 +2637,14 @@ function vueCatalogue({ params }) {
   const NOM_CAT = Object.fromEntries(CATS);
   const repas = E.recettes.filter(r => estRepas(r) && !estRetire(r.id)), F = filtresCat, couvre = E.stock_couvre || {};
   const cherche = filtreCatalogue.trim().toLowerCase();
-  const ordre = { nom: (a, b) => a.nom.localeCompare(b.nom, "fr"), prix: (a, b) => a.cout - b.cout, prot: (a, b) => b.prot - a.prot,
+  // Croissant ou décroissant (Taha, 23/11/2026).
+  const ordre = { nom: (a, b) => a.nom.localeCompare(b.nom, "fr"), prix: (a, b) => a.cout - b.cout, prot: (a, b) => a.prot - b.prot,
                   kcal: (a, b) => a.kcal - b.kcal, temps: (a, b) => (a.temps || 0) - (b.temps || 0) };
   const lignes = repas.filter(r => (!F.cats.size || F.cats.has(r.cat)) && (!F.avis || (F.avis === "sans" ? !r.gout : r.gout === F.avis)) && r.nom.toLowerCase().includes(cherche)
       && [...F.regimes].every(x => r.filtres.regimes.includes(x)) && [...F.atouts].every(x => r.filtres.atouts.includes(x))
       && (!F.proteines.size || F.proteines.has(r.filtres.proteine)) && (!F.origines.size || F.origines.has(r.filtres.origine))
       && (!F.prix || r.cout < F.prix) && (!F.temps || (r.temps && r.temps < F.temps)) && (!F.stock || couvre[r.id] === 1))
-    .sort((a, b) => ordre[F.tri](a, b) || ordre.nom(a, b));
+    .sort((a, b) => F.sens * ordre[F.tri](a, b) || ordre.nom(a, b));
   const nb = gout => repas.filter(r => r.gout === gout).length;
   const puce = (cle, valeur, texte, actif) => `<button type="button" data-action="filtreCat" data-cle="${cle}" data-valeur="${esc(valeur)}" aria-pressed="${actif}">${texte}</button>`;
   const actifs = F.cats.size + (F.avis ? 1 : 0) + F.regimes.size + F.atouts.size + F.proteines.size + F.origines.size + (F.prix ? 1 : 0) + (F.temps ? 1 : 0) + (F.stock ? 1 : 0);
@@ -2658,21 +2663,22 @@ function vueCatalogue({ params }) {
     ${groupe("Ton avis", AVIS.filter(([id]) => id).concat([["sans", "Pas encore d'avis"]]).map(([id, nom]) => puce("avis", id, nom, F.avis === id)).join(""))}
     ${groupe("Régime", REGIMES.map(x => puce("regime", x, x, F.regimes.has(x))).join(""))}
     ${groupe("Protéine", proteines.map(([id, nom]) => puce("proteine", id, nom, F.proteines.has(id))).join(""))}
-    ${groupe("Cuisine", origines.map(x => puce("origine", x, x, F.origines.has(x))).join(""))}
+    ${groupe("Cuisine du monde", origines.map(x => puce("origine", x, x, F.origines.has(x))).join(""))}
     ${groupe("Temps", TEMPS.map(([v, t]) => puce("temps", v, t, F.temps === v)).join(""))}
     ${groupe("Atouts", ATOUTS.map(x => puce("atout", x, x, F.atouts.has(x))).join(""))}
     ${groupe("Prix", PRIX.map(([v, t]) => puce("prix", v, t, F.prix === v)).join(""))}
     ${groupe("Stock", puce("stock", "", "Faisable avec mon stock", F.stock))}` : ""}
     <div class="champ formulaire tri"><label for="triCat">Trier par</label>
-      <select id="triCat" name="tri">${TRIS.map(([id, nom]) => `<option value="${id}"${F.tri === id ? " selected" : ""}>${nom}</option>`).join("")}</select></div>
+      <select id="triCat" name="tri">${TRIS.map(([id, nom]) => `<option value="${id}"${F.tri === id ? " selected" : ""}>${nom}</option>`).join("")}</select>
+      <button type="button" class="tri-sens${F.sens < 0 ? " bas" : ""}" data-action="filtreCat" data-cle="sens" data-valeur="" aria-label="Ordre ${F.sens > 0 ? "croissant" : "décroissant"}, toucher pour inverser">${icone("caret-right")}${F.sens > 0 ? "Croissant" : "Décroissant"}</button></div>
   </section>
   <div class="champ formulaire"><label for="filtre">Chercher une recette</label>
     <input id="filtre" name="filtre" type="search" autocomplete="off" placeholder="Poulet, curry…" value="${esc(filtreCatalogue)}"></div>
   <p class="discret petit" role="status" style="margin:-6px 0 8px">${lignes.length} recette${lignes.length > 1 ? "s" : ""}${F.stock && !E.stock.length ? ". Ton stock est vide : ce filtre servira après ta première commande payée" : ""}.</p>
-  ${lignes.length ? `<ul class="rp-liste cat-liste">${lignes.slice(0, 80).map(r => `<li><a class="rp-plat" href="#/plat/${r.id}">${photo(r, 120, "carre")}
+  ${lignes.length ? `<ul class="rp-liste cat-liste">${lignes.slice(0, F.nb).map(r => `<li><a class="rp-plat" href="#/plat/${r.id}">${photo(r, 120, "carre")}
       <span class="rp-texte"><b>${esc(r.nom)}</b>${macrosLigne(r.kcal, r.prot).replace("</span></span>", `</span><span>${euros(r.cout)}</span>${r.gout === "tester" ? `<span class="rp-ecart plus">À tester</span>` : r.gout === "non" ? `<span>J'aime pas</span>` : ""}</span>`)}</span></a></li>`).join("")}</ul>`
     : `<p class="discret">Aucune recette ne correspond.</p>`}
-  ${lignes.length > 80 ? `<p class="discret petit" style="margin-top:14px">Les 80 premières sur ${lignes.length} : précise avec un filtre ou la recherche pour voir les autres.</p>` : ""}`;
+  ${lignes.length > F.nb ? `<p class="cat-plus"><button type="button" class="bouton sobre" data-action="plusCat">Voir 5 de plus<small>${nombre(Math.min(F.nb, lignes.length))} sur ${nombre(lignes.length)}</small></button></p>` : ""}`;
 }
 // ---------- Le stock à la maison (Taha, 22/11/2026) : photo du frigo ou du placard, ticket de caisse, ou saisie ; l'IA lit,
 // tu vérifies, ça entre ; ce que tu manges en sort ; les plats faisables avec sont marqués, et les prochains jours peuvent
@@ -2771,6 +2777,15 @@ function vueStockMaison() {
         return `<li><a class="rp-plat" href="#/plat/${id}">${photo(r, 120, "carre")}<span class="rp-texte"><b>${esc(r.nom)}</b>${macrosLigne(r.kcal, r.prot)}</span>
           <span class="stock-part">${nombre(Math.round(part * 100))} %</span></a></li>`; }).join("")}</ul>
       <button type="button" class="bouton large" data-action="stockProposer" style="margin-top:10px">${icone("arrows-clockwise")}Refaire mes repas avec mon stock</button></section>` : ""}
+    ${(() => {
+      const c = coursesMalines();
+      if (!c.length) return "";
+      const total = new Set(c.flatMap(x => x.plats)).size;
+      return `<section class="bloc stock-malin" aria-labelledby="tMalin"><h2 id="tMalin">À acheter pour plus de plats</h2>
+        <p class="petit discret">Avec ces ${c.length} produit${c.length > 1 ? "s" : ""}, ${total} plat${total > 1 ? "s" : ""} de plus avec ton stock.</p>
+        <ul class="malin-liste">${c.map(x => `<li><span class="malin-nom"><b>${esc(x.nom)}</b><small>${esc(x.plats.slice(0, 2).map(id => recette(id).nom).join(", "))}${x.plats.length > 2 ? "…" : ""}</small></span>
+          <span class="malin-n">+${x.plats.length} plat${x.plats.length > 1 ? "s" : ""}</span>
+          <button type="button" class="malin-ajout" data-stock-pas="1" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" data-q="0" aria-label="J'ai acheté ${esc(x.nom)} : l'ajouter au stock">${icone("plus")}</button></li>`).join("")}</ul></section>`; })()}
     ${barreStock}
     ${(() => {
       // Deux parties (Taha, 23/11/2026 : « beaucoup d'ingrédients, plus facile pour le user ») : ce que tu as, en
@@ -2795,6 +2810,30 @@ function vueStockMaison() {
     })()}`;
 }
 const STOCK_OUVERTS = new Set();
+// La liste de courses qui ouvre le plus de plats avec ce qu'on a déjà (Taha, 23/11/2026) : à chaque tour, le produit
+// qui rend faisables le plus de plats (à égalité, celui qui rapproche le plus d'autres plats) ; 8 produits au plus.
+function coursesMalines(max = 8) {
+  if (!(E.stock || []).length || !E.stock_manque) return [];
+  const ok = id => { const r = recette(id); return r && estRepas(r) && !estRetire(id) && r.gout !== "non" && !["extrariz", "rien"].includes(id); };
+  const reste = Object.entries(E.stock_manque).filter(([id, m]) => ok(id) && m.length <= 4)
+    .map(([id, m]) => ({ id, m: new Map(m.map(([n, , u]) => [n, u])) }));
+  const choix = [];
+  while (choix.length < max) {
+    const score = new Map();
+    for (const r of reste) for (const n of r.m.keys()) {
+      const x = score.get(n) || { finis: 0, proches: 0 };
+      if (r.m.size === 1) x.finis++; else x.proches += 1 / r.m.size;
+      score.set(n, x);
+    }
+    const [nom, x] = [...score.entries()].sort((a, b) => b[1].finis - a[1].finis || b[1].proches - a[1].proches)[0] || [];
+    if (!nom || !x.finis) break;
+    const unite = reste.find(r => r.m.has(nom)).m.get(nom), plats = [];
+    for (const r of reste) if (r.m.delete(nom) && !r.m.size) plats.push(r.id);
+    choix.push({ nom, unite, plats });
+    for (let i = reste.length - 1; i >= 0; i--) if (!reste[i].m.size) reste.splice(i, 1);
+  }
+  return choix;
+}
 async function stockAnalyser(corps, sorte) {
   const d = $("dialogue");
   d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">${icone("sparkle")} L'IA lit${sorte === "ticket" ? " le ticket" : sorte === "photo" ? " la photo" : " ta liste"}…</h2>
@@ -3082,7 +3121,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       <div class="photo-ajout">
         <label class="bouton second" for="nrPhoto">${icone("image")}${photoJointe ? "Changer la photo" : "Ajouter une photo"}</label>
         <input id="nrPhoto" type="file" accept="image/*" hidden>
-        ${photoJointe ? `<img src="${photoJointe}" alt="Photo jointe" class="apercu-photo"><button type="button" class="lien" id="nrSansPhoto">Retirer la photo</button>` : `<small class="discret">Ton assiette, une étiquette ou un ticket de caisse.</small>`}
+        ${photoJointe ? `<img src="${photoJointe}" alt="Photo jointe" class="apercu-photo"><button type="button" class="lien" id="nrSansPhoto">Retirer la photo</button>` : `<small class="discret">Pas de balance ? Photographie ton assiette : l'IA estime les quantités. Ou une étiquette, un ticket.</small>`}
       </div>
       <small id="eNr" class="erreur" role="alert" style="display:block;margin-top:10px;color:var(--critique)"></small>
       <p class="petit" style="margin-top:10px"><button type="button" class="lien" id="nrMain">Entrer les chiffres moi-même</button></p>
@@ -3661,7 +3700,7 @@ document.addEventListener("change", async ev => {
     const oui = ev.target.checked;
     appel("/api/reglages", { stock_seul: oui }).then(rep => {
       if (rep !== true) return rendre();
-      rendre();
+    rendre();
       dire(!oui ? "Des plats variés, ton stock d'abord." : !(E.stock || []).length ? "Stock uniquement : ajoute d'abord ce que tu as dans Stock."
         : E.stock_refaits ? `Stock uniquement : ${E.stock_refaits} repas refait${E.stock_refaits > 1 ? "s" : ""} avec ton stock.`
         : "Stock uniquement : rien à changer (déjà faisable, ou aucun plat entièrement faisable).");
@@ -4012,7 +4051,9 @@ const ACTIONS = {
     else if (cle === "temps") F.temps = F.temps === Number(v) ? 0 : Number(v);
     else if (cle === "stock") F.stock = !F.stock;
     else if (cle === "ouvert") F.ouvert = !F.ouvert;
+    else if (cle === "sens") F.sens = -F.sens;
     else { [F.cats, F.regimes, F.atouts, F.proteines, F.origines].forEach(e => e.clear()); F.avis = ""; F.prix = 0; F.temps = 0; F.stock = false; }
+    if (cle !== "ouvert") F.nb = 5;
     rendre();
   },
   gout: b => agir("/api/gout", { plat: b.dataset.plat, gout: b.getAttribute("aria-pressed") === "true" ? "" : b.dataset.gout },
@@ -4022,7 +4063,7 @@ const ACTIONS = {
       const r = await fetch(`/api/journal?debut=${E.journal.length + journalPlus.length}`);
       const d = await r.json();
       journalPlus = journalPlus.concat(d.entrees); journalSuite = d.suite;
-      rendre();
+    rendre();
     } catch (e) { dire("L'appli ne répond pas."); }
   },
   ingredient: b => demanderIngredient({ nom: b.dataset.nom }),
@@ -4043,9 +4084,17 @@ const ACTIONS = {
   fixer: b => agir("/api/repas/fixer", { plat: b.dataset.plat, moment: b.dataset.moment, fixe: b.dataset.fixe === "1" },
     b.dataset.fixe === "1" ? "Fixé : il revient chaque jour." : "Ce plat n'est plus fixe."),
   reessayer: demarrer,
+  plusCat: () => { filtresCat.nb += 5; rendre(); },
+  garderPlat: async b => { if (await agir("/api/plat/garder", { plat: b.dataset.plat }, "Ajouté à tes plats.")) fermerCarte(); },
 };
 
 PETIT.addEventListener("change", () => rendre());
+// Le clavier ouvert : la barre des onglets ne monte pas avec lui, elle se cache (Taha, 23/11/2026).
+const AU_CLAVIER = 'input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=button]):not([type=submit]):not([type=date]), textarea, [contenteditable="true"]';
+document.addEventListener("focusin", ev => { if (ev.target.matches && ev.target.matches(AU_CLAVIER)) document.body.classList.add("clavier"); });
+document.addEventListener("focusout", () => setTimeout(() => {
+  const a = document.activeElement;
+  if (!(a && a.matches && a.matches(AU_CLAVIER))) document.body.classList.remove("clavier"); }, 60));
 // Une feuille ou la carte d'un plat est ouverte : la page derrière ne bouge plus quand on fait défiler (Taha, 19/11/2026).
 // iPhone : un champ activé par le code (sans toucher) n'ouvre pas le clavier, et le toucher ensuite ne l'ouvre plus
 // (Taha, 20/11/2026 : « le clavier ne pop plus »). Toucher un champ déjà actif le réactive pendant le geste.
@@ -4160,7 +4209,7 @@ document.addEventListener("submit", async ev => {
 });
 document.addEventListener("change", ev => {
   const i = ev.target;
-  if (i.id === "triCat") { filtresCat.tri = i.value; rendre(); return; }
+  if (i.id === "triCat") { Object.assign(filtresCat, { tri: i.value, sens: i.value === "prot" ? -1 : 1, nb: 5 }); rendre(); return; }
   if (i.dataset.coche) {
     const [liste, ...reste] = i.dataset.coche.split("|"), nom = reste.join("|");
     if (liste === "secs") { cocher(i.dataset.coche, i.checked); return; }          // fruits secs : simple pense-bete, garde sur l'appareil
@@ -4179,7 +4228,7 @@ document.addEventListener("change", ev => {
 });
 document.addEventListener("input", ev => {
   if (ev.target.id !== "filtre") return;
-  if (route().vue === "catalogue") filtreCatalogue = ev.target.value;
+  if (route().vue === "catalogue") { filtreCatalogue = ev.target.value; filtresCat.nb = 5; }
   else filtreStock = ev.target.value;
   const position = ev.target.selectionStart;
   rendre();

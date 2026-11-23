@@ -468,7 +468,7 @@ try {
     await taper('');
     vrai(await attendre(`document.querySelectorAll('.stock-liste li').length >= 3`, 10000) >= 0, 'le stock ne montre pas les produits');
     const avant = await B.js(`document.querySelector('.stock-saisie').value`);
-    await B.js(`document.querySelector('[data-stock-pas="1"]').click()`);
+    await B.js(`document.querySelector('.stock-liste [data-stock-pas="1"]').click()`);
     vrai(await attendre(`document.querySelector('.stock-saisie') && document.querySelector('.stock-saisie').value !== ${JSON.stringify(avant)}`, 10000) >= 0, '+ ne change rien');
     await B.photo('stock-plein');
     if (await B.js(`!!document.querySelector('[data-action=stockProposer]')`)) {
@@ -579,15 +579,30 @@ try {
   // Taha, 22/11/2026 : le catalogue en liste, comme « Remplacer par un autre plat ».
   await test('Catalogue : liste, recherche, fiche', async () => {
     await aller('#/catalogue');
-    const n = await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`);
-    vrai(n > 10, `${n} plats seulement`);
+    // 5 à la fois, « Voir 5 de plus » (Taha, 23/11/2026).
+    const n5 = await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`);
+    vrai(n5 === 5, `${n5} plats au départ, 5 attendus`);
+    await B.js(`document.querySelector('[data-action="plusCat"]').click()`); await att(300);
+    const n10 = await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`);
+    vrai(n10 === 10, `${n10} plats après « Voir 5 de plus »`);
+    const premier = await B.js(`document.querySelector('.cat-liste b').textContent`);
+    await B.js(`document.querySelector('.tri-sens').click()`); await att(300);
+    const premierInverse = await B.js(`document.querySelector('.cat-liste b').textContent`);
+    vrai(premier !== premierInverse && await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`) === 5, `décroissant : ${premier} / ${premierInverse}`);
+    await B.js(`document.querySelector('.tri-sens').click()`); await att(300);
+    const n = await B.js(`parseInt(document.querySelector('#contenu p.petit[role=status]').textContent)`);
+    // Le clavier ouvert cache la barre des onglets.
+    await B.js(`(() => { const f = document.getElementById('filtre'); f.focus(); f.dispatchEvent(new FocusEvent('focusin', { bubbles: true })); })()`); await att(150);
+    vrai(await B.js(`getComputedStyle(document.getElementById('navBas')).display`) === 'none', 'la barre des onglets reste avec le clavier');
+    await B.js(`(() => { const f = document.getElementById('filtre'); f.blur(); f.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); })()`); await att(200);
+    vrai(await B.js(`getComputedStyle(document.getElementById('navBas')).display`) !== 'none', 'la barre des onglets ne revient pas');
     const h = await B.js(`Math.max(...[...document.querySelectorAll('.cat-liste a.rp-plat')].map(x => x.getBoundingClientRect().height))`);
     vrai(h <= 80, `une ligne fait ${h} px`);
     const d = await debordement();
     vrai(d <= 1, `la page déborde de ${d} px`);
     await B.js(`(() => { const f = document.getElementById('filtre'); f.value = 'poulet'; f.dispatchEvent(new Event('input', { bubbles: true })); })()`); await att(700);
-    const m = await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`);
-    vrai(m > 0 && m < n, `recherche « poulet » : ${m} plats`);
+    const m = await B.js(`parseInt(document.querySelector('#contenu p.petit[role=status]').textContent)`);
+    vrai(m > 0 && m < n, `recherche « poulet » : ${m} plats sur ${n}`);
     await B.js(`document.querySelector('.cat-liste a.rp-plat').click()`);
     vrai(await attendre(`document.querySelector('.carte-plat h2, #cpTitre')`, 10000) >= 0, 'la fiche ne s\'ouvre pas');
     await fermerCarte();

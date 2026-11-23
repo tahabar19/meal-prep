@@ -219,6 +219,20 @@ class G_SansClaude(unittest.TestCase):
         self.assertEqual(s, 200, c)
         self.assertNotIn("Galette test auto", M.etat()["vitamines_a_completer"])
 
+    def test_plat_du_jour_cache_puis_garde(self):
+        # Un repas mis au menu depuis « Ajouter » n'entre pas dans tes plats ; « Ajouter à mes plats » l'y met.
+        s, c, _ = M.api("POST", "/api/repas/au_menu", {"date": AUJ, "moment": "col", "nom": "Wrap cache auto",
+                                                     "items": [{"nom": "Wrap cache auto", "g": 200, "kcal": 420, "prot": 22}]})
+        self.assertEqual(s, 200, c)
+        plat = c["au_menu"]["plat"]
+        fiche = next(r for r in M.serveur.plats_perso() if r["id"] == plat)
+        self.assertTrue(fiche.get("cache"), fiche)
+        self.assertIn(plat, M.serveur.plats_caches())
+        self.assertEqual(M.api("POST", "/api/plat/garder", {"plat": plat})[0], 200)
+        fiche = next(r for r in M.serveur.plats_perso() if r["id"] == plat)
+        self.assertFalse(fiche.get("cache"), fiche)
+        self.assertEqual(M.api("POST", "/api/plat/garder", {"plat": "perso-inexistant"})[0], 400)
+
     def test_aucun_appel_claude_en_fond(self):
         avant = len(M.appels_claude)
         M.serveur.vitamines_en_fond()

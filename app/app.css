@@ -1668,3 +1668,28 @@ input[type=date]::-webkit-datetime-edit{padding:0}
 .periode-dates label{display:grid;gap:4px;min-width:0;font-size:.76rem;color:var(--discret)}
 .objectif-reglages > .champ,.champs2 > .champ{min-width:0}
 .date-discrete input[type=date]{width:auto!important;display:inline-block}
+
+/* 23/11/2026 : catalogue 5 par 5, tri croissant/décroissant, courses malines, plat caché, clavier ouvert */
+.tri select{flex:1;min-width:0}
+.tri-sens{display:inline-flex;align-items:center;gap:4px;flex:none;height:36px;padding:0 10px 0 6px;border:1px solid var(--filet);border-radius:999px;
+  background:none;color:var(--encre);font:inherit;font-size:.8rem;cursor:pointer}
+.tri-sens .ic{transform:rotate(-90deg);color:var(--accent);transition:transform .2s}
+.tri-sens.bas .ic{transform:rotate(90deg)}
+.cat-plus{display:flex;justify-content:center;margin:14px 0 4px}
+.cat-plus .bouton{display:inline-flex;align-items:center;gap:8px}
+.cat-plus small{color:var(--discret);font-size:.74rem;font-weight:400}
+.stock-malin{padding:12px 14px!important}
+.stock-malin > p{margin:2px 0 6px}
+.malin-liste{list-style:none;margin:0;padding:0}
+.malin-liste li{display:flex;align-items:center;gap:10px;min-height:48px}
+.malin-liste li + li{border-top:1px solid var(--filet-doux)}
+.malin-nom{display:grid;flex:1;min-width:0}
+.malin-nom b{font-weight:600;font-size:.9rem}
+.malin-nom small{color:var(--discret);font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.malin-n{flex:none;font-size:.76rem;color:var(--accent);font-variant-numeric:tabular-nums}
+.malin-ajout{flex:none;display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--filet);border-radius:50%;background:none;color:var(--encre);cursor:pointer}
+.cp-garder{margin-top:8px}
+@media (max-width:899px){
+  body.clavier .nav-bas{display:none}
+  body.clavier .barre{bottom:var(--bas)}
+}
