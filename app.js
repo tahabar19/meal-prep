@@ -40,13 +40,13 @@ const filtresCat = { cats: new Set(), avis: "", regimes: new Set(), atouts: new 
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const nombre = (n, d = 0) => new Intl.NumberFormat("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }).format(n);
-const euros = n => new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
-const dateLongue = iso => new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(new Date(iso));
-const dateHeure = iso => new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+const nombre = (n, d = 0) => new Intl.NumberFormat(LOCALE, { minimumFractionDigits: d, maximumFractionDigits: d }).format(n);
+const euros = n => new Intl.NumberFormat(LOCALE, { style: "currency", currency: "EUR" }).format(n);
+const dateLongue = iso => new Intl.DateTimeFormat(LOCALE, { weekday: "long", day: "numeric", month: "long" }).format(new Date(iso));
+const dateHeure = iso => new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 const recette = id => E.recettes.find(r => r.id === id);
 const propre = s => String(s).replace(/\s[\u2014\u2013]\s/g, " : ");     // anciens textes du journal
-const dose = q => new Intl.NumberFormat("fr-FR", { maximumFractionDigits: q < 10 ? 2 : 0 }).format(q);   // vitamines
+const dose = q => new Intl.NumberFormat(LOCALE, { maximumFractionDigits: q < 10 ? 2 : 0 }).format(q);   // vitamines
 const estRepas = r => r && r.cat !== "fruit" && r.cat !== "rien";                             // les fruits s'ajoutent, ils ne se choisissent pas
 // Une semaine commence le jour `debut` (le lendemain du jour ou elle est composee) ; les anciennes, sans date, un lundi.
 const debutDe = s => s && s.debut ? new Date(s.debut + "T00:00:00") : null;
@@ -54,7 +54,7 @@ const rangDuJour = (s = E && E.semaine) => { const d = debutDe(s); return d ? Ma
 const aujourdhui = () => Math.min(6, Math.max(0, rangDuJour()));           // le jour a montrer : jamais hors de la semaine
 const court = j => j.jour.slice(0, 3);
 const periode = s => { const d = debutDe(s); if (!d) return ""; const f = new Date(+d + 6 * 864e5), jj = x => x.getDate() + (x.getDate() === 1 ? "er" : "");
-  const mois = x => new Intl.DateTimeFormat("fr-FR", { month: "short" }).format(x);
+  const mois = x => new Intl.DateTimeFormat(LOCALE, { month: "short" }).format(x);
   return `du ${jj(d)}${d.getMonth() === f.getMonth() ? "" : " " + mois(d)} au ${jj(f)} ${mois(f)}`; };
 const fait = (s, jour, id) => (s.prepares || {})[`${jour}|${id}`];       // cette recette, ce jour-la, est cuisinee
 const TACTILE = matchMedia("(pointer: coarse)");           // téléphone : pas de focus posé par le code
@@ -67,7 +67,113 @@ if (TACTILE.matches && window.HTMLDialogElement) {
     if (a && this.contains(a) && a.matches("input, textarea, select")) a.blur();
   };
 }
-const icone = nom => `<span class="ic" aria-hidden="true">${ICONES[nom] || ""}</span>`;
+const icone = nom => `<span class="ic" data-i="${nom}" aria-hidden="true">${ICONES[nom] || ""}</span>`;
+/* ------------------------------------------------------------ langues (Taha, 23/11/2026) */
+// La page est écrite en français. Dans une autre langue, chaque texte affiché (et placeholder, aria-label, title, alt)
+// est remplacé par sa traduction, prise dans i18n/<langue>.json (fait par outils/i18n_traduire.py) ; un texte avec
+// des valeurs se reconnaît par motif (« {0} plats avec ça »), et ses valeurs se traduisent aussi (un nom de plat).
+// La langue : celle choisie (Réglages, ou l'écran de connexion), sinon celle du téléphone ; l'arabe se lit de droite à gauche.
+const LANGUES = [["fr", "Français"], ["en", "English"], ["ar", "العربية"], ["es", "Español"]];
+const LANGUE = (() => {
+  try { const l = localStorage.getItem("mp-langue"); if (LANGUES.some(x => x[0] === l)) return l; } catch (e) {}
+  const n = String(navigator.language || "fr").slice(0, 2).toLowerCase();
+  return LANGUES.some(x => x[0] === n) ? n : "en";
+})();
+const LOCALE = { fr: "fr-FR", en: "en-GB", ar: "ar-MA", es: "es-ES" }[LANGUE];
+// Le choix de la langue : les noms des langues restent dans leur langue (pas traduits).
+const choixLangue = (libelle = "") => `<label class="langue-choix" data-sans-trad>${icone("globe")}${libelle ? `<span>${libelle}</span>` : ""}
+  <select data-langue aria-label="Langue · Language · اللغة · Idioma">${LANGUES.map(([c, n]) => `<option value="${c}"${c === LANGUE ? " selected" : ""}>${n}</option>`).join("")}</select></label>`;
+document.addEventListener("change", ev => { if (ev.target.matches && ev.target.matches("[data-langue]")) changerLangue(ev.target.value); });
+function changerLangue(l) {
+  try { localStorage.setItem("mp-langue", l); } catch (e) {}
+  location.reload();
+}
+const I18N = { exact: new Map(), motifs: new Map(), pret: LANGUE === "fr" };
+document.documentElement.lang = LANGUE;
+document.documentElement.dir = LANGUE === "ar" ? "rtl" : "ltr";
+const i18nPropre = t => t.replace(/\s+/g, " ").trim();
+function i18nTexte(t) {
+  const v = I18N.exact.get(t);
+  if (v != null) return v;
+  const mots = (t.toLowerCase().match(/[a-zà-ÿœ']{3,}/g) || []);
+  let mieux = null;
+  for (const m of new Set(mots)) for (const x of I18N.motifs.get(m) || []) {
+    if (mieux && x.poids <= mieux.x.poids) continue;
+    const r = x.re.exec(t);
+    if (r) mieux = { x, r };
+  }
+  if (!mieux) return i18nMorceaux(t);
+  return mieux.x.v.replace(/\{(\d+)\}/g, (_, i) => { const g = mieux.r[Number(i) + 1] ?? ""; const tg = i18nPropre(g); return tg && I18N.exact.has(tg) ? g.replace(tg, I18N.exact.get(tg)) : g; });
+}
+// Un libellé fait de plusieurs morceaux (« Midi, cuisiné une fois pour midi et soir », « Collation · fixe ») : chaque
+// morceau se traduit s'il est connu ; null si aucun ne l'est.
+function i18nMorceaux(t) {
+  const parts = t.split(/( · |, | : | — | \/ )/);
+  if (parts.length < 3) return null;
+  let un = false;
+  const out = parts.map((x, i) => {
+    if (i % 2) return x;
+    const v = I18N.exact.get(x) ?? I18N.exact.get(x.charAt(0).toUpperCase() + x.slice(1));
+    if (v != null) { un = true; return i ? v.charAt(0).toLowerCase() + v.slice(1) : v; }
+    return x;
+  });
+  return un ? out.join("") : null;
+}
+const I18N_ATTRS = ["placeholder", "aria-label", "title", "alt"];
+function i18nNoeud(n) {
+  if (n.nodeType === 3) {
+    const brut = n.nodeValue;
+    if (!brut || !/[A-Za-zÀ-ÿ]/.test(brut)) return;
+    const p = n.parentNode;
+    if (!p || p.nodeName === "SCRIPT" || p.nodeName === "STYLE" || p.nodeName === "TEXTAREA" || (p.closest && p.closest("[data-sans-trad]"))) return;
+    const t = i18nPropre(brut), v = i18nTexte(t);
+    if (v != null && v !== t) { const m = brut.match(/^\s*/)[0], f = brut.match(/\s*$/)[0]; n.nodeValue = m + v + f; }
+    return;
+  }
+  if (n.nodeType !== 1 || n.closest("[data-sans-trad]")) return;
+  for (const a of I18N_ATTRS) if (n.hasAttribute(a)) {
+    const t = i18nPropre(n.getAttribute(a)), v = t && i18nTexte(t);
+    if (v != null && v !== t) n.setAttribute(a, v);
+  }
+}
+function i18nTout(racine) {
+  if (I18N.pret !== true || LANGUE === "fr" || !racine) return;
+  if (racine.nodeType === 3) return i18nNoeud(racine);
+  if (racine.nodeType !== 1) return;
+  i18nNoeud(racine);
+  const w = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) i18nNoeud(n);
+}
+(async () => {
+  if (LANGUE === "fr") return;
+  try {
+    const r = await fetch(`i18n/${LANGUE}.json`, { cache: "no-cache" });
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    for (const [k, v] of Object.entries(d)) {
+      if (!/\{\d+\}/.test(k)) { I18N.exact.set(k, v); continue; }
+      const statiques = k.split(/\{\d+\}/), ordre = [...k.matchAll(/\{(\d+)\}/g)].map(m => Number(m[1]));
+      // Les groupes dans l'ordre des marques du texte : on les renumérote dans l'ordre {0}, {1}…
+      let src = "^" + statiques.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("([\\s\\S]*?)") + "$";
+      const vv = v.replace(/\{(\d+)\}/g, (_, i) => `{${ordre.indexOf(Number(i))}}`);
+      const poids = statiques.join("").length;
+      const long = (statiques.join(" ").toLowerCase().match(/[a-zà-ÿœ']{3,}/g) || []).sort((a, b) => b.length - a.length)[0];
+      if (!long || poids < 3) continue;
+      const m = { re: new RegExp(src), v: vv, poids };
+      I18N.motifs.set(long, [...(I18N.motifs.get(long) || []), m]);
+    }
+  } catch (e) { I18N.pret = true; return; }
+  I18N.pret = true;
+  i18nTout(document.body);
+  document.title = i18nTexte(document.title) || document.title;
+  new MutationObserver(ms => {
+    for (const m of ms) {
+      if (m.type === "characterData") i18nNoeud(m.target);
+      else if (m.type === "attributes") i18nNoeud(m.target);
+      else m.addedNodes.forEach(i18nTout);
+    }
+  }).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: I18N_ATTRS });
+})();
 // Ce que fait l'IA (Claude) se voit dans les champs (Taha, 20/11/2026 : « on n'a pas l'impression que c'est de l'IA »).
 const BADGE_IA = `<span class="badge-ia">${icone("sparkle")}IA</span>`;
 
@@ -480,7 +586,7 @@ function tableauDeLaSemaine(s, k, n) {
   const double = j.cuisine.some(c => c.id === j.din && c.pour_demain);
   const modes = (s.modes || []).map(x => (E.modes.find(y => y.id === x) || { nom: x }).nom);
   const fin = (phase.jusqu_a || "").split("-");
-  const jusqu = fin.length === 2 ? new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(new Date(+fin[0], +fin[1] - 1, 1)) : "";
+  const jusqu = fin.length === 2 ? new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric" }).format(new Date(+fin[0], +fin[1] - 1, 1)) : "";
   const depasse = s.dans_le_budget === false;
   // Le plat le plus cher de la semaine : celui a ouvrir pour l'ecarter quand le budget est depasse (R-12).
   const cher = depasse ? Object.values(s.choix).filter(c => (recette(c.id) || {}).cat === "plat").sort((a, b) => b.cout - a.cout)[0] : null;
@@ -610,7 +716,7 @@ function semaineCompacte(s, k, n) {
   const jauge = (nom, val, but, unite) => { const pct = Math.min(100, Math.round(100 * val / but));
     return `<div class="jauge"><div><span>${nom}</span><b class="chiffres">${nombre(val)}<small> / ${nombre(but)} ${unite}</small></b></div>
       <span class="piste" role="img" aria-label="${pct} % de l'objectif"><i style="width:${pct}%"></i></span></div>`; };
-  const date = s.debut ? new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long" }).format(new Date(new Date(s.debut + "T12:00").getTime() + n * 864e5)) : "";
+  const date = s.debut ? new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "long" }).format(new Date(new Date(s.debut + "T12:00").getTime() + n * 864e5)) : "";
   const depasse = s.dans_le_budget === false;
   apresRendu.push(() => {
     const plus = $("mPlus");
@@ -2116,7 +2222,7 @@ function vueAvancement({ params }) {
   if (enSuivi()) argent = "";                     // mode flemmard : ni courses ni budget suivis
   const faitsJour = s ? s.jours[aujourdhui()].cuisine.filter(k => fait(s, aujourdhui(), k.id)).length : 0;
   const totalJour = s ? s.jours[aujourdhui()].cuisine.length : 0;
-  const court = iso => new Intl.DateTimeFormat("fr-FR", p === "semaine" ? { weekday: "short" } : { day: "numeric" }).format(new Date(iso + "T12:00"));
+  const court = iso => new Intl.DateTimeFormat(LOCALE, p === "semaine" ? { weekday: "short" } : { day: "numeric" }).format(new Date(iso + "T12:00"));
   const basses = Object.keys(E.vitamines.noms).filter(v => x.vitamines[v] / E.vitamines.besoins[v] < 0.8);
   if (p !== "jour" && enSuivi() && suivi) apresRendu.push(() => {
     // Une courbe : ce que tu as mangé chaque journée finie (depuis ta date de début), et ton objectif en pointillés.
@@ -2189,7 +2295,7 @@ function vueVitaminesMangees(params) {
   const dec = Math.round((new Date(a.aujourdhui + "T12:00") - new Date(date + "T12:00")) / 864e5);
   const p = "jour", x = dec ? (a.par_jour || {})[date] || { jours_suivis: 0, vitamines: {} } : a.jour;
   const bulle = dec === 0 ? "Aujourd'hui" : dec === 1 ? "Hier"
-    : new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
+    : new Intl.DateTimeFormat(LOCALE, { weekday: "short", day: "numeric", month: "short" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
   const lien = d => `#/vitamines${d === a.aujourdhui ? "" : `?j=${d}`}`;
   const nav = `<nav class="jours jours-suivi jours-vitamines" aria-label="Jour">
     ${date > premier ? `<a class="fleche" href="${lien(decaler(date, -1))}" aria-label="Jour d'avant">${icone("caret-left")}</a>` : ""}
@@ -2199,7 +2305,7 @@ function vueVitaminesMangees(params) {
   // Le calendrier : les jours après aujourd'hui (et avant le début du suivi) grisés, un point sous les jours mangés
   // (Taha, 20/11/2026 ; celui de l'iPhone ne grise rien).
   const avecDonnees = new Set([...passes, ...(a.jour.jours_suivis ? [a.aujourdhui] : [])]);
-  const MOIS = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+  const MOIS = new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric" });
   const calendrier = mois => {                  // mois = "AAAA-MM"
     const [an, m] = mois.split("-").map(Number), premierDuMois = new Date(an, m - 1, 1, 12);
     const vide = (premierDuMois.getDay() + 6) % 7, nb = new Date(an, m, 0).getDate();
@@ -2693,7 +2799,7 @@ function lienDesMontants(c) {
 function vueBudget() {
   barre("");
   const b = E.budget, c = E.couts, s = E.semaine;
-  const mois = new Intl.DateTimeFormat("fr-FR", { month: "long" }).format(new Date(b.mois + "-01"));
+  const mois = new Intl.DateTimeFormat(LOCALE, { month: "long" }).format(new Date(b.mois + "-01"));
   const kpi = (libelle, valeur, aide) => `<div><dt>${libelle}</dt><dd>${valeur}</dd>${aide ? `<p>${aide}</p>` : ""}</div>`;
   const depasse = b.reste < 0;
   if (c) apresRendu.push(() => Graph.barres($("gBudget"), { unite: "€", decimales: 2, hauteur: 210, cible: Math.round(s.budget_semaine / 7 * 100) / 100, nomCible: "budget",
@@ -2937,7 +3043,7 @@ document.addEventListener("click", ev => {
   ev.preventDefault(); ev.stopPropagation();
   if (b.dataset.manque) return montrerManque("Il te manque, pour une portion", recette(b.dataset.manque).nom, E.stock_manque[b.dataset.manque] || []);
   const d = b.dataset.manqueJour;
-  montrerManque("À acheter pour les repas du", new Date(d + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()),
+  montrerManque("À acheter pour les repas du", new Date(d + "T12:00").toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()),
     (E.manque_jours[d] || []).map(x => [x.nom, x.quantite, x.unite]));
 }, true);
 // Des pas qui comptent (Taha, 23/11/2026 : « la granularité est trop petite ») : un verre pour les liquides, 100 g sinon.
@@ -3205,7 +3311,7 @@ function vueStock() {
 /* ------------------------------------------------------------ mode flemmard : ce que je mange */
 const MOMENTS_REPAS = [["pdj", "Matin"], ["dej", "Midi"], ["col", "Collation"], ["din", "Soir"]];
 const isoPlus = n => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-const dateLongueCourte = iso => new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" }).format(new Date(iso + "T12:00"));
+const dateLongueCourte = iso => new Intl.DateTimeFormat(LOCALE, { weekday: "long", day: "numeric", month: "long" }).format(new Date(iso + "T12:00"));
 function jaugesDuJour(j, o, mange = null) {
   // Les chiffres sont ceux du PRÉVU ; aujourd'hui, la barre montre en gris le prévu et en vert, pour illustrer,
   // ce qui est déjà mangé (Taha, 20/11/2026 : « la barre verte c'est juste pour illustration »).
@@ -3241,8 +3347,8 @@ function vueJourSuivi(params) {
   const J = E.journal_repas, dmax = 1, dmin = -7;
   const dec = params.get("d") === "demain" ? 1 : Math.min(dmax, Math.max(dmin, parseInt(params.get("d"), 10) || 0));
   const demain = dec === 1, date = dec ? isoPlus(dec) : J.aujourdhui;
-  const nomJour = new Intl.DateTimeFormat("fr-FR", { weekday: "long" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
-  const bulle = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
+  const nomJour = new Intl.DateTimeFormat(LOCALE, { weekday: "long" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
+  const bulle = new Intl.DateTimeFormat(LOCALE, { weekday: "short", day: "numeric" }).format(new Date(date + "T12:00")).replace(/^./, c => c.toUpperCase());
   const j = J.jours.find(x => x.date === date) || { entrees: [], repas: [], kcal: 0, prot: 0, gluc: 0, lip: 0, reste: { kcal: J.objectif.kcal, prot: J.objectif.prot } };
   // Aujourd'hui, la barre illustre aussi ce qui est déjà mangé ; les chiffres restent ceux du prévu (Taha, 20/11/2026).
   const mangeJour = dec === 0 && E.avancement ? E.avancement.jour : null;
@@ -3342,7 +3448,7 @@ function vueHistorique() {
   return `<a class="retour" href="#/semaine">${icone("caret-left")}Aujourd'hui</a>
   <div class="titre"><h1 tabindex="-1">Historique</h1><p>Ce que tu as mangé jour après jour, comparé à ton objectif de ${nombre(o.kcal)} kcal et ${o.prot} g de protéines.</p></div>
   ${passes.length ? `<div class="historique-jours">${passes.map(j => `<details class="jour-histo">
-      <summary><span><b>${esc(new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" }).format(new Date(j.date + "T12:00")).replace(/^./, c => c.toUpperCase()))}</b>
+      <summary><span><b>${esc(new Intl.DateTimeFormat(LOCALE, { weekday: "short", day: "numeric", month: "short" }).format(new Date(j.date + "T12:00")).replace(/^./, c => c.toUpperCase()))}</b>
         <small>${[j.repas && j.repas.length ? `${j.repas.length} plat${j.repas.length > 1 ? "s" : ""} prévu${j.repas.length > 1 ? "s" : ""}` : "", j.entrees.length ? `${j.entrees.length} noté${j.entrees.length > 1 ? "s" : ""} en plus` : ""].filter(Boolean).join(" · ")}</small>
         ${E.eau ? `<small class="histo-eau${eauCochee(j.date) ? " coche" : ""}">${icone("goutte")}${virgule((E.eau.bu || {})[j.date] || 0)} L${eauCochee(j.date) ? ` ${icone("check")}` : " · pas coché"}</small>` : ""}</span>
         <span class="chiffres histo-chiffres"><span>${nombre(Math.round(j.kcal))} kcal <i class="mini-piste"><i style="width:${pct(j.kcal, o.kcal)}%"></i></i></span>
@@ -3648,7 +3754,7 @@ const MESURES = [["poids", "Poids", "kg"], ["biceps_avant", "Biceps", "cm"], ["t
                  ["biceps_apres", "Biceps après la séance", "cm"], ["tour_apres", "Hanches après la séance", "cm"], ["torse_apres", "Torse après la séance", "cm"]];
 const virgule = v => v == null ? "" : String(v).replace(".", ",");
 const isoDuJour = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
-const dateCourte = iso => new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" }).format(new Date(iso + "T12:00"));
+const dateCourte = iso => new Intl.DateTimeFormat(LOCALE, { weekday: "short", day: "numeric", month: "short" }).format(new Date(iso + "T12:00"));
 function vueSuivi({ params }) {
   // Poids chaque jour, biceps et tour de hanches avant et après la séance. Sur iPhone : les chiffres d'abord,
   // une carte pour noter, une courbe à la fois, l'historique en bas (Taha, 19/11/2026).
@@ -3913,6 +4019,9 @@ function vueReglagesFlemmard() {
         if (m.erreur) throw 0; $("cEmail").value = m.email || ""; telRemplir($("cTel"), m.telephone); }
       catch (e) { f.hidden = true; }                   // sur le PC : pas de compte en ligne
     }); return ""; })()}
+  <section class="bloc" aria-labelledby="tLangue" data-resume="${esc((LANGUES.find(x => x[0] === LANGUE) || LANGUES[0])[1])}"><h2 id="tLangue">Langue</h2>
+    <p class="doux petit sous-titre">L'appli s'affiche dans cette langue. Au départ, celle de ton téléphone.</p>
+    ${choixLangue()}</section>
   <section class="bloc" aria-labelledby="tCompte" data-resume="Email, mot de passe"><h2 id="tCompte">Mon compte</h2>
     <form class="formulaire" id="fCoord" novalidate>
       <div class="champ"><label for="cEmail">Email</label><input id="cEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120" placeholder="prenom@gmail.com"></div>
@@ -4170,7 +4279,7 @@ function vueConnexion(erreur = "") {
       <p class="auth-oubli"><button type="button" class="lien" data-action="oubliMdp">Mot de passe oublié ?</button></p>
     </form></div>
     <p class="auth-bas">Pas encore de compte ? <button type="button" class="lien" data-action="versCreation">Créer mon profil</button></p>
-    ${lienAndroid()}`, "Cuisine malin, mange juste.");
+    ${lienAndroid()}<p class="auth-langue">${choixLangue()}</p>`, "Cuisine malin, mange juste.");
 }
 
 /* ------------------------------------------------------------ rendu */
@@ -4184,7 +4293,18 @@ let derniereAdresse = "", adressePrecedente = "";
 const POSITIONS = new Map();
 let PAGE_DEPUIS_CARTE = null, RETOUR_ARRIERE = false;
 
+// Les plats que tu as créés, traduits par l'IA (traductions.json du moteur) : ajoutés au dictionnaire de la page ;
+// s'il en manque, on les demande une fois (seulement hors du français).
+function i18nPerso() {
+  if (LANGUE === "fr" || !E) return;
+  for (const [k, v] of Object.entries(E.traductions || {})) if (v && v[LANGUE]) I18N.exact.set(k, v[LANGUE]);
+  if (E.a_traduire > 0 && !I18N.demande) {
+    I18N.demande = true;
+    appel("/api/traductions/completer", {}).then(ok => { if (ok === true && E.traduits) { I18N.demande = false; rendre(); } });   // tant que ça avance, la suite
+  }
+}
 function rendre() {
+  i18nPerso();
   if (!E) return;
   let r = route();
   if (["plat", "plus", "journal", "profils", "nouveau"].includes(r.vue)) { history.replaceState(null, "", "#/semaine"); r = route(); }
