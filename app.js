@@ -2782,10 +2782,11 @@ function vueStockMaison() {
       if (!c.length) return "";
       const total = new Set(c.flatMap(x => x.plats)).size;
       return `<section class="bloc stock-malin" aria-labelledby="tMalin"><h2 id="tMalin">À acheter pour plus de plats</h2>
-        <p class="petit discret">Avec ces ${c.length} produit${c.length > 1 ? "s" : ""}, ${total} plat${total > 1 ? "s" : ""} de plus avec ton stock.</p>
-        <ul class="malin-liste">${c.map(x => `<li><span class="malin-nom"><b>${esc(x.nom)}</b><small>${esc(x.plats.slice(0, 2).map(id => recette(id).nom).join(", "))}${x.plats.length > 2 ? "…" : ""}</small></span>
-          <span class="malin-n">+${x.plats.length} plat${x.plats.length > 1 ? "s" : ""}</span>
-          <button type="button" class="malin-ajout" data-stock-pas="1" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" data-q="0" aria-label="J'ai acheté ${esc(x.nom)} : l'ajouter au stock">${icone("plus")}</button></li>`).join("")}</ul></section>`; })()}
+        <p class="petit discret">Ton top ${c.length} : ${total} plat${total > 1 ? "s" : ""} de plus avec ton stock.</p>
+        <ul class="malin-liste">${c.map(x => { const ids = x.plats.length ? x.plats : x.aide;
+          return `<li><span class="malin-nom"><b>${esc(x.nom)}</b><small>${esc(ids.slice(0, 2).map(id => recette(id).nom).join(", "))}${ids.length > 2 ? "…" : ""}</small></span>
+          <span class="malin-n">${x.plats.length ? `+${x.plats.length} plat${x.plats.length > 1 ? "s" : ""}` : `dans ${x.aide.length} plat${x.aide.length > 1 ? "s" : ""}`}</span>
+          <button type="button" class="malin-ajout" data-stock-pas="1" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" data-q="0" aria-label="J'ai acheté ${esc(x.nom)} : l'ajouter au stock">${icone("plus")}</button></li>`; }).join("")}</ul></section>`; })()}
     ${barreStock}
     ${(() => {
       // Deux parties (Taha, 23/11/2026 : « beaucoup d'ingrédients, plus facile pour le user ») : ce que tu as, en
@@ -2811,11 +2812,12 @@ function vueStockMaison() {
 }
 const STOCK_OUVERTS = new Set();
 // La liste de courses qui ouvre le plus de plats avec ce qu'on a déjà (Taha, 23/11/2026) : à chaque tour, le produit
-// qui rend faisables le plus de plats (à égalité, celui qui rapproche le plus d'autres plats) ; 8 produits au plus.
-function coursesMalines(max = 8) {
+// qui rend faisables le plus de plats (à égalité, celui qui rapproche le plus d'autres plats) ; toujours un top 10
+// (Taha, 23/11/2026), même quand les derniers ne font que rapprocher des plats.
+function coursesMalines(max = 10) {
   if (!(E.stock || []).length || !E.stock_manque) return [];
   const ok = id => { const r = recette(id); return r && estRepas(r) && !estRetire(id) && r.gout !== "non" && !["extrariz", "rien"].includes(id); };
-  const reste = Object.entries(E.stock_manque).filter(([id, m]) => ok(id) && m.length <= 4)
+  const reste = Object.entries(E.stock_manque).filter(([id]) => ok(id))
     .map(([id, m]) => ({ id, m: new Map(m.map(([n, , u]) => [n, u])) }));
   const choix = [];
   while (choix.length < max) {
@@ -2826,10 +2828,10 @@ function coursesMalines(max = 8) {
       score.set(n, x);
     }
     const [nom, x] = [...score.entries()].sort((a, b) => b[1].finis - a[1].finis || b[1].proches - a[1].proches)[0] || [];
-    if (!nom || !x.finis) break;
-    const unite = reste.find(r => r.m.has(nom)).m.get(nom), plats = [];
-    for (const r of reste) if (r.m.delete(nom) && !r.m.size) plats.push(r.id);
-    choix.push({ nom, unite, plats });
+    if (!nom) break;
+    const unite = reste.find(r => r.m.has(nom)).m.get(nom), plats = [], aide = [];
+    for (const r of reste) if (r.m.delete(nom)) (r.m.size ? aide : plats).push(r.id);
+    choix.push({ nom, unite, plats, aide });
     for (let i = reste.length - 1; i >= 0; i--) if (!reste[i].m.size) reste.splice(i, 1);
   }
   return choix;
