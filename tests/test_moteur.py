@@ -252,6 +252,44 @@ class G_SansClaude(unittest.TestCase):
         self.assertEqual(M.api("POST", "/api/liste_courses/lot", {"items": lot, "retirer": True})[0], 200)
         self.assertEqual(M.etat()["liste_courses"], [])
 
+    def test_regime(self):
+        # Qui tolère le lactose a du lait normal ; qui l'évite, ou est allergique, n'a plus les plats qui ne vont pas.
+        def ings():
+            return {i["n"] for r in M.serveur.donnees_site()["recettes"] for i in r.get("ing", [])}
+        try:
+            self.assertEqual(M.api("POST", "/api/regime", {"lactose": False, "gluten": False})[0], 200)
+            self.assertNotIn("Lait sans lactose", ings())
+            self.assertIn("Lait", ings())
+            self.assertEqual(M.serveur.plats_hors_regime(), set())
+            self.assertEqual(M.api("POST", "/api/regime", {"lactose": True, "allergies": ["Arachides", "inconnu"]})[0], 200)
+            self.assertIn("Lait sans lactose", ings())
+            e = M.etat()
+            self.assertEqual(e["regime"]["allergies"], ["Arachides"])
+            hors = set(e["plats_hors_regime"])
+            self.assertTrue(hors)
+            par_id = {r["id"]: r for r in M.serveur.donnees_site()["recettes"]}
+            for i in hors:
+                noms = " ".join(M.serveur.pdf.normaliser(x["n"]) for x in par_id[i]["ing"])
+                self.assertTrue("cacahuete" in noms or "arachide" in noms or "Sans lactose" not in M.serveur.P.filtres(par_id[i])["regimes"], i)
+            self.assertTrue(any("cacahuete" in M.serveur.pdf.normaliser(x["n"]) for i in hors for x in par_id[i]["ing"]))
+        finally:
+            M.api("POST", "/api/regime", {"lactose": False})
+
+    def test_retirer_pour_de_bon_quitte_aujourdhui(self):
+        # Retiré pour de bon : il quitte aussi le menu du jour s'il n'est pas mangé (Taha, 23/11/2026).
+        import datetime
+        plan, k, j = M.serveur._plan_de_la_date(datetime.date.today())
+        s, c, _ = M.api("POST", "/api/semaine/modifier", {"operation": {"type": "ajouter", "jour": j, "plat": "skyrmiel"}, "semaine": k, "confirme": True})
+        self.assertEqual(s, 200, c)
+        auj = lambda: (lambda p: p[0]["jours"][p[2]])(M.serveur._plan_de_la_date(datetime.date.today()))
+        self.assertIn("skyrmiel", auj()["collations"])
+        try:
+            self.assertEqual(M.api("POST", "/api/plat/retirer", {"plat": "skyrmiel"})[0], 200)
+            self.assertNotIn("skyrmiel", auj()["collations"])
+        finally:
+            r = M.serveur._lire_p("reglages_site.json", {})
+            M.serveur._ecrire_p("reglages_site.json", {**r, "retires": [x for x in r.get("retires", []) if x != "skyrmiel"]})
+
     def test_aucun_appel_claude_en_fond(self):
         avant = len(M.appels_claude)
         M.serveur.vitamines_en_fond()

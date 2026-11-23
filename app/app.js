@@ -36,7 +36,7 @@ let apresRendu = [];     // graphiques a tracer une fois la vue posee dans la pa
 let filtreStock = "";
 let filtreCatalogue = "";
 const filtresCat = { cats: new Set(), avis: "", regimes: new Set(), atouts: new Set(), proteines: new Set(), origines: new Set(), prix: 0, temps: 0,
-                     stock: false, tri: "nom", sens: 1, debut: 0, ouvert: matchMedia("(min-width: 900px)").matches };   // filtres du catalogue
+                     stock: false, ings: new Set(), tri: "nom", sens: 1, debut: 0, ouvert: matchMedia("(min-width: 900px)").matches };   // filtres du catalogue
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -1019,7 +1019,7 @@ async function apercuChangement(k, operation, titre, retour) {
 /* ------------------------------------------------------------ mon propre plat */
 // Les plats retirés pour de bon par la personne (Taha, 22/11/2026) : plus au catalogue ni dans les choix.
 // Un plat noté un jour depuis « Ajouter un repas » reste hors de tes plats tant que tu ne l'y mets pas (Taha, 23/11/2026).
-const estRetire = id => (E.plats_retires || []).includes(id) || !!(recette(id) || {}).cache;
+const estRetire = id => (E.plats_retires || []).includes(id) || (E.plats_hors_regime || []).includes(id) || !!(recette(id) || {}).cache;
 function ingredientsConnus() {
   // Les ingredients du site et ceux crees par le profil, pour les listes de saisie.
   return [...new Set(E.recettes.filter(r => !r.perso).flatMap(r => r.ing.filter(i => i.u !== "qs").map(i => i.n))
@@ -2479,6 +2479,24 @@ document.addEventListener("click", ev => {
   const i = $(b.dataset.voirMdp), voir = i.type === "password";
   i.type = voir ? "text" : "password"; b.setAttribute("aria-label", voir ? "Cacher le mot de passe" : "Afficher le mot de passe");
 });
+// Ce que la personne mange (Taha, 23/11/2026) : à la création du compte et dans Réglages. Des pastilles à cocher.
+const ALLERGENES = ["Arachides", "Fruits à coque", "Œufs", "Poisson", "Crustacés", "Soja", "Sésame"];
+function champsRegime(r = {}, enDirect = false) {
+  const puce = (nom, valeur, texte, coche) => `<label class="puce-choix"><input type="checkbox" name="${nom}" value="${esc(valeur)}"${coche ? " checked" : ""}${enDirect ? " data-regime" : ""}><span>${texte}</span></label>`;
+  return `<div class="regime">
+    <p class="regime-titre">J'évite</p>
+    <div class="puces-choix">${puce("reg", "lactose", "Le lactose", r.lactose)}${puce("reg", "gluten", "Le gluten", r.gluten)}${puce("reg", "vegetarien", "La viande et le poisson", r.vegetarien)}</div>
+    <p class="regime-titre">Allergies</p>
+    <div class="puces-choix">${ALLERGENES.map(a => puce("allergie", a, a, (r.allergies || []).includes(a))).join("")}</div>
+    <input type="text" name="autres" maxlength="200" autocomplete="off" placeholder="Autre chose à éviter : champignons, kiwi…" value="${esc(r.autres || "")}"${enDirect ? " data-regime" : ""} aria-label="Autre chose à éviter">
+  </div>`;
+}
+function lireRegime(racine) {
+  const coches = nom => [...racine.querySelectorAll(`input[name="${nom}"]:checked`)].map(i => i.value);
+  const reg = coches("reg");
+  return { lactose: reg.includes("lactose"), gluten: reg.includes("gluten"), vegetarien: reg.includes("vegetarien"),
+           allergies: coches("allergie"), autres: (racine.querySelector('input[name="autres"]') || {}).value || "" };
+}
 function formulaireProfil(avecCode) {
   const champ = (id, libelle, corps, aide = "") => `<div class="champ"><label for="${id}">${libelle}</label>${corps}${aide ? `<small>${aide}</small>` : ""}</div>`;
   const nombreChamp = (id, min, max, pas, exemple) => `<input id="${id}" name="${id}" type="number" inputmode="decimal" min="${min}" max="${max}" step="${pas}" autocomplete="off" placeholder="${exemple}…" required>`;
@@ -2508,6 +2526,8 @@ function formulaireProfil(avecCode) {
     ${rubrique("Ton objectif")}
     ${champ("activite", "Activité", choix("activite", [["sedentaire", "Sédentaire, peu ou pas de sport"], ["leger", "Sport léger, 1 à 3 fois par semaine"], ["modere", "Sport modéré, 3 à 5 fois par semaine"], ["actif", "Sport intense, 6 à 7 fois par semaine"], ["intense", "Sport très intense ou métier physique"]]))}
     ${champ("objectif", "Objectif", choix("objectif", [["perte", "Perdre du poids"], ["maintien", "Garder mon poids"], ["prise", "Prendre du muscle"]]))}
+    ${rubrique("Ce que tu manges")}
+    ${champsRegime()}
     <div style="margin-bottom:18px"></div>
     <small id="eProfil" class="erreur" role="alert" style="display:block;margin-bottom:12px;color:var(--critique)"></small>
     <button class="bouton large" type="submit">Créer mon profil</button>
@@ -2644,12 +2664,13 @@ function vueCatalogue({ params }) {
   const lignes = repas.filter(r => (!F.cats.size || F.cats.has(r.cat)) && (!F.avis || (F.avis === "sans" ? !r.gout : r.gout === F.avis)) && r.nom.toLowerCase().includes(cherche)
       && [...F.regimes].every(x => r.filtres.regimes.includes(x)) && [...F.atouts].every(x => r.filtres.atouts.includes(x))
       && (!F.proteines.size || F.proteines.has(r.filtres.proteine)) && (!F.origines.size || F.origines.has(r.filtres.origine))
-      && (!F.prix || r.cout < F.prix) && (!F.temps || (r.temps && r.temps < F.temps)) && (!F.stock || couvre[r.id] >= 0.8))
+      && (!F.prix || r.cout < F.prix) && (!F.temps || (r.temps && r.temps < F.temps)) && (!F.stock || couvre[r.id] >= 0.8)
+      && [...F.ings].every(n => (r.ing || []).some(i => i.n === n)))
     .sort((a, b) => F.sens * ordre[F.tri](a, b) || ordre.nom(a, b));
   if (F.debut >= lignes.length) F.debut = 0;
   const nb = gout => repas.filter(r => r.gout === gout).length;
   const puce = (cle, valeur, texte, actif) => `<button type="button" data-action="filtreCat" data-cle="${cle}" data-valeur="${esc(valeur)}" aria-pressed="${actif}">${texte}</button>`;
-  const actifs = F.cats.size + (F.avis ? 1 : 0) + F.regimes.size + F.atouts.size + F.proteines.size + F.origines.size + (F.prix ? 1 : 0) + (F.temps ? 1 : 0) + (F.stock ? 1 : 0);
+  const actifs = F.ings.size + F.cats.size + (F.avis ? 1 : 0) + F.regimes.size + F.atouts.size + F.proteines.size + F.origines.size + (F.prix ? 1 : 0) + (F.temps ? 1 : 0) + (F.stock ? 1 : 0);
   // Seules les cuisines et les proteines presentes dans cette categorie sont proposees.
   const ici = repas.filter(r => !F.cats.size || F.cats.has(r.cat));
   const origines = [...new Set(ici.map(r => r.filtres.origine).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
@@ -2669,11 +2690,15 @@ function vueCatalogue({ params }) {
     ${groupe("Temps", TEMPS.map(([v, t]) => puce("temps", v, t, F.temps === v)).join(""))}
     ${groupe("Atouts", ATOUTS.map(x => puce("atout", x, x, F.atouts.has(x))).join(""))}
     ${groupe("Prix", PRIX.map(([v, t]) => puce("prix", v, t, F.prix === v)).join(""))}
-    ${groupe("Stock", puce("stock", "", "Faisable avec ton stock", F.stock))}` : ""}
+    ${groupe("Stock", puce("stock", "", "Faisable avec ton stock", F.stock))}
+    <div class="filtre-groupe"><span class="filtre-nom">Avec un ingrédient</span>
+      <input id="ingCat" type="search" list="ingCatListe" autocomplete="off" placeholder="Lait, poulet…" aria-label="Voir les plats avec cet ingrédient">
+      <datalist id="ingCatListe">${[...new Set(repas.flatMap(r => (r.ing || []).filter(i => i.u !== "qs").map(i => i.n)))].sort((a, b) => a.localeCompare(b, "fr")).map(n => `<option value="${esc(n)}">`).join("")}</datalist></div>` : ""}
     <div class="champ formulaire tri"><label for="triCat">Trier par</label>
       <select id="triCat" name="tri">${TRIS.map(([id, nom]) => `<option value="${id}"${F.tri === id ? " selected" : ""}>${nom}</option>`).join("")}</select>
       <button type="button" class="tri-sens${F.sens < 0 ? " bas" : ""}" data-action="filtreCat" data-cle="sens" data-valeur="" aria-label="Ordre ${F.sens > 0 ? "croissant" : "décroissant"}, toucher pour inverser">${icone("caret-right")}${F.sens > 0 ? "Croissant" : "Décroissant"}</button></div>
   </section>
+  ${F.ings.size ? `<p class="cat-ings">Avec ${[...F.ings].map(n => `<button type="button" data-action="sansIngCat" data-nom="${esc(n)}" aria-label="Retirer ${esc(n)}">${esc(n)}${icone("x")}</button>`).join("")}</p>` : ""}
   <div class="champ formulaire"><label for="filtre">Chercher une recette</label>
     <input id="filtre" name="filtre" type="search" autocomplete="off" placeholder="Poulet, curry…" value="${esc(filtreCatalogue)}"></div>
   <p class="discret petit" role="status" style="margin:-6px 0 8px">${lignes.length} recette${lignes.length > 1 ? "s" : ""}${F.stock && !E.stock.length ? ". Ton stock est vide : ajoute ce que tu as dans Stock" : ""}.</p>
@@ -2745,8 +2770,14 @@ document.addEventListener("click", ev => {
 }, true);
 // Des pas qui comptent (Taha, 23/11/2026 : « la granularité est trop petite ») : un verre pour les liquides, 100 g sinon.
 const pasStock = l => l.unite === "ml" ? 250 : l.unite === "g" ? (l.quantite >= 2000 ? 250 : 100) : 1;
-function vueStockMaison() {
+function vueStockMaison({ params } = {}) {
   barre("");
+  // Deux rubriques (Taha, 23/11/2026 : « ajoute une rubrique courses dans stock pour t'aider à t'organiser »).
+  const courses = !!(params && params.get && params.get("v") === "courses"), nl = (E.liste_courses || []).length;
+  const onglets = `<nav class="stock-onglets" aria-label="Stock">
+      <a href="#/stock"${courses ? "" : ' aria-current="page"'}>Chez moi</a>
+      <a href="#/stock?v=courses"${courses ? ' aria-current="page"' : ""}>Courses${nl ? `<span>${nl}</span>` : ""}</a></nav>`;
+  if (courses) return `<div class="m-tete"><div><h1 tabindex="-1">Mon stock</h1></div></div>${onglets}${vueCourses()}`;
   const st = E.stock || [], voulus = motsStock(filtreStock), rayons = rayonsDesIngredients(), groupes = new Map();
   // Tous les ingrédients des plats sont là, à 0 et grisés tant que tu n'en as pas ; 0 n'efface rien (Taha, 23/11/2026).
   const unites = {};
@@ -2773,11 +2804,17 @@ function vueStockMaison() {
       ? `« ${esc(filtreStock.trim())} » n'est pas dans ton stock : <button type="submit" form="fStockTaper" class="lien">l'ajouter</button>`
       : /\d/.test(filtreStock) ? `Entrée pour ajouter « ${esc(filtreStock.trim())} » à ton stock.` : ""}</p>
     <small class="erreur" id="eStockTaper" role="alert"></small>`;
+  for (const n of [...ING_CHOISIS]) if (!st.some(l => l.nom === n && l.quantite > 0)) ING_CHOISIS.delete(n);
+  if (ING_CHOISIS.size) {
+    const n = platsAvec(ING_CHOISIS).length;
+    barre(`<div><b>${esc([...ING_CHOISIS].join(", "))}</b><span>${n ? `${n} plat${n > 1 ? "s" : ""} avec ${ING_CHOISIS.size > 1 ? "tout ça" : "ça"}` : "Aucun plat avec tout ça"}</span></div>
+      <button type="button" class="bouton sobre" data-action="lacherIngs" aria-label="Tout désélectionner">${icone("x")}</button>
+      ${n ? `<button type="button" class="bouton" data-action="voirPlatsIngs">Voir les plats</button>` : ""}`);
+  }
   return `<div class="m-tete"><div><h1 tabindex="-1">Mon stock</h1>
+      ${onglets}
       <p class="petit discret">${st.length ? `${st.length} produit${st.length > 1 ? "s" : ""} à la maison. Ce que tu marques mangé en sort tout seul.` : "Ajoute ce que tu as chez toi : l'appli te propose des repas avec."}</p></div></div>
     ${ajout}
-
-    ${tableauCourses()}
     ${barreStock}
     ${(() => {
       // Deux parties (Taha, 23/11/2026 : « beaucoup d'ingrédients, plus facile pour le user ») : ce que tu as, en
@@ -2785,7 +2822,8 @@ function vueStockMaison() {
       const ordre = ([a], [b]) => (a === "Autres") - (b === "Autres") || a.localeCompare(b, "fr");
       const parRayon = liste => { const m = new Map(); for (const l of liste) { const g = rayons[l.nom] != null && E.rayons && E.rayons[rayons[l.nom]] ? E.rayons[rayons[l.nom]] : "Autres"; m.set(g, [...(m.get(g) || []), l]); } return [...m.entries()].sort(ordre); };
       const chez = trouves.filter(l => l.quantite > 0), reste = trouves.filter(l => !(l.quantite > 0));
-      const ligne = l => `<li><span class="stock-nom">${esc(l.nom)}</span><span class="stock-q">
+      const ligne = l => `<li><button type="button" class="stock-nom" data-action="choisirIng" data-nom="${esc(l.nom)}" aria-pressed="${ING_CHOISIS.has(l.nom)}"
+          aria-label="${esc(l.nom)} : choisir pour voir les plats qui en ont">${ING_CHOISIS.has(l.nom) ? icone("check") : ""}${esc(l.nom)}</button><span class="stock-q">
           <button type="button" data-stock-pas="-1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Moins de ${esc(l.nom)}">−</button>
           <input class="stock-saisie" type="number" inputmode="decimal" min="0" step="any" value="${enAffiche(l).q}" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-facteur="${enAffiche(l).f}" aria-label="Quantité de ${esc(l.nom)}, en ${esc(enAffiche(l).u)}">
           <span class="stock-u">${esc(enAffiche(l).u)}</span>
@@ -2793,7 +2831,10 @@ function vueStockMaison() {
       apresRendu.push(() => document.querySelectorAll("details[data-rayon]").forEach(d => d.addEventListener("toggle", () =>
         d.open ? STOCK_OUVERTS.add(d.dataset.rayon) : STOCK_OUVERTS.delete(d.dataset.rayon))));
       return `<h2 class="stock-titre">Chez toi <span>${chez.length}</span></h2>
-      ${chez.length ? parRayon(chez).map(([g, lignes]) => `<section class="bloc stock-groupe"><h3>${esc(g)}</h3><ul class="stock-liste">${lignes.map(ligne).join("")}</ul></section>`).join("")
+      ${chez.length ? `<p class="petit discret stock-astuce">Touche un produit pour voir les plats qui en ont (un lait à finir, par exemple).</p>
+      <div class="stock-rayons">${parRayon(chez).map(([g, lignes]) => `<details class="stock-rayon stock-chez" data-rayon="chez|${esc(g)}"${voulus.length || STOCK_OUVERTS.has("chez|" + g) || lignes.some(l => ING_CHOISIS.has(l.nom)) ? " open" : ""}>
+        <summary><span class="sr-nom">${esc(g)}</span><small>${lignes.length}</small>${icone("caret-right")}</summary>
+        <ul class="stock-liste">${lignes.map(ligne).join("")}</ul></details>`).join("")}</div>`
         : `<p class="petit discret stock-vide">${voulus.length ? "Rien de cela chez toi." : "Rien pour l'instant : ajoute avec une photo, un ticket, la barre, ou touche un ingrédient juste en dessous."}</p>`}
       ${reste.length ? `<h2 class="stock-titre">À ajouter <span>${reste.length}</span></h2><p class="petit discret stock-astuce">Touche un ingrédient pour l'ajouter, puis règle sa quantité.</p>
       <div class="stock-rayons">${parRayon(reste).map(([g, lignes]) => `<details class="stock-rayon" data-rayon="${esc(g)}"${voulus.length || STOCK_OUVERTS.has(g) ? " open" : ""}>
@@ -2802,32 +2843,50 @@ function vueStockMaison() {
     })()}`;
 }
 const STOCK_OUVERTS = new Set();
+// Les plats qui contiennent TOUS ces ingrédients (Taha, 23/11/2026 : « sélectionner lait, il expire demain »).
+const platsAvec = noms => E.recettes.filter(r => estRepas(r) && !estRetire(r.id) && !["extrariz", "rien"].includes(r.id)
+  && [...noms].every(n => (r.ing || []).some(i => i.n === n)));
 const LC_COCHES = new Set();
 // Ma liste de courses (Taha, 23/11/2026) : UN tableau. Vide, il propose de le remplir avec les N produits qui permettent de
 // cuisiner le plus de plats avec le stock (N au choix). Chaque produit dit en clair à quoi il sert ; on coche ce qu'on a
 // acheté, « Ajouter au stock ».
 const raisonCourse = x => x.plats.length ? `pour ${x.plats.length} nouveau${x.plats.length > 1 ? "x" : ""} plat${x.plats.length > 1 ? "s" : ""}`
   : `pour compléter ${x.aide.length} plat${x.aide.length > 1 ? "s" : ""}`;
-function tableauCourses() {
-  if (!(E.stock || []).length && !(E.liste_courses || []).length) return "";
-  const l = E.liste_courses || [];
+const ING_CHOISIS = new Set();             // produits du stock choisis pour voir les plats qui en ont
+let filtreCourses = "";
+function vueCourses() {
+  const l = E.liste_courses || [], aStock = (E.stock || []).length;
   for (const n of [...LC_COCHES]) if (!l.some(x => x.nom === n)) LC_COCHES.delete(n);
   const nb = `<span class="lc-nb"><button type="button" data-action="lcNb" data-pas="-1" aria-label="Un produit de moins">−</button>
       <input id="lcNb" type="number" inputmode="numeric" min="1" max="50" value="${LC_NB.n}" aria-label="Nombre de produits à proposer">
       <button type="button" data-action="lcNb" data-pas="1" aria-label="Un produit de plus">+</button></span>`;
-  const remplir = texte => `<div class="lc-remplir">${nb}<button type="button" class="bouton${l.length ? " sobre" : ""}" data-action="lcRemplir">${icone("sparkle")}${texte}</button></div>`;
-  return `<section class="bloc liste-courses" aria-labelledby="tListe">
-    <h2 id="tListe">Ma liste de courses${l.length ? `<span>${l.length}</span>` : ""}</h2>
-    ${l.length ? `<ul>${l.map(x => `<li><label><input type="checkbox" data-lc="${esc(x.nom)}"${LC_COCHES.has(x.nom) ? " checked" : ""}><i aria-hidden="true">${icone("check")}</i>
-        <span class="lc-nom"><b>${esc(x.nom)}</b>${x.raison ? `<small>${esc(x.raison)}</small>` : ""}</span><span class="lc-q chiffres">${quantite(x.quantite, x.unite)}</span></label>
-        <button type="button" class="lc-x" data-action="lcRetirer" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" aria-label="Retirer ${esc(x.nom)} de la liste">${icone("x")}</button></li>`).join("")}</ul>
+  const idees = `<section class="bloc lc-idees" aria-labelledby="tIdees"><h2 id="tIdees">${icone("sparkle")}Des idées</h2>
+      ${aStock ? `<p class="lc-aide">Les produits qui te permettent de cuisiner le plus de plats avec ce que tu as déjà.</p>
+      <div class="lc-remplir">${nb}<button type="button" class="bouton${l.length ? " second" : ""}" data-action="lcRemplir">${l.length ? "Ajouter à ma liste" : "Remplir ma liste"}</button></div>`
+      : `<p class="lc-aide">Ajoute d'abord ce que tu as dans « Chez moi » : l'appli te dira quoi acheter pour cuisiner plus.</p>`}</section>`;
+  // Ajouter à la main : les ingrédients de l'appli qui commencent par ce qu'on tape.
+  const mots = motsStock(filtreCourses), tous = Object.keys(rayonsDesIngredients()).sort((a, b) => a.localeCompare(b, "fr"));
+  const trouves = mots.length ? tous.filter(n => !l.some(x => x.nom === n) && mots.every(m => motsStock(n).some(k => k.startsWith(m)))).slice(0, 8) : [];
+  const unite = nom => { for (const x of E.recettes) for (const i of x.ing || []) if (i.n === nom && i.u !== "qs") return i.u; return "g"; };
+  const ajout = `<div class="lc-ajout"><div class="champ-ia rp-recherche">${icone("plus")}<input id="filtreCourses" type="search" autocomplete="off" enterkeyhint="done"
+      placeholder="Ajouter un produit : riz, lait…" value="${esc(filtreCourses)}" aria-label="Ajouter un produit à ma liste"></div>
+    ${trouves.length ? `<div class="stock-puces">${trouves.map(n => { const u = unite(n);
+      return `<button type="button" class="stock-puce" data-action="lcAjouter" data-nom="${esc(n)}" data-unite="${esc(u)}" data-q="${u === "g" ? 500 : u === "ml" ? 1000 : 1}">${esc(n)}${icone("plus")}</button>`; }).join("")}</div>`
+      : mots.length ? `<p class="lc-aide">Aucun produit de l'appli ne s'appelle ainsi.</p>` : ""}</div>`;
+  const rayons = rayonsDesIngredients(), groupes = new Map();
+  for (const x of l) { const g = rayons[x.nom] != null && E.rayons && E.rayons[rayons[x.nom]] ? E.rayons[rayons[x.nom]] : "Autres"; groupes.set(g, [...(groupes.get(g) || []), x]); }
+  const ligne = x => `<li><label><input type="checkbox" data-lc="${esc(x.nom)}"${LC_COCHES.has(x.nom) ? " checked" : ""}><i aria-hidden="true">${icone("check")}</i>
+      <span class="lc-nom"><b>${esc(x.nom)}</b>${x.raison ? `<small>${esc(x.raison)}</small>` : ""}</span><span class="lc-q chiffres">${quantite(x.quantite, x.unite)}</span></label>
+      <button type="button" class="lc-x" data-action="lcRetirer" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" aria-label="Retirer ${esc(x.nom)} de la liste">${icone("x")}</button></li>`;
+  const liste = `<section class="bloc liste-courses" aria-labelledby="tListe"><h2 id="tListe">Ma liste${l.length ? `<span>${l.length}</span>` : ""}</h2>
+    ${ajout}
+    ${l.length ? `${[...groupes.entries()].sort(([a], [b]) => (a === "Autres") - (b === "Autres") || a.localeCompare(b, "fr")).map(([g, xs]) =>
+        `<h3 class="lc-rayon">${esc(g)}</h3><ul>${xs.map(ligne).join("")}</ul>`).join("")}
       <button type="button" class="bouton large" id="lcValider" data-action="lcValider"${LC_COCHES.size ? "" : " disabled"}>${lcTexte()}</button>
-      <p class="lc-aide">Coche ce que tu as acheté : ça passe dans ton stock.</p>
-      <details class="lc-plus"><summary>Ajouter d'autres idées${icone("caret-right")}</summary>${remplir("Ajouter")}</details>`
-    : `<p class="lc-aide">L'appli choisit ce qu'il te faut acheter pour cuisiner le plus de plats avec ce que tu as déjà.</p>
-      ${remplir("Remplir ma liste")}`}
-  </section>`;
+      <p class="lc-aide lc-sous">Coche ce que tu as acheté : ça passe dans « Chez moi ».</p>` : `<p class="lc-aide">Ta liste est vide.</p>`}</section>`;
+  return liste + idees;
 }
+
 const LC_NB = { n: (() => { try { const v = parseInt(localStorage.getItem("mp-lc-nb"), 10); return v >= 1 && v <= 50 ? v : 8; } catch (e) { return 8; } })() };
 const lcNbGarder = v => { LC_NB.n = Math.max(1, Math.min(50, Math.round(v) || 8)); try { localStorage.setItem("mp-lc-nb", String(LC_NB.n)); } catch (e) {} };                 // cochés sur ma liste de courses, pas encore validés
 const lcTexte = () => LC_COCHES.size ? `${icone("check")}Ajouter au stock (${LC_COCHES.size})` : "Ajouter au stock";
@@ -2902,7 +2961,7 @@ function stockVerifier(items, sorte) {
   if (!d.open) d.showModal();
 }
 function vueStock() {
-  if (enSuivi()) return vueStockMaison();
+  if (enSuivi()) return vueStockMaison(arguments[0] || {});
   barre("");
   const lignes = E.stock.filter(l => l.nom.toLowerCase().includes(filtreStock.toLowerCase()));
   return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}
@@ -3579,6 +3638,7 @@ function vueReglagesFlemmard() {
       <label class="option"><input type="checkbox" id="rMemePlat"${r.meme_plat !== false ? " checked" : ""}><span><b>Le même plat midi et soir</b><small>Un seul plat par jour, au déjeuner et au dîner. Décoche pour deux plats différents.</small></span></label>
       <label class="option"><input type="checkbox" id="rFodmap"${fodmap ? " checked" : ""}><span><b>Pauvre en FODMAP</b><small>Seulement des plats pauvres en FODMAP.</small></span></label>
     </div>
+    <div id="rRegime">${champsRegime(E.regime || {}, true)}</div>
   </section>
   ${blocObjectifs(`<div class="objectif-reglages">
       ${(E.phases || []).length > 1 && !E.phases_perso ? champ("rPhase", "Phase du programme", choix("rPhase", "phase", r.phase || "", [["", "Automatique, selon la date"], ...E.phases.map(p => [p.n, `${p.n}. ${esc(p.nom)}, ${nombre(p.kcal)} kcal`])])) : ""}
@@ -3731,6 +3791,8 @@ document.addEventListener("change", async ev => {
         : "Stock uniquement : rien à changer (déjà faisable, ou aucun plat entièrement faisable).");
     });
   }
+  if (ev.target.dataset && ev.target.dataset.regime != null && $("rRegime"))
+    agir("/api/regime", lireRegime($("rRegime")), "C'est noté : le catalogue et tes prochains menus en tiennent compte.");
   if (ev.target.id === "rMemePlat") agir("/api/reglages", { meme_plat: ev.target.checked }, ev.target.checked
     ? "Le même plat midi et soir, dès aujourd'hui." : "Deux plats différents midi et soir, dès aujourd'hui.");
   if (ev.target.id === "rFodmap") agir("/api/profil/modifier", { fodmap: ev.target.checked }, ev.target.checked ? "Pauvre en FODMAP : pour les semaines composées." : "FODMAP retiré.");
@@ -4077,7 +4139,8 @@ const ACTIONS = {
     else if (cle === "stock") F.stock = !F.stock;
     else if (cle === "ouvert") F.ouvert = !F.ouvert;
     else if (cle === "sens") F.sens = -F.sens;
-    else { [F.cats, F.regimes, F.atouts, F.proteines, F.origines].forEach(e => e.clear()); F.avis = ""; F.prix = 0; F.temps = 0; F.stock = false; }
+    else if (cle === "ing") { if (v) F.ings.add(v); }
+    else { [F.cats, F.regimes, F.atouts, F.proteines, F.origines, F.ings].forEach(e => e.clear()); F.avis = ""; F.prix = 0; F.temps = 0; F.stock = false; }
     if (cle !== "ouvert") F.debut = 0;
     rendre();
   },
@@ -4111,6 +4174,11 @@ const ACTIONS = {
   reessayer: demarrer,
   // Des pages de 5, ‹ et › (Taha, 23/11/2026 : « voir 5 de plus, c'est lourd »).
   lcNb: b => { lcNbGarder(LC_NB.n + Number(b.dataset.pas)); const i = $("lcNb"); if (i) i.value = LC_NB.n; },
+  lcAjouter: b => { filtreCourses = ""; return agir("/api/liste_courses", { nom: b.dataset.nom, unite: b.dataset.unite, quantite: Number(b.dataset.q) }, `${b.dataset.nom} : sur ta liste.`); },
+  choisirIng: b => { const n = b.dataset.nom; ING_CHOISIS.has(n) ? ING_CHOISIS.delete(n) : ING_CHOISIS.add(n); rendre(); },
+  lacherIngs: () => { ING_CHOISIS.clear(); rendre(); },
+  voirPlatsIngs: () => { Object.assign(filtresCat, { ings: new Set(ING_CHOISIS), debut: 0 }); ING_CHOISIS.clear(); location.hash = "#/catalogue"; },
+  sansIngCat: b => { filtresCat.ings.delete(b.dataset.nom); filtresCat.debut = 0; rendre(); },
   lcRemplir: async () => {
     const i = $("lcNb"); if (i) lcNbGarder(Number(i.value));
     const c = coursesMalines(LC_NB.n, new Set((E.liste_courses || []).map(x => x.nom)));
@@ -4203,6 +4271,8 @@ document.addEventListener("submit", async ev => {
     if ($("pEmail") && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(String(corps.email || "").trim())) { $("eProfil").textContent = "Email : écris une adresse valide."; return $("pEmail").focus(); }
     if ($("pEmail") && !mdpValide(String(corps.mot_de_passe || ""))) { $("eProfil").textContent = "Mot de passe : " + REGLE_MDP; return $("pMdp").focus(); }
     for (const cle of ["boucher", "fodmap"]) corps[cle] = f.has(cle);
+    corps.regime = lireRegime(ev.target);
+    for (const cle of ["reg", "allergie", "autres"]) delete corps[cle];
     corps.identifiant = String(corps.identifiant || "").trim().toLowerCase();
     const libelle = bouton.textContent;
     bouton.textContent = "Création…"; bouton.disabled = true;
@@ -4249,6 +4319,11 @@ document.addEventListener("submit", async ev => {
 });
 document.addEventListener("change", ev => {
   const i = ev.target;
+  if (i.id === "ingCat") {
+    const nom = [...document.querySelectorAll("#ingCatListe option")].map(o => o.value).find(v => v.toLowerCase() === i.value.trim().toLowerCase());
+    if (nom) { filtresCat.ings.add(nom); filtresCat.debut = 0; rendre(); } else if (i.value.trim()) dire("Choisis un ingrédient de la liste.");
+    return;
+  }
   if (i.id === "lcNb") { lcNbGarder(Number(i.value)); i.value = LC_NB.n; return; }
   if (i.dataset.lc != null) {
     i.checked ? LC_COCHES.add(i.dataset.lc) : LC_COCHES.delete(i.dataset.lc);
@@ -4273,6 +4348,12 @@ document.addEventListener("change", ev => {
     agir("/api/stock", { nom: i.dataset.nom, unite: i.dataset.unite, quantite: Math.max(0, Number(i.value) || 0) }, "Stock corrigé.");
 });
 document.addEventListener("input", ev => {
+  if (ev.target.id === "filtreCourses") {
+    filtreCourses = ev.target.value;
+    const p = ev.target.selectionStart; rendre();
+    const c = $("filtreCourses"); if (c) { c.focus(); c.setSelectionRange(p, p); }
+    return;
+  }
   if (ev.target.id !== "filtre") return;
   if (route().vue === "catalogue") { filtreCatalogue = ev.target.value; filtresCat.debut = 0; }
   else filtreStock = ev.target.value;

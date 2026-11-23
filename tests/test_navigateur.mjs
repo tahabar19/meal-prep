@@ -468,6 +468,15 @@ try {
     await taper('');
     vrai(await attendre(`document.querySelectorAll('.stock-liste li').length >= 3`, 10000) >= 0, 'le stock ne montre pas les produits');
     const avant = await B.js(`document.querySelector('.stock-saisie').value`);
+    // Un produit choisi dans Chez moi → les plats qui en ont, dans le catalogue (Taha, 23/11/2026).
+    await B.js(`document.querySelector('button.stock-nom').click()`); await att(300);
+    vrai(await B.js(`/plat/.test(document.getElementById('barre').textContent)`), 'pas de barre « N plats avec ça »');
+    if (await B.js(`!!document.querySelector('[data-action=voirPlatsIngs]')`)) {
+      await B.js(`document.querySelector('[data-action=voirPlatsIngs]').click()`); await att(800);
+      vrai(await B.js(`!!document.querySelector('.cat-ings button')`), 'le catalogue ne montre pas l\'ingrédient choisi');
+      await B.js(`document.querySelector('.cat-ings button').click()`); await att(300);
+    }
+    await aller('#/stock?v=courses');
     // Ma liste de courses : « Remplir ma liste » (N au choix), cocher, « Ajouter au stock » (Taha, 23/11/2026).
     await B.js(`document.querySelector('.liste-courses') && document.querySelector('.liste-courses').scrollIntoView()`); await att(200); await B.photo('stock-liste-vide');
     if (await B.js(`!!document.querySelector('[data-action=lcRemplir]')`)) {
@@ -484,6 +493,14 @@ try {
       vrai(await attendre(`document.querySelectorAll('.liste-courses li').length === ${nLc - 1}`, 10000) >= 0, 'le produit coché ne quitte pas la liste');
       for (let k = 0; k < nLc - 1; k++) { await B.js(`document.querySelector('.lc-x').click()`); await synchro(); }
     }
+    // Ajouter à la main un produit à la liste.
+    await B.js(`(() => { const f = document.getElementById('filtreCourses'); f.value = 'riz'; f.dispatchEvent(new Event('input', { bubbles: true })); })()`); await att(300);
+    vrai(await B.js(`!!document.querySelector('[data-action=lcAjouter]')`), 'taper « riz » ne propose rien');
+    await B.js(`document.querySelector('[data-action=lcAjouter]').click()`); await synchro();
+    vrai(await attendre(`document.querySelectorAll('.liste-courses li').length === 1`, 10000) >= 0, 'le produit tapé ne va pas sur la liste');
+    await B.photo('stock-courses');
+    await B.js(`document.querySelector('.lc-x').click()`); await synchro();
+    await aller('#/stock'); await attendre(`document.querySelector('.stock-saisie')`, 10000);
     await B.js(`document.querySelector('.stock-liste [data-stock-pas="1"]').click()`);
     vrai(await attendre(`document.querySelector('.stock-saisie') && document.querySelector('.stock-saisie').value !== ${JSON.stringify(avant)}`, 10000) >= 0, '+ ne change rien');
     await B.photo('stock-plein');
