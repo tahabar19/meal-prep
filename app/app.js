@@ -2629,8 +2629,17 @@ const pasStock = l => l.unite === "pièce" ? 1 : l.quantite > 1000 ? 100 : l.qua
 function vueStockMaison() {
   barre("");
   const st = E.stock || [], voulus = motsStock(filtreStock), rayons = rayonsDesIngredients(), groupes = new Map();
-  const trouves = st.filter(l => !voulus.length || voulus.every(m => motsStock(l.nom).some(n => n.startsWith(m))));
-  trouves.sort((a, b) => a.nom.localeCompare(b.nom, "fr")).forEach(l => {
+  // Tous les ingrédients des plats sont là, à 0 et grisés tant que tu n'en as pas ; 0 n'efface rien (Taha, 23/11/2026).
+  const unites = {};
+  for (const x of E.recettes) for (const i of x.ing || []) {
+    const u = (unites[i.n] = unites[i.n] || {});
+    if (i.u !== "qs") u[i.u] = (u[i.u] || 0) + 1;
+  }
+  const dejaLa = new Set(st.map(l => l.nom));
+  const zeros = Object.entries(unites).filter(([n]) => !dejaLa.has(n)).map(([n, u]) =>
+    ({ nom: n, unite: Object.keys(u).sort((a, b) => u[b] - u[a])[0] || "g", quantite: 0, zero: true }));
+  const trouves = [...st, ...zeros].filter(l => !voulus.length || voulus.every(m => motsStock(l.nom).some(n => n.startsWith(m))));
+  trouves.sort((a, b) => (b.quantite > 0) - (a.quantite > 0) || a.nom.localeCompare(b.nom, "fr")).forEach(l => {
     const g = rayons[l.nom] != null && E.rayons && E.rayons[rayons[l.nom]] ? E.rayons[rayons[l.nom]] : "Autres";
     groupes.set(g, [...(groupes.get(g) || []), l]); });
   const faisables = Object.entries(E.stock_couvre || {}).filter(([id, p]) => p >= 0.8 && recette(id) && estRepas(recette(id)) && !estRetire(id) && !["extrariz", "rien"].includes(id))
@@ -2644,7 +2653,7 @@ function vueStockMaison() {
       <input id="filtre" name="filtre" type="search" enterkeyhint="go" autocomplete="off" maxlength="600" value="${esc(filtreStock)}"
         placeholder="Chercher ou ajouter : riz, 6 œufs…" aria-label="Chercher dans ton stock, ou ajouter ce que tu as acheté" aria-describedby="stockAide">
       <button type="submit" class="stock-taper-ok" aria-label="Ajouter au stock">${icone("plus")}</button></form>
-    <p class="stock-aide" id="stockAide" aria-live="polite">${!voulus.length ? "" : !trouves.length
+    <p class="stock-aide" id="stockAide" aria-live="polite">${!voulus.length ? "" : !trouves.some(l => l.quantite > 0)
       ? `« ${esc(filtreStock.trim())} » n'est pas dans ton stock : <button type="submit" form="fStockTaper" class="lien">l'ajouter</button>`
       : /\d/.test(filtreStock) ? `Entrée pour ajouter « ${esc(filtreStock.trim())} » à ton stock.` : ""}</p>
     <small class="erreur" id="eStockTaper" role="alert"></small>`;
@@ -2657,10 +2666,10 @@ function vueStockMaison() {
           <span class="stock-part">${nombre(Math.round(part * 100))} %</span></a></li>`; }).join("")}</ul>
       <button type="button" class="bouton large" data-action="stockProposer" style="margin-top:10px">${icone("arrows-clockwise")}Refaire mes repas avec mon stock</button></section>` : ""}
     ${barreStock}
-    ${st.length ? `
-      ${[...groupes.entries()].map(([g, lignes]) => `<section class="bloc stock-groupe"><h2>${esc(g)}</h2><ul class="stock-liste">${lignes.map(l =>
-        `<li><span class="stock-nom">${esc(l.nom)}</span><span class="stock-q">
-          <button type="button" data-stock-pas="-1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Moins de ${esc(l.nom)}">−</button>
+    ${trouves.length ? `
+      ${[...groupes.entries()].sort((a, b) => (a[0] === "Autres") - (b[0] === "Autres")).map(([g, lignes]) => `<section class="bloc stock-groupe"><h2>${esc(g)}</h2><ul class="stock-liste">${lignes.map(l =>
+        `<li${l.quantite > 0 ? "" : ' class="stock-zero"'}><span class="stock-nom">${esc(l.nom)}</span><span class="stock-q">
+          <button type="button" data-stock-pas="-1"${l.quantite > 0 ? "" : " disabled"} data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Moins de ${esc(l.nom)}">−</button>
           <input class="stock-saisie" type="number" inputmode="decimal" min="0" step="any" value="${enAffiche(l).q}" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-facteur="${enAffiche(l).f}" aria-label="Quantité de ${esc(l.nom)}, en ${esc(enAffiche(l).u)}">
           <span class="stock-u">${esc(enAffiche(l).u)}</span>
           <button type="button" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Plus de ${esc(l.nom)}">+</button></span></li>`).join("")}</ul></section>`).join("")

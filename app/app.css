@@ -1470,3 +1470,6 @@ html:has(.carte-fond.ouvert){background:#060706}
 .conso-bloc .lignes li > span:first-child{display:grid;gap:2px}
 .conso-bloc .lignes small{color:var(--discret);font-size:.75rem;font-weight:400}
 .conso-bloc .q{white-space:nowrap}
+/* Stock : les ingrédients à 0 restent, grisés (Taha, 23/11/2026) */
+.stock-zero .stock-nom,.stock-zero .stock-saisie,.stock-zero .stock-u{opacity:.45}
+.stock-zero button[disabled]{opacity:.3;cursor:default}
