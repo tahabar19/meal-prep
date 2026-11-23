@@ -1593,3 +1593,34 @@ body:has(.auth)::before{display:none}
 .fam-choix .bouton{min-height:34px;padding:0 12px;font-size:.8rem}
 .fam-regles{margin:0;padding-left:18px;display:grid;gap:6px}
 .menu a > span small{display:block;margin-top:2px;color:var(--discret);font-size:.75rem;font-weight:400}
+/* Stock en deux parties (Taha, 23/11/2026) */
+.stock-titre{display:flex;align-items:baseline;gap:8px;margin:22px 0 10px;font-size:.9375rem;font-weight:600}
+.stock-titre span{padding:1px 8px;border-radius:var(--r-pilule);background:var(--surface-fort);color:var(--discret);font-size:.72rem;font-weight:600}
+.stock-groupe h3{margin:0 0 4px;color:var(--discret);font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.stock-vide{margin:0 0 6px;padding:14px 16px;border:1px dashed var(--filet);border-radius:var(--r-carte)}
+.stock-astuce{margin:-4px 0 10px}
+.stock-rayons{display:grid;gap:8px}
+.stock-rayon{border-radius:14px;background:var(--surface)}
+.stock-rayon > summary{display:flex;align-items:center;gap:8px;min-height:46px;padding:0 14px;cursor:pointer;list-style:none;color:var(--encre);font-size:.875rem;font-weight:500}
+.stock-rayon > summary::-webkit-details-marker{display:none}
+.stock-rayon > summary small{color:var(--discret);font-size:.75rem}
+.stock-rayon > summary .ic{width:16px;height:16px;color:var(--discret);transition:transform .15s}
+.stock-rayon[open] > summary .ic{transform:rotate(90deg)}
+.stock-puces{display:flex;flex-wrap:wrap;gap:6px;padding:2px 12px 14px}
+.stock-puce{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:0 8px 0 12px;border:1px solid var(--filet);border-radius:var(--r-pilule);background:transparent;color:var(--texte);font:inherit;font-size:.8rem;cursor:pointer}
+.stock-puce .ic{width:13px;height:13px;color:var(--accent)}
+.stock-puce:hover,.stock-puce:active{border-color:rgba(200,240,75,.6);color:var(--encre)}
+#contenu .stock-rayon > summary{display:flex;align-items:center;gap:8px;min-height:46px;padding:0 14px;margin:0;border:0}
+#contenu .stock-rayon{border-top:0;padding-top:0}
+#contenu .stock-rayon > summary > .sr-nom{flex:1;font-size:.875rem;font-weight:500;color:var(--encre)}
+#contenu .stock-rayon > summary > small{flex:none;font-size:.75rem;color:var(--discret)}
+
+/* L'ouverture de l'appli avec les motifs de l'accueil (Taha, 23/11/2026) : ils apparaissent en fondu et glissent à peine. */
+.ouverture{background:radial-gradient(120% 70% at 50% 0%,#1d2414 0%,#111312 60%)!important;overflow:hidden}
+.ouverture::before{content:"";position:absolute;inset:-60px;z-index:-1;pointer-events:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22280%22 height=%22280%22 viewBox=%220 0 280 280%22%3E%3Cg fill=%22none%22 stroke=%22%23c8f04b%22 stroke-width=%222.2%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E %3Cg transform=%22translate%2822 36%29 rotate%28-24%29%22%3E%3Crect x=%220%22 y=%227%22 width=%227%22 height=%2220%22 rx=%222.5%22/%3E%3Crect x=%228%22 y=%222%22 width=%227%22 height=%2230%22 rx=%222.5%22/%3E%3Cpath d=%22M15 17h22%22/%3E%3Crect x=%2237%22 y=%222%22 width=%227%22 height=%2230%22 rx=%222.5%22/%3E%3Crect x=%2245%22 y=%227%22 width=%227%22 height=%2220%22 rx=%222.5%22/%3E%3C/g%3E %3Cg transform=%22translate%28150 22%29 rotate%2810%29%22%3E%3Ccircle cx=%2224%22 cy=%2224%22 r=%2222%22/%3E%3Ccircle cx=%2224%22 cy=%2224%22 r=%2213%22/%3E%3Cpath d=%22M-8 8v12M-12 8v8a4 4 0 0 0 8 0V8M-8 20v20M56 8c5 3 5 14 0 16v16%22/%3E%3C/g%3E %3Cg transform=%22translate%2896 112%29 rotate%28-8%29%22%3E%3Cpath d=%22M2 40V30c0-6 6-9 12-9h6c-1-6-3-11 0-16 2-4 10-4 12 0 2 4 0 8-2 10 7 2 14 7 14 15 0 6-6 10-14 10z%22/%3E%3Cpath d=%22M20 21c3 3 8 4 12 2%22/%3E%3C/g%3E %3Cg transform=%22translate%28222 120%29 rotate%2812%29%22%3E%3Cpath d=%22M0 0h26l-3 38H3z%22/%3E%3Cpath d=%22M2 14c6 3 16 3 22 0%22/%3E%3C/g%3E %3Cg transform=%22translate%2830 186%29 rotate%28-12%29%22%3E%3Cpath d=%22M22 10c-6-5-16-3-18 6-3 11 5 24 12 24 3 0 4-2 6-2s3 2 6 2c7 0 15-13 12-24-2-9-12-11-18-6z%22/%3E%3Cpath d=%22M22 10c0-5 3-8 7-9%22/%3E%3C/g%3E %3Cg transform=%22translate%28160 206%29 rotate%286%29%22%3E%3Cpath d=%22M0 14h52c0 14-11 24-26 24S0 28 0 14z%22/%3E%3Cpath d=%22M-4 14h60%22/%3E%3Cpath d=%22M16 8c-3-4 3-6 0-10M26 8c-3-4 3-6 0-10M36 8c-3-4 3-6 0-10%22/%3E%3C/g%3E %3Cg transform=%22translate%28236 24%29 rotate%28-30%29%22%3E%3Cpath d=%22M0 18C0 8 8 0 18 0c0 10-8 18-18 18z%22/%3E%3Cpath d=%22M0 18L12 6%22/%3E%3C/g%3E %3Cg transform=%22translate%2896 22%29 rotate%2818%29%22%3E%3Cpath d=%22M6 0v14M2 0v8a4 4 0 0 0 8 0V0%22/%3E%3Cpath d=%22M6 14v20%22/%3E%3C/g%3E %3Cg transform=%22translate%28250 196%29 rotate%28-20%29%22%3E%3Crect x=%220%22 y=%220%22 width=%224%22 height=%2210%22 rx=%221.5%22/%3E%3Crect x=%225%22 y=%22-3%22 width=%224%22 height=%2216%22 rx=%221.5%22/%3E%3Cpath d=%22M9 5h12%22/%3E%3Crect x=%2221%22 y=%22-3%22 width=%224%22 height=%2216%22 rx=%221.5%22/%3E%3Crect x=%2226%22 y=%220%22 width=%224%22 height=%2210%22 rx=%221.5%22/%3E%3C/g%3E %3C/g%3E%3C/svg%3E");background-size:280px 280px;
+  opacity:0;-webkit-mask-image:radial-gradient(circle at 50% 45%,rgba(0,0,0,.35) 0%,#000 60%);mask-image:radial-gradient(circle at 50% 45%,rgba(0,0,0,.35) 0%,#000 60%);
+  animation:ouvMotifs 1.2s .15s ease-out forwards,ouvGlisse 24s linear infinite}
+.ouverture > *{position:relative}
+@keyframes ouvMotifs{to{opacity:.14}}
+@keyframes ouvGlisse{from{transform:translate3d(0,0,0)}to{transform:translate3d(-40px,-40px,0)}}
+@media (prefers-reduced-motion:reduce){.ouverture::before{animation:none;opacity:.14}}
