@@ -25,5 +25,14 @@
    "sizes": "any",
    "type": "image/svg+xml"
   }
- ]
+ ],
+ "share_target": {
+  "action": "./",
+  "method": "GET",
+  "params": {
+   "title": "titre",
+   "text": "texte",
+   "url": "lien"
+  }
+ }
 }
