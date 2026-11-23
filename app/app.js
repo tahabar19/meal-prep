@@ -2605,12 +2605,14 @@ function marquerStock(racine) {
 let marquage = 0;
 new MutationObserver(() => { if (!marquage) marquage = requestAnimationFrame(() => { marquage = 0; marquerStock(document); }); })
   .observe(document.body, { childList: true, subtree: true });
-function montrerManque(titre, lignes) {
+// Une petite carte au centre, sobre comme la carte d'un plat (Taha, 23/11/2026 : « pas adaptée, un peu grande »).
+function montrerManque(sur, titre, lignes) {
   document.querySelector(".manque-fond")?.remove();
   const hote = document.querySelector("dialog[open]") || document.body;
-  hote.insertAdjacentHTML("beforeend", `<div class="manque-fond"><div class="manque-feuille" role="dialog" aria-modal="true" aria-label="${esc(titre)}">
-    <h3>${esc(titre)}</h3><ul class="lignes">${lignes.map(([n, q, u]) => `<li><span>${esc(n)}</span><span class="q">${quantite(q, u)}</span></li>`).join("")}</ul>
-    <button type="button" class="bouton second" data-manque-fermer>Fermer</button></div></div>`);
+  hote.insertAdjacentHTML("beforeend", `<div class="manque-fond"><div class="manque-feuille" role="dialog" aria-modal="true" aria-label="${esc(sur + " : " + titre)}">
+    <button type="button" class="manque-x" data-manque-fermer aria-label="Fermer">${icone("x")}</button>
+    <p class="manque-sur">${esc(sur)}</p><h3>${esc(titre)}</h3>
+    <ul class="manque-lignes">${lignes.map(([n, q, u]) => `<li><span>${esc(n)}</span><span class="q chiffres">${quantite(q, u)}</span></li>`).join("")}</ul></div></div>`);
 }
 document.addEventListener("click", ev => {
   const b = ev.target.closest && ev.target.closest("[data-manque], [data-manque-jour], .manque-fond");
@@ -2620,9 +2622,9 @@ document.addEventListener("click", ev => {
     return;
   }
   ev.preventDefault(); ev.stopPropagation();
-  if (b.dataset.manque) return montrerManque(`Il te manque pour « ${recette(b.dataset.manque).nom} » (une portion)`, E.stock_manque[b.dataset.manque] || []);
+  if (b.dataset.manque) return montrerManque("Il te manque, pour une portion", recette(b.dataset.manque).nom, E.stock_manque[b.dataset.manque] || []);
   const d = b.dataset.manqueJour;
-  montrerManque(`À acheter pour les repas du ${new Date(d + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}`,
+  montrerManque("À acheter pour les repas du", new Date(d + "T12:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }).replace(/^./, c => c.toUpperCase()),
     (E.manque_jours[d] || []).map(x => [x.nom, x.quantite, x.unite]));
 }, true);
 const pasStock = l => l.unite === "pièce" ? 1 : l.quantite > 1000 ? 100 : l.quantite > 200 ? 50 : 10;
