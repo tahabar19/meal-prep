@@ -2624,6 +2624,7 @@ function boutonsGout(r) {
 }
 function vueCatalogue({ params }) {
   barre("");
+  if (params.get && params.get("stock") === "1") { Object.assign(filtresCat, { stock: true, ouvert: true, nb: 5 }); history.replaceState(null, "", "#/catalogue"); }
   const CATS = [["plat", "Plats"], ["petitdej", "Petits-déjeuners"], ["collation", "Collations"]];
   const AVIS = [["", "Tous"], ["tester", "À tester"], ["non", "J'aime pas"]];
   const REGIMES = ["Pauvre en FODMAP", "Sans gluten", "Sans lactose", "Végétarien"];
@@ -2643,7 +2644,7 @@ function vueCatalogue({ params }) {
   const lignes = repas.filter(r => (!F.cats.size || F.cats.has(r.cat)) && (!F.avis || (F.avis === "sans" ? !r.gout : r.gout === F.avis)) && r.nom.toLowerCase().includes(cherche)
       && [...F.regimes].every(x => r.filtres.regimes.includes(x)) && [...F.atouts].every(x => r.filtres.atouts.includes(x))
       && (!F.proteines.size || F.proteines.has(r.filtres.proteine)) && (!F.origines.size || F.origines.has(r.filtres.origine))
-      && (!F.prix || r.cout < F.prix) && (!F.temps || (r.temps && r.temps < F.temps)) && (!F.stock || couvre[r.id] === 1))
+      && (!F.prix || r.cout < F.prix) && (!F.temps || (r.temps && r.temps < F.temps)) && (!F.stock || couvre[r.id] >= 0.8))
     .sort((a, b) => F.sens * ordre[F.tri](a, b) || ordre.nom(a, b));
   const nb = gout => repas.filter(r => r.gout === gout).length;
   const puce = (cle, valeur, texte, actif) => `<button type="button" data-action="filtreCat" data-cle="${cle}" data-valeur="${esc(valeur)}" aria-pressed="${actif}">${texte}</button>`;
@@ -2667,14 +2668,14 @@ function vueCatalogue({ params }) {
     ${groupe("Temps", TEMPS.map(([v, t]) => puce("temps", v, t, F.temps === v)).join(""))}
     ${groupe("Atouts", ATOUTS.map(x => puce("atout", x, x, F.atouts.has(x))).join(""))}
     ${groupe("Prix", PRIX.map(([v, t]) => puce("prix", v, t, F.prix === v)).join(""))}
-    ${groupe("Stock", puce("stock", "", "Faisable avec mon stock", F.stock))}` : ""}
+    ${groupe("Stock", puce("stock", "", "Faisable avec ton stock", F.stock))}` : ""}
     <div class="champ formulaire tri"><label for="triCat">Trier par</label>
       <select id="triCat" name="tri">${TRIS.map(([id, nom]) => `<option value="${id}"${F.tri === id ? " selected" : ""}>${nom}</option>`).join("")}</select>
       <button type="button" class="tri-sens${F.sens < 0 ? " bas" : ""}" data-action="filtreCat" data-cle="sens" data-valeur="" aria-label="Ordre ${F.sens > 0 ? "croissant" : "décroissant"}, toucher pour inverser">${icone("caret-right")}${F.sens > 0 ? "Croissant" : "Décroissant"}</button></div>
   </section>
   <div class="champ formulaire"><label for="filtre">Chercher une recette</label>
     <input id="filtre" name="filtre" type="search" autocomplete="off" placeholder="Poulet, curry…" value="${esc(filtreCatalogue)}"></div>
-  <p class="discret petit" role="status" style="margin:-6px 0 8px">${lignes.length} recette${lignes.length > 1 ? "s" : ""}${F.stock && !E.stock.length ? ". Ton stock est vide : ce filtre servira après ta première commande payée" : ""}.</p>
+  <p class="discret petit" role="status" style="margin:-6px 0 8px">${lignes.length} recette${lignes.length > 1 ? "s" : ""}${F.stock && !E.stock.length ? ". Ton stock est vide : ajoute ce que tu as dans Stock" : ""}.</p>
   ${lignes.length ? `<ul class="rp-liste cat-liste">${lignes.slice(0, F.nb).map(r => `<li><a class="rp-plat" href="#/plat/${r.id}">${photo(r, 120, "carre")}
       <span class="rp-texte"><b>${esc(r.nom)}</b>${macrosLigne(r.kcal, r.prot).replace("</span></span>", `</span><span>${euros(r.cout)}</span>${r.gout === "tester" ? `<span class="rp-ecart plus">À tester</span>` : r.gout === "non" ? `<span>J'aime pas</span>` : ""}</span>`)}</span></a></li>`).join("")}</ul>`
     : `<p class="discret">Aucune recette ne correspond.</p>`}
@@ -2755,8 +2756,9 @@ function vueStockMaison() {
   trouves.sort((a, b) => (b.quantite > 0) - (a.quantite > 0) || a.nom.localeCompare(b.nom, "fr")).forEach(l => {
     const g = rayons[l.nom] != null && E.rayons && E.rayons[rayons[l.nom]] ? E.rayons[rayons[l.nom]] : "Autres";
     groupes.set(g, [...(groupes.get(g) || []), l]); });
+  // « Faisable avec ton stock » est un filtre du catalogue (Taha, 23/11/2026) ; ici, juste le lien.
   const faisables = Object.entries(E.stock_couvre || {}).filter(([id, p]) => p >= 0.8 && recette(id) && estRepas(recette(id)) && !estRetire(id) && !["extrariz", "rien"].includes(id))
-    .sort((a, b) => b[1] - a[1]).slice(0, 6);
+    .sort((a, b) => b[1] - a[1]);
   const ajout = `<div class="stock-ajout">
       <label class="stock-bouton">${icone("image")}<span>Photo</span><small>frigo, placard</small><input type="file" accept="image/*" hidden data-stock-photo="photo"></label>
       <label class="stock-bouton">${icone("receipt")}<span>Ticket</span><small>de caisse</small><input type="file" accept="image/*" hidden data-stock-photo="ticket"></label>
@@ -2772,11 +2774,8 @@ function vueStockMaison() {
   return `<div class="m-tete"><div><h1 tabindex="-1">Mon stock</h1>
       <p class="petit discret">${st.length ? `${st.length} produit${st.length > 1 ? "s" : ""} à la maison. Ce que tu marques mangé en sort tout seul.` : "Ajoute ce que tu as chez toi : l'appli te propose des repas avec."}</p></div></div>
     ${ajout}
-    ${faisables.length ? `<section class="bloc stock-faisable" aria-labelledby="tFaisable"><h2 id="tFaisable">Faisable avec ton stock</h2>
-      <ul class="rp-liste">${faisables.map(([id, part]) => { const r = recette(id);
-        return `<li><a class="rp-plat" href="#/plat/${id}">${photo(r, 120, "carre")}<span class="rp-texte"><b>${esc(r.nom)}</b>${macrosLigne(r.kcal, r.prot)}</span>
-          <span class="stock-part">${nombre(Math.round(part * 100))} %</span></a></li>`; }).join("")}</ul>
-      <button type="button" class="bouton large" data-action="stockProposer" style="margin-top:10px">${icone("arrows-clockwise")}Refaire mes repas avec mon stock</button></section>` : ""}
+    ${faisables.length ? `<p class="stock-refaire"><a class="lien" href="#/catalogue?stock=1">${faisables.length} plat${faisables.length > 1 ? "s" : ""} faisable${faisables.length > 1 ? "s" : ""} avec ton stock</a>
+      <button type="button" class="bouton large" data-action="stockProposer">${icone("arrows-clockwise")}Refaire mes repas avec mon stock</button></p>` : ""}
     ${(() => {
       const c = coursesMalines();
       if (!c.length) return "";
