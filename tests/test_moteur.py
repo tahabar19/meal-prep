@@ -246,6 +246,11 @@ class G_SansClaude(unittest.TestCase):
         self.assertEqual(M.api("POST", "/api/liste_courses", {"nom": "Thon", "unite": "pièce", "retirer": True})[0], 200)
         self.assertEqual(M.etat()["liste_courses"], [])
         self.assertEqual(M.api("POST", "/api/liste_courses", {"nom": "X", "unite": "g", "quantite": -3})[0], 400)
+        lot = [{"nom": "Riz basmati", "unite": "g", "quantite": 300, "raison": "pour 2 nouveaux plats"}, {"nom": "Citron", "unite": "pièce", "quantite": 1}]
+        self.assertEqual(M.api("POST", "/api/liste_courses/lot", {"items": lot})[0], 200)
+        self.assertEqual([(x["nom"], x.get("raison")) for x in M.etat()["liste_courses"]], [("Riz basmati", "pour 2 nouveaux plats"), ("Citron", None)])
+        self.assertEqual(M.api("POST", "/api/liste_courses/lot", {"items": lot, "retirer": True})[0], 200)
+        self.assertEqual(M.etat()["liste_courses"], [])
 
     def test_aucun_appel_claude_en_fond(self):
         avant = len(M.appels_claude)

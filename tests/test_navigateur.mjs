@@ -468,15 +468,21 @@ try {
     await taper('');
     vrai(await attendre(`document.querySelectorAll('.stock-liste li').length >= 3`, 10000) >= 0, 'le stock ne montre pas les produits');
     const avant = await B.js(`document.querySelector('.stock-saisie').value`);
-    // « À acheter » : une pastille va sur ma liste ; cochée puis validée, elle entre au stock (Taha, 23/11/2026).
-    if (await B.js(`!!document.querySelector('.malin-puce')`)) {
-      const nomMalin = await B.js(`document.querySelector('.malin-puce').dataset.nom`);
-      await B.js(`document.querySelector('.malin-puce').click()`); await synchro();
-      vrai(await attendre(`[...document.querySelectorAll('.liste-courses .lc-nom')].some(x => x.textContent === ${JSON.stringify(nomMalin)})`, 10000) >= 0, 'pas sur ma liste');
+    // Ma liste de courses : « Remplir ma liste » (N au choix), cocher, « Ajouter au stock » (Taha, 23/11/2026).
+    await B.js(`document.querySelector('.liste-courses') && document.querySelector('.liste-courses').scrollIntoView()`); await att(200); await B.photo('stock-liste-vide');
+    if (await B.js(`!!document.querySelector('[data-action=lcRemplir]')`)) {
+      await B.js(`(() => { const i = document.getElementById('lcNb'); i.value = 3; i.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+      await B.js(`document.querySelector('[data-action=lcRemplir]').click()`); await synchro();
+      vrai(await attendre(`document.querySelectorAll('.liste-courses li').length > 0`, 10000) >= 0, 'la liste ne se remplit pas');
+      const nLc = await B.js(`document.querySelectorAll('.liste-courses li').length`);
+      vrai(nLc <= 3, `${nLc} produits pour 3 demandés`);
+      await B.js(`document.querySelector('.liste-courses').scrollIntoView({ block: 'start' })`); await att(200); await B.photo('stock-liste');
+      vrai(await B.js(`!!document.querySelector('.liste-courses li small')`), 'pas de raison en clair');
       await B.js(`document.querySelector('.liste-courses input[data-lc]').click()`); await att(100);
-      vrai(await B.js(`!document.getElementById('lcValider').disabled`), 'Valider reste grisé');
+      vrai(await B.js(`!document.getElementById('lcValider').disabled`), 'Ajouter au stock reste grisé');
       await B.js(`document.getElementById('lcValider').click()`); await synchro();
-      vrai(await attendre(`!document.querySelector('.liste-courses')`, 10000) >= 0, 'la liste ne se vide pas');
+      vrai(await attendre(`document.querySelectorAll('.liste-courses li').length === ${nLc - 1}`, 10000) >= 0, 'le produit coché ne quitte pas la liste');
+      for (let k = 0; k < nLc - 1; k++) { await B.js(`document.querySelector('.lc-x').click()`); await synchro(); }
     }
     await B.js(`document.querySelector('.stock-liste [data-stock-pas="1"]').click()`);
     vrai(await attendre(`document.querySelector('.stock-saisie') && document.querySelector('.stock-saisie').value !== ${JSON.stringify(avant)}`, 10000) >= 0, '+ ne change rien');
