@@ -11,7 +11,7 @@ const ONGLETS = [
   { id: "suivi", nom: "Suivi", icone: "chart-line" },
   { id: "plus", nom: "Plus", icone: "dots-three-outline" },
 ];
-const DANS_PLUS = ["plus", "courses", "cuisine", "historique", "budget", "vitamines", "profil", "profils", "nouveau", "stock", "journal", "reglages"];
+const DANS_PLUS = ["plus", "courses", "cuisine", "historique", "budget", "vitamines", "profil", "profils", "nouveau", "stock", "journal", "reglages", "conso"];
 // Mode flemmard : plus d'onglet « Plus » ; les vitamines ont leur onglet, « Profil » ouvre sa page (Taha, 19/11/2026).
 const ONGLETS_FLEMMARD = [
   { id: "semaine", nom: "Jour", icone: "calendar-blank" },
@@ -171,7 +171,7 @@ function route() {
 }
 function ongletDe(vue) {
   if (vue === "plat") return "semaine";
-  if (enSuivi()) return vue === "historique" ? "semaine" : ["plus", "profil", "profils", "nouveau", "reglages", "journal"].includes(vue) ? "profil" : vue;
+  if (enSuivi()) return vue === "historique" ? "semaine" : ["plus", "profil", "profils", "nouveau", "reglages", "journal", "conso"].includes(vue) ? "profil" : vue;
   return DANS_PLUS.includes(vue) ? "plus" : vue;
 }
 
@@ -190,6 +190,8 @@ function comptesNav() {
   return { courses: enSuivi() ? 0 : aAcheter, cuisine: s.etat !== "terminee" && (s.etat === "commandee" || Object.keys(s.prepares || {}).length) ? aFaire : 0 };
 }
 const BUDGET_POUR = ["taha"];
+const ADMIN_CONSO = ["taha"];     // la page « Suivi de conso » (Taha, 23/11/2026) ; le serveur vérifie aussi
+const estAdminConso = () => typeof sb !== "undefined" && ADMIN_CONSO.includes(String((typeof M !== "undefined" && M.ident) || "").toLowerCase());
 function rendreNavigation(actif) {
   const comptes = comptesNav();
   const lien = (o, bas) => {
@@ -2274,11 +2276,70 @@ function vueProfilFlemmard() {
       ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul></section>
   <ul class="menu" style="margin-top:16px">
     ${lien("#/reglages", "sliders-horizontal", "Réglages", "")}
+    ${estAdminConso() ? lien("#/conso", "chart-bar", "Suivi de conso", "Ce que chaque compte consomme en IA") : ""}
     ${E.utilisateur.admin ? lien("#/profils", "users", "Profils", "") : ""}
   </ul>
   ${lienAndroid()}
   <p style="margin-top:18px"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>
   ${typeof VERSION === "string" ? `<p class="petit discret" style="margin-top:6px;font-size:.7rem;opacity:.6">Version ${esc(VERSION.replace(/^(\d{4})-(\d\d)-(\d\d)-(\d\d)(\d\d)\d\d$/, "du $3/$2 à $4:$5"))} · écran ${innerHeight}/${screen.height}, trou ${getComputedStyle(document.documentElement).getPropertyValue("--trou-bas").trim() || "0px"}</p>` : ""}`;
+}
+// « Suivi de conso » (Taha, 23/11/2026 : « voir la consommation de chaque user, pour juger la facturation ») :
+// chaque appel à l'IA est noté par la fonction en ligne (Claude : tokens envoyés et reçus, sa clé ou celle de l'appli ;
+// Gemini : une image). Réservé à l'admin, ici et côté serveur. Les tokens ne sont comptés que depuis le 23/11/2026.
+let CONSO = null, CONSO_P = "mois";
+function vueConso() {
+  barre("");
+  if (!estAdminConso()) return vueIntrouvable();
+  const tete = `<a class="retour" href="#/profil">${icone("caret-left")}Profil</a>
+    <div class="m-tete"><div><h1 tabindex="-1">Suivi de conso</h1><p class="petit discret">Les appels à l'IA de chaque compte de l'appli.</p></div></div>`;
+  if (!CONSO || CONSO.vieux) {
+    const etait = CONSO;
+    CONSO = { charge: true };
+    sb.functions.invoke("claude", { body: { action: "conso" } }).then(({ data, error }) => {
+      CONSO = data && data.lignes ? { ...data, recu: Date.now() } : { erreur: (data && data.erreur) || (error && error.message) || "lecture impossible" };
+      if (route().vue === "conso") rendre();
+    }).catch(e => { CONSO = { erreur: e.message }; if (route().vue === "conso") rendre(); });
+    if (!etait || etait.erreur) return tete + `<p class="petit discret">Chargement…</p>`;
+    CONSO = { ...etait, charge: true, vieux: false };
+  }
+  if (CONSO.charge && !CONSO.lignes) return tete + `<p class="petit discret">Chargement…</p>`;
+  if (CONSO.erreur) return tete + `<p class="erreur" role="alert">${esc(CONSO.erreur)}</p>`;
+  const P = { jour: ["Aujourd'hui", 1], semaine: ["7 jours", 7], mois: ["30 jours", 30], tout: ["Tout", 0] };
+  const auj = new Date(); auj.setHours(0, 0, 0, 0);
+  const depuis = P[CONSO_P][1] ? auj.getTime() - (P[CONSO_P][1] - 1) * 864e5 : 0;
+  const noms = Object.fromEntries((CONSO.profils || []).map(p => [p.id, p.identifiant]));
+  const vide = () => ({ claude: 0, perso: 0, partagee: 0, entree: 0, sortie: 0, sans: 0, images: 0, img_e: 0, img_s: 0, web: 0, modeles: new Set() });
+  const par = new Map(), total = vide();
+  for (const l of CONSO.lignes) {
+    if (new Date(l.quand).getTime() < depuis) continue;
+    const qui = noms[l.user_id] || "compte supprimé";
+    if (!par.has(qui)) par.set(qui, vide());
+    for (const x of [par.get(qui), total]) {
+      if (l.action === "messages") {
+        x.claude++;
+        if (l.cle === "perso" || l.cle === "partagee") x[l.cle]++;
+        if (l.tokens_entree == null) x.sans++; else { x.entree += l.tokens_entree; x.sortie += l.tokens_sortie || 0; }
+        if (l.modele) x.modeles.add(l.modele.replace(/^claude-/, ""));
+      } else if (l.action === "image") { x.images++; x.img_e += l.tokens_entree || 0; x.img_s += l.tokens_sortie || 0; }
+      else if (l.action === "web") x.web++;
+    }
+  }
+  const k = n => n >= 1e6 ? `${virgule(Math.round(n / 1e5) / 10)} M` : n >= 1e4 ? `${nombre(Math.round(n / 1e3))} k` : nombre(n);
+  const bloc = (titre, x, sous = "") => `<section class="bloc conso-bloc"><h2>${esc(titre)}${sous ? `<small>${sous}</small>` : ""}</h2>
+    <ul class="lignes">
+      <li><span>Claude<small>${x.claude} appel${x.claude > 1 ? "s" : ""}${x.perso || x.partagee ? ` · ${x.partagee} sur la clé de l'appli, ${x.perso} sur sa clé` : ""}${x.modeles.size ? ` · ${esc([...x.modeles].join(", "))}` : ""}</small></span>
+        <span class="q chiffres">${k(x.entree)} → ${k(x.sortie)}</span></li>
+      <li><span>Photos Gemini<small>${x.images} image${x.images > 1 ? "s" : ""}</small></span><span class="q chiffres">${x.images ? `${k(x.img_e)} → ${k(x.img_s)}` : "—"}</span></li>
+      <li><span>Pages lues<small>étiquettes, photos libres (pas d'IA)</small></span><span class="q chiffres">${x.web}</span></li>
+    </ul>${x.sans ? `<p class="petit discret">${x.sans} appel${x.sans > 1 ? "s" : ""} Claude d'avant le 23/11 : tokens non comptés.</p>` : ""}</section>`;
+  const comptes = [...par.entries()].sort((a, b) => (b[1].entree + b[1].sortie + b[1].img_s) - (a[1].entree + a[1].sortie + a[1].img_s) || b[1].claude - a[1].claude);
+  apresRendu.push(() => document.querySelectorAll("[data-conso-p]").forEach(b => b.addEventListener("click", () => { CONSO_P = b.dataset.consoP; rendre(); })));
+  apresRendu.push(() => $("consoMaj") && $("consoMaj").addEventListener("click", () => { CONSO.vieux = true; rendre(); }));
+  return tete + `<nav class="jours" aria-label="Période">${Object.entries(P).map(([c, [t]]) =>
+      `<button type="button" data-conso-p="${c}"${c === CONSO_P ? ' aria-current="true"' : ""}>${t}</button>`).join("")}</nav>
+    <p class="petit discret" style="margin:4px 0 12px">Tokens envoyés → reçus. ${CONSO.charge ? "Mise à jour…" : `<button type="button" class="lien" id="consoMaj">Actualiser</button>`}</p>
+    ${bloc("Tous les comptes", total)}
+    ${comptes.length ? comptes.map(([qui, x]) => bloc(qui, x)).join("") : `<p class="petit discret">Aucun appel sur cette période.</p>`}`;
 }
 function vueProfils() {
   barre("");
@@ -2766,7 +2827,7 @@ function vueJourSuivi(params) {
       <ul class="rp-liste">${idees.plats.map((x, i) => `<li><button type="button" class="rp-plat" data-idee="${i}">${photo(recette(x.id), 120, "carre")}
         <span class="rp-texte"><b>${esc(x.nom)}</b>${macrosLigne(x.kcal, x.prot)}</span>
         ${o.kcal && Math.abs(x.kcal_jour - o.kcal) <= o.kcal * 0.05 && x.prot_jour >= o.prot * 0.95 ? `<span class="rp-tient" title="Ta journée tient l'objectif">${icone("check")}</span>` : ""}</button></li>`).join("")}</ul></details>` : ""}
-    ${ici && courante && !jp.retire && ici.n <= rangDuJour(ici.s) && jp.cuisine.some(c => !fait(ici.s, ici.n, c.id)) ? `<div class="m-actions bas">
+    ${ici && courante && !jp.retire && ici.n <= rangDuJour(ici.s) && (jp.cuisine.some(c => !fait(ici.s, ici.n, c.id)) || (jp.dej_reste && !fait(ici.s, ici.n, jp.dej))) ? `<div class="m-actions bas">
       <button class="bouton second" data-action="journee" data-jour="${ici.n}">${icone("check")}Tout mangé</button></div>` : ""}</div>`;
 }
 // Un plat de l'historique, en carte comme sur l'écran Jour : le toucher ouvre sa carte avec les chiffres de CE jour-là.
@@ -3610,7 +3671,7 @@ function vueConnexion(erreur = "") {
 const VUES = { semaine: vueSemaine, plat: vuePlat, courses: vueCourses, cuisine: a => a.arg ? vueRecette(a) : vueCuisine(a),
                plus: vuePlus, avancement: vueAvancement, budget: vueBudget, vitamines: vueVitamines, profil: vueProfil, profils: vueProfils,
                nouveau: vueNouveau, stock: vueStock, catalogue: vueCatalogue, journal: vueJournal, reglages: vueReglages, suivi: vueSuivi,
-               historique: vueHistorique };
+               historique: vueHistorique, conso: vueConso };
 let derniereAdresse = "", adressePrecedente = "";
 // Revenir d'un pas (Taha, 22/11/2026 : « le retour remet à la première page ») : la page d'où l'on vient garde sa
 // position, et une page ouverte depuis la carte d'un plat (« Voir la recette ») ramène sur cette carte.
@@ -3630,7 +3691,7 @@ function rendre() {
   apresRendu = [];
   const NOMS = { semaine: "", plat: "Plat", courses: "Courses", cuisine: "Cuisine", plus: "Plus", catalogue: "Catalogue", avancement: "Avancement",
                  budget: "Budget", vitamines: "Vitamines", stock: "Stock", journal: "Journal de l'appli", profil: "Mon profil", profils: "Profils",
-                 nouveau: "Nouveau profil", reglages: "Réglages", suivi: "Mon suivi", historique: "Historique" };
+                 nouveau: "Nouveau profil", reglages: "Réglages", suivi: "Mon suivi", historique: "Historique", conso: "Suivi de conso" };
   const fin = r.arg && recette(r.arg) ? recette(r.arg).nom : "";
   $("fil").innerHTML = [NOMS[r.vue], fin].filter(Boolean).map(t => `<span>/</span><span>${esc(t)}</span>`).join("");
   $("pucePhase").textContent = `Phase ${E.phase.n} · ${E.phase.nom}`;

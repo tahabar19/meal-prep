@@ -100,3 +100,8 @@ create table if not exists public.essais_connexion (
 );
 alter table public.essais_connexion enable row level security;
 create index if not exists essais_connexion_cle_quand on public.essais_connexion (cle, quand desc);
+-- Consommation par appel (Taha, 23/11/2026 : page « Suivi de conso », pour juger la facturation)
+alter table public.usage_claude add column if not exists modele text;
+alter table public.usage_claude add column if not exists tokens_entree integer;
+alter table public.usage_claude add column if not exists tokens_sortie integer;
+alter table public.usage_claude add column if not exists cle text;   -- 'perso' (sa clé), 'partagee' (celle de l'appli), 'gemini'

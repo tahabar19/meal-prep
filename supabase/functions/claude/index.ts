@@ -33,14 +33,19 @@ const SITES = [/(^|\.)openfoodfacts\.org$/, /^www\.auchan\.fr$/, /(^|\.)foodiesf
                /^(commons|upload)\.wikimedia\.org$/, /(^|\.)staticflickr\.com$/,
                /^pub-aaa82e9851064d22b954c3ebbafc9ae6\.r2\.dev$/];   // les images de Foodiesfeed
 
-async function quota(admin: any, uid: string, action: string): Promise<boolean> {
+async function quota(admin: any, uid: string, action: string): Promise<number> {
   const [heure, jour] = QUOTAS[action] || [20, 100];
   const compte = async (ms: number) => (await admin.from("usage_claude").select("id", { count: "exact", head: true })
     .eq("user_id", uid).eq("action", action).gte("quand", new Date(Date.now() - ms).toISOString())).count ?? 0;
-  if (await compte(3600e3) >= heure || await compte(86400e3) >= jour) return false;
-  await admin.from("usage_claude").insert({ user_id: uid, action });
-  return true;
+  if (await compte(3600e3) >= heure || await compte(86400e3) >= jour) return 0;
+  const { data } = await admin.from("usage_claude").insert({ user_id: uid, action }).select("id").maybeSingle();
+  return data?.id || -1;                                       // l'appel noté : ses tokens s'y ajoutent ensuite
 }
+// Les tokens d'un appel, pour la page « Suivi de conso » de l'admin (Taha, 23/11/2026). Jamais bloquant.
+async function noter(admin: any, id: number, champs: Record<string, unknown>) {
+  if (id > 0) await admin.from("usage_claude").update(champs).eq("id", id).then(() => {}, () => {});
+}
+const ADMINS = ["taha"];                                       // voient la conso de tous les comptes
 
 // Une adresse publique en https, jamais le réseau interne
 function adressePublique(brut: unknown, message = "Cette adresse n'est pas autorisée."): URL {
@@ -179,7 +184,7 @@ function vaisselle(nom: string, cat: string): string {
   if (cat === "collation") return "Dans une petite assiette en céramique gris anthracite mat.";
   return "Dans une assiette en céramique gris anthracite mat, une seule portion.";
 }
-async function imagePlat(corps: any): Promise<{ base64: string; type: string }> {
+async function imagePlat(corps: any): Promise<{ base64: string; type: string; usage: any; modele: string }> {
   const cle = Deno.env.get("GEMINI_API_KEY");
   if (!cle) throw new Error("Pas de clé Gemini.");
   const nom = propre(corps.nom, 80), cat = propre(corps.cat, 20);
@@ -197,7 +202,7 @@ async function imagePlat(corps: any): Promise<{ base64: string; type: string }> 
   if (!r.ok) throw new Error("Gemini : " + (d?.error?.message || r.status));
   const morceau = (d?.candidates?.[0]?.content?.parts || []).find((x: any) => x.inlineData?.data);
   if (!morceau) throw new Error("Gemini n'a pas rendu d'image.");
-  return { base64: morceau.inlineData.data, type: morceau.inlineData.mimeType || "image/png" };
+  return { base64: morceau.inlineData.data, type: morceau.inlineData.mimeType || "image/png", usage: d?.usageMetadata || {}, modele };
 }
 
 Deno.serve(async (req) => {
@@ -215,8 +220,25 @@ Deno.serve(async (req) => {
       if (!moi || moi.identifiant.startsWith("zz-")) return json({ erreur: "Pas d'images pour ce compte.", sans_cle: true }, 400);
       if (!Deno.env.get("GEMINI_API_KEY")) return json({ erreur: "Pas de clé Gemini.", sans_cle: true }, 400);
     }
-    if (["web", "web_lot", "cle", "messages", "image"].includes(corps.action) && !(await quota(admin, user.id, corps.action === "web_lot" ? "web" : corps.action)))
+    let appel = 0;
+    if (["web", "web_lot", "cle", "messages", "image"].includes(corps.action) && !(appel = await quota(admin, user.id, corps.action === "web_lot" ? "web" : corps.action)))
       return json({ erreur: "Trop de demandes pour l'instant : réessaie dans un moment." }, 429);
+
+    // ---------- La conso de chaque compte : pour l'admin seulement ----------
+    if (corps.action === "conso") {
+      const { data: moi } = await admin.from("profils").select("identifiant").eq("id", user.id).maybeSingle();
+      if (!moi || !ADMINS.includes(moi.identifiant)) return json({ erreur: "Réservé à l'admin." }, 403);
+      const { data: profils } = await admin.from("profils").select("id, identifiant");
+      const lignes: any[] = [];
+      for (let de = 0; de < 50000; de += 1000) {               // tout l'historique, par pages de 1 000
+        const { data, error } = await admin.from("usage_claude").select("user_id, quand, action, modele, tokens_entree, tokens_sortie, cle")
+          .order("id").range(de, de + 999);
+        if (error) return json({ erreur: error.message }, 500);
+        lignes.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      return json({ profils, lignes });
+    }
 
     if (corps.action === "web") {
       try { return json(await lire(String(corps.url || ""), !!corps.binaire)); }
@@ -231,7 +253,12 @@ Deno.serve(async (req) => {
     }
 
     if (corps.action === "image") {
-      try { return json(await imagePlat(corps)); }
+      try {
+        const r = await imagePlat(corps);
+        await noter(admin, appel, { modele: r.modele, cle: "gemini", tokens_entree: r.usage.promptTokenCount ?? null,
+                                    tokens_sortie: r.usage.candidatesTokenCount ?? null });
+        return json({ base64: r.base64, type: r.type });
+      }
       catch (e) { return json({ erreur: (e as Error).message }, 502); }
     }
 
@@ -265,7 +292,8 @@ Deno.serve(async (req) => {
     }
 
     if (corps.action === "messages") {
-      const k = (await connexionDe(admin, user.id)) || (await connexionPartagee(admin, user.id));
+      const propre = await connexionDe(admin, user.id);
+      const k = propre || (await connexionPartagee(admin, user.id));
       if (!k) return json({ erreur: "Connecte d'abord ton compte Claude (Réglages).", sans_cle: true }, 400);
       let blocs: any[];
       try { blocs = contenu(corps.contenu); } catch (e) { return json({ erreur: (e as Error).message }, 400); }
@@ -279,6 +307,10 @@ Deno.serve(async (req) => {
       try {
         const c = client(k as Connexion);
         const r: any = await c.messages.create(demande);
+        const u = r.usage || {};
+        await noter(admin, appel, { modele: r.model || modele, cle: propre ? "perso" : "partagee",
+          tokens_entree: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0),
+          tokens_sortie: u.output_tokens ?? null });
         if (r.stop_reason === "refusal") return json({ erreur: "Claude a refusé de répondre à cette demande." }, 400);
         const texte = (r.content || []).filter((b: any) => b.type === "text").map((b: any) => b.text).join("");
         const objet = /\{[\s\S]*\}/.exec(texte);
