@@ -1497,3 +1497,39 @@ html:has(.carte-fond.ouvert){background:#060706}
   #contenu .m-actions .bouton,#contenu .vide .bouton,#contenu .formulaire .bouton,#contenu .actions .bouton,#contenu .bouton.large{font-size:.875rem;min-height:44px}
   #contenu .jour-histo > summary b{font-size:.9375rem;font-weight:650}
 }
+/* Passe « élégance » (Taha, 23/11/2026 : filtres, carte des manquants, fenêtres trop grandes) */
+.manque-feuille{position:relative;width:min(100%,330px);padding:18px 18px 10px;border-radius:20px;background:var(--surface);box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.manque-sur{margin:0 34px 2px 0;color:var(--discret);font-size:.72rem;letter-spacing:.04em;text-transform:uppercase}
+.manque-feuille h3{margin:0 34px 10px 0;font-size:.95rem;font-weight:600;line-height:1.3}
+.manque-x{position:absolute;top:12px;right:12px;display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:50%;background:var(--surface-fort);color:var(--texte);cursor:pointer}
+.manque-x .ic{width:15px;height:15px}
+.manque-lignes{list-style:none;margin:0;padding:0}
+.manque-lignes li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--filet-doux);font-size:.84rem;color:var(--encre)}
+.manque-lignes .q{color:var(--discret);white-space:nowrap}
+@media (max-width:899px){
+  /* Catalogue : la boîte Filtres plus fine */
+  #contenu .filtres{margin:8px 0 12px;padding:6px 14px 10px}
+  #contenu .filtres-bascule{min-height:38px;font-size:.875rem}
+  #contenu .filtres .bouton.sobre{min-height:32px;padding:0 10px;font-size:.78rem}
+  #contenu .filtre-groupe{padding:8px 0;gap:6px}
+  #contenu .filtre-nom{font-size:.68rem}
+  #contenu .filtres .puces button,#contenu .filtre-groupe button{min-height:32px;padding:0 12px;font-size:.8rem}
+  #contenu .tri{display:flex;align-items:center;gap:10px;margin:6px 0 0;padding-top:8px;border-top:1px solid var(--filet-doux)}
+  #contenu .tri label{margin:0;font-size:.8rem;color:var(--discret);white-space:nowrap}
+  #contenu .tri select{min-height:36px;height:36px;padding:0 10px;font-size:.84rem}
+  #contenu .champ.formulaire > label[for="filtre"]{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  #contenu .champ.formulaire > input#filtre{min-height:42px;height:42px;font-size:.9rem}
+  /* Les fenêtres du bas (Ajouter, Modifier les ingrédients…) : vignettes et boutons à l'échelle du reste */
+  #dialogue .candidat{grid-template-columns:52px minmax(0,1fr) 18px;gap:12px;padding:9px 0}
+  #dialogue .candidat .photo{width:52px;border-radius:10px}
+  #dialogue .candidat b{font-size:.875rem}
+  #dialogue .candidat .chiffres,#dialogue .candidat .texte small{font-size:.75rem}
+  #dialogue .candidat .texte small{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  #dialogue .candidat b{-webkit-line-clamp:1}
+  #dialogue .bouton{min-height:44px;font-size:.875rem}
+  #dialogue h2{font-size:1.1rem}
+  /* Vitamines : le rappel « à compléter » sur une ligne, comme sur Jour */
+  #contenu .a-completer > summary,#contenu .a-completer > summary span{font-size:.8125rem;font-weight:500}
+  /* Suivi : champs moins hauts */
+  #contenu .formulaire input:not([type=checkbox]):not([type=radio]),#contenu .formulaire select{min-height:42px}
+}
