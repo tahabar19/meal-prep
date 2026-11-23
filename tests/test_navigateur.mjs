@@ -686,6 +686,14 @@ try {
     for (const mot of ['objectif', 'compte', 'même plat midi et soir']) vrai(new RegExp(mot, 'i').test(t), `« ${mot} » absent des Réglages`);
     vrai(await B.js(`document.querySelectorAll('.reglages .bloc.pliable:not(.ouvert)').length >= 4`), 'les rubriques ne sont pas repliées');
     vrai(await B.js(`document.documentElement.scrollHeight < 1400`), 'la page Réglages est encore trop longue');
+    // « Mon alimentation » se replie ; « autre chose à éviter » : un aliment avec +, une pastille qu'on retire (Taha, 23/11/2026).
+    vrai(await B.js(`!!document.querySelector('#tRepas .reg-tete')`), '« Mon alimentation » ne se replie pas');
+    await B.js(`document.querySelector('#tRepas .reg-tete').click()`); await att(200);
+    await B.js(`(i => { i.value = 'kiwi'; document.querySelector('.regime-plus').click(); })(document.querySelector('.regime-ajout input'))`);
+    vrai(await attendre(`[...document.querySelectorAll('.regime-autre')].some(b => /Kiwi/.test(b.textContent))`, 15000) >= 0, 'l\'aliment à éviter n\'apparaît pas');
+    await B.photo('reglages-alimentation');
+    await B.js(`[...document.querySelectorAll('.regime-autre')].find(b => /Kiwi/.test(b.textContent)).click()`);
+    vrai(await attendre(`![...document.querySelectorAll('.regime-autre')].some(b => /Kiwi/.test(b.textContent))`, 15000) >= 0, 'l\'aliment à éviter ne se retire pas');
     await B.js(`document.querySelectorAll('.reg-tete').forEach(b => b.closest('section').classList.contains('ouvert') || b.click())`); await att(300);
     vrai(await debordement() <= 0, 'la page Réglages déborde sur le côté');
     vrai(await attendre(`!!document.getElementById('fCoord') && !document.getElementById('fCoord').hidden`, 10000) >= 0, 'pas d\'email / téléphone dans Mon compte');

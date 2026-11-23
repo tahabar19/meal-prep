@@ -39,6 +39,15 @@ const Graph = (() => {
     bulle.style.left = `${Math.max(0, Math.min(max - l, x - l / 2))}px`;
     bulle.style.top = `${Math.max(0, y - bulle.offsetHeight - 12)}px`;
   }
+  // Ce que montre le graphique, sous lui (Taha, 23/11/2026 : « dis calories, jour… pour que le user comprenne ») :
+  // chaque ligne avec sa couleur et son trait, puis ce que disent les axes.
+  function legende(hote, items, axes) {
+    const p = document.createElement("p");
+    p.className = "graph-legende";
+    p.innerHTML = items.map(x => `<span><i class="${x.pointille ? "gl-pointille" : x.barre ? "gl-barre" : "gl-trait"}" style="--c:${x.couleur}"></i>${x.nom}</span>`).join("")
+      + (axes ? `<small>${axes}</small>` : "");
+    hote.appendChild(p);
+  }
   function vide(hote, texte) {
     hote.classList.add("graph");
     hote.innerHTML = `<p class="graph-vide">${texte}</p>`;
@@ -46,11 +55,12 @@ const Graph = (() => {
 
   // Courbes dans le temps. series = [{ nom, couleur, points: [{ x: 'AAAA-MM-JJ', y }], pointille, marques }]
   // yMin / yMax : le bas et le haut de l'axe (Taha, 20/11/2026 : 500 kcal sous la journée la plus basse, 200 au-dessus de la plus haute).
-  function courbes(hote, { series, unite = "", hauteur = 220, aujourdhui = null, videTexte = "Pas encore de données.", titre = "", decimales = 0, yMin = null, yMax = null }) {
+  function courbes(hote, { series, unite = "", hauteur = 220, aujourdhui = null, videTexte = "Pas encore de données.", titre = "", decimales = 0, yMin = null, yMax = null,
+                           axeX = "le jour du mois" }) {
     const tous = series.flatMap(s => s.points);
     if (!tous.length) return vide(hote, videTexte);
     const { svg, bulle, L, H } = cadre(hote, hauteur, titre);
-    const m = { g: 48, d: 16, h: 14, b: 26 };
+    const m = { g: 48, d: 16, h: 22, b: 26 };
     const xs = tous.map(p => +new Date(p.x)), ys = tous.map(p => p.y);
     let x0 = Math.min(...xs), x1 = Math.max(...xs);
     if (x0 === x1) { x0 -= 864e5 * 3; x1 += 864e5 * 3; }
@@ -92,6 +102,9 @@ const Graph = (() => {
                    ...(s.pointille ? { "stroke-dasharray": "5 6" } : {}) }, svg);
       if (s.marques) for (const p of s.points) el("circle", { cx: X(p.x), cy: Y(p.y), r: 4, fill: s.couleur, class: "marque" }, svg);
     }
+    if (unite) el("text", { x: m.g - 8, y: 9, class: "axe unite", "text-anchor": "end" }, svg).textContent = unite;
+    legende(hote, series.filter(s => s.points.length).map(s => ({ nom: s.nom, couleur: s.couleur, pointille: s.pointille })),
+            `${unite ? `Hauteur : ${unite}` : ""}${unite && axeX ? " · " : ""}${axeX ? `en bas : ${axeX}` : ""}`);
     const fil = el("line", { y1: m.h, y2: H - m.b, class: "reticule", visibility: "hidden" }, svg);
     const zone = el("rect", { x: m.g, y: m.h, width: L - m.g - m.d, height: H - m.h - m.b, fill: "transparent" }, svg);
     // Souris : la valeur au survol ; téléphone : toucher un point montre sa valeur, qui reste affichée (Taha, 20/11/2026).
@@ -122,10 +135,10 @@ const Graph = (() => {
 
   // Barres. donnees = [{ etiquette, valeur, detail, couleur, choisi }] ; cible = trait pointillé (objectif).
   function barres(hote, { donnees, couleur = "var(--s1)", unite = "", hauteur = 200, cible = null, nomCible = "objectif",
-                          decimales = 0, videTexte = "Pas encore de données.", titre = "" }) {
+                          decimales = 0, videTexte = "Pas encore de données.", titre = "", nom = "", axeX = "le jour" }) {
     if (!donnees.length) return vide(hote, videTexte);
     const { svg, bulle, L, H } = cadre(hote, hauteur, titre);
-    const m = { g: 44, d: 8, h: 14, b: 26 };
+    const m = { g: 44, d: 8, h: 22, b: 26 };
     const max = Math.max(...donnees.map(d => d.valeur), cible || 0, 1);
     const grad = graduations(0, max * 1.12, 3), haut = Math.max(grad[grad.length - 1] || 0, max * 1.12);   // le plus haut reste dans le cadre
     const pas = (L - m.g - m.d) / Math.max(donnees.length, 6), larg = Math.min(38, pas - 6);
@@ -149,6 +162,9 @@ const Graph = (() => {
       });
       zone.addEventListener("pointerleave", () => { b.classList.remove("survol"); bulle.hidden = true; });
     });
+    if (unite) el("text", { x: m.g - 8, y: 9, class: "axe unite", "text-anchor": "end" }, svg).textContent = unite;
+    legende(hote, [...(nom ? [{ nom, couleur, barre: true }] : []), ...(cible ? [{ nom: nomCible, couleur: "var(--texte)", pointille: true }] : [])],
+            `${unite ? `Hauteur : ${unite}` : ""}${unite && axeX ? " · " : ""}${axeX ? `en bas : ${axeX}` : ""}`);
     if (cible) {
       el("line", { x1: m.g, x2: L - m.d, y1: Y(cible), y2: Y(cible), class: "cible" }, svg);
       el("text", { x: L - m.d, y: Y(cible) - 6, class: "etiquette", "text-anchor": "end" }, svg).textContent = `${nomCible} ${nb(cible, decimales)}`;
