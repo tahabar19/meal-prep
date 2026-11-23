@@ -1768,3 +1768,4 @@ button.stock-nom .ic{width:15px;height:15px;flex:none}
 .puce-choix input:checked + span{border-color:rgba(200,240,75,.6);background:rgba(200,240,75,.1);color:var(--encre)}
 .puce-choix input:focus-visible + span{outline:2px solid var(--accent);outline-offset:2px}
 .regime input[type=text]{margin-top:4px}
+.stock-proposes{padding:0;margin:-12px 0 18px}

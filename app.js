@@ -2775,9 +2775,9 @@ function vueStockMaison({ params } = {}) {
   // Deux rubriques (Taha, 23/11/2026 : « ajoute une rubrique courses dans stock pour t'aider à t'organiser »).
   const courses = !!(params && params.get && params.get("v") === "courses"), nl = (E.liste_courses || []).length;
   const onglets = `<nav class="stock-onglets" aria-label="Stock">
-      <a href="#/stock"${courses ? "" : ' aria-current="page"'}>Chez moi</a>
+      <a href="#/stock"${courses ? "" : ' aria-current="page"'}>Mon stock</a>
       <a href="#/stock?v=courses"${courses ? ' aria-current="page"' : ""}>Courses${nl ? `<span>${nl}</span>` : ""}</a></nav>`;
-  if (courses) return `<div class="m-tete"><div><h1 tabindex="-1">Mon stock</h1></div></div>${onglets}${vueCourses()}`;
+  if (courses) return `<div class="m-tete"><div><h1 tabindex="-1">Stock</h1></div></div>${onglets}${vueCourses()}`;
   const st = E.stock || [], voulus = motsStock(filtreStock), rayons = rayonsDesIngredients(), groupes = new Map();
   // Tous les ingrédients des plats sont là, à 0 et grisés tant que tu n'en as pas ; 0 n'efface rien (Taha, 23/11/2026).
   const unites = {};
@@ -2800,7 +2800,11 @@ function vueStockMaison({ params } = {}) {
   const barreStock = `<form class="rp-recherche champ-ia stock-taper" id="fStockTaper" novalidate>${icone("sparkle")}
       <input id="filtre" name="filtre" type="search" enterkeyhint="go" autocomplete="off" maxlength="600" value="${esc(filtreStock)}"
         placeholder="Chercher ou ajouter : riz, 6 œufs…" aria-label="Chercher dans ton stock, ou ajouter ce que tu as acheté" aria-describedby="stockAide"></form>
-    <p class="stock-aide" id="stockAide" aria-live="polite">${!voulus.length ? "" : !trouves.some(l => l.quantite > 0)
+    ${(() => {
+      // Plus de liste « À ajouter » (Taha, 23/11/2026) : on tape, l'appli propose, comme dans Courses.
+      const proposes = voulus.length ? trouves.filter(l => !(l.quantite > 0)).slice(0, 8) : [];
+      return proposes.length ? `<div class="stock-puces stock-proposes">${proposes.map(l => `<button type="button" class="stock-puce" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="0" aria-label="Ajouter ${esc(l.nom)} au stock">${esc(l.nom)}${icone("plus")}</button>`).join("")}</div>` : ""; })()}
+    <p class="stock-aide" id="stockAide" aria-live="polite">${!voulus.length ? "" : !trouves.length
       ? `« ${esc(filtreStock.trim())} » n'est pas dans ton stock : <button type="submit" form="fStockTaper" class="lien">l'ajouter</button>`
       : /\d/.test(filtreStock) ? `Entrée pour ajouter « ${esc(filtreStock.trim())} » à ton stock.` : ""}</p>
     <small class="erreur" id="eStockTaper" role="alert"></small>`;
@@ -2811,7 +2815,7 @@ function vueStockMaison({ params } = {}) {
       <button type="button" class="bouton sobre" data-action="lacherIngs" aria-label="Tout désélectionner">${icone("x")}</button>
       ${n ? `<button type="button" class="bouton" data-action="voirPlatsIngs">Voir les plats</button>` : ""}`);
   }
-  return `<div class="m-tete"><div><h1 tabindex="-1">Mon stock</h1>
+  return `<div class="m-tete"><div><h1 tabindex="-1">Stock</h1>
       ${onglets}
       <p class="petit discret">${st.length ? `${st.length} produit${st.length > 1 ? "s" : ""} à la maison. Ce que tu marques mangé en sort tout seul.` : "Ajoute ce que tu as chez toi : l'appli te propose des repas avec."}</p></div></div>
     ${ajout}
@@ -2830,16 +2834,11 @@ function vueStockMaison({ params } = {}) {
           <button type="button" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Plus de ${esc(l.nom)}">+</button></span></li>`;
       apresRendu.push(() => document.querySelectorAll("details[data-rayon]").forEach(d => d.addEventListener("toggle", () =>
         d.open ? STOCK_OUVERTS.add(d.dataset.rayon) : STOCK_OUVERTS.delete(d.dataset.rayon))));
-      return `<h2 class="stock-titre">Chez toi <span>${chez.length}</span></h2>
-      ${chez.length ? `<p class="petit discret stock-astuce">Touche un produit pour voir les plats qui en ont (un lait à finir, par exemple).</p>
+      return `${chez.length ? `<p class="petit discret stock-astuce">Touche un produit pour voir les plats qui en ont (un lait à finir, par exemple).</p>
       <div class="stock-rayons">${parRayon(chez).map(([g, lignes]) => `<details class="stock-rayon stock-chez" data-rayon="chez|${esc(g)}"${voulus.length || STOCK_OUVERTS.has("chez|" + g) || lignes.some(l => ING_CHOISIS.has(l.nom)) ? " open" : ""}>
         <summary><span class="sr-nom">${esc(g)}</span><small>${lignes.length}</small>${icone("caret-right")}</summary>
         <ul class="stock-liste">${lignes.map(ligne).join("")}</ul></details>`).join("")}</div>`
-        : `<p class="petit discret stock-vide">${voulus.length ? "Rien de cela chez toi." : "Rien pour l'instant : ajoute avec une photo, un ticket, la barre, ou touche un ingrédient juste en dessous."}</p>`}
-      ${reste.length ? `<h2 class="stock-titre">À ajouter <span>${reste.length}</span></h2><p class="petit discret stock-astuce">Touche un ingrédient pour l'ajouter, puis règle sa quantité.</p>
-      <div class="stock-rayons">${parRayon(reste).map(([g, lignes]) => `<details class="stock-rayon" data-rayon="${esc(g)}"${voulus.length || STOCK_OUVERTS.has(g) ? " open" : ""}>
-        <summary><span class="sr-nom">${esc(g)}</span><small>${lignes.length}</small>${icone("caret-right")}</summary>
-        <div class="stock-puces">${lignes.map(l => `<button type="button" class="stock-puce" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="0" aria-label="Ajouter ${esc(l.nom)} au stock">${esc(l.nom)}${icone("plus")}</button>`).join("")}</div></details>`).join("")}</div>` : ""}`;
+        : `<p class="petit discret stock-vide">${voulus.length ? "" : "Ton stock est vide : tape un produit, ou prends en photo ton frigo ou un ticket."}</p>`}`;
     })()}`;
 }
 const STOCK_OUVERTS = new Set();
@@ -2863,7 +2862,7 @@ function vueCourses() {
   const idees = `<section class="bloc lc-idees" aria-labelledby="tIdees"><h2 id="tIdees">${icone("sparkle")}Des idées</h2>
       ${aStock ? `<p class="lc-aide">Les produits qui te permettent de cuisiner le plus de plats avec ce que tu as déjà.</p>
       <div class="lc-remplir">${nb}<button type="button" class="bouton${l.length ? " second" : ""}" data-action="lcRemplir">${l.length ? "Ajouter à ma liste" : "Remplir ma liste"}</button></div>`
-      : `<p class="lc-aide">Ajoute d'abord ce que tu as dans « Chez moi » : l'appli te dira quoi acheter pour cuisiner plus.</p>`}</section>`;
+      : `<p class="lc-aide">Ajoute d'abord ce que tu as dans « Mon stock » : l'appli te dira quoi acheter pour cuisiner plus.</p>`}</section>`;
   // Ajouter à la main : les ingrédients de l'appli qui commencent par ce qu'on tape.
   const mots = motsStock(filtreCourses), tous = Object.keys(rayonsDesIngredients()).sort((a, b) => a.localeCompare(b, "fr"));
   const trouves = mots.length ? tous.filter(n => !l.some(x => x.nom === n) && mots.every(m => motsStock(n).some(k => k.startsWith(m)))).slice(0, 8) : [];
@@ -2883,7 +2882,7 @@ function vueCourses() {
     ${l.length ? `${[...groupes.entries()].sort(([a], [b]) => (a === "Autres") - (b === "Autres") || a.localeCompare(b, "fr")).map(([g, xs]) =>
         `<h3 class="lc-rayon">${esc(g)}</h3><ul>${xs.map(ligne).join("")}</ul>`).join("")}
       <button type="button" class="bouton large" id="lcValider" data-action="lcValider"${LC_COCHES.size ? "" : " disabled"}>${lcTexte()}</button>
-      <p class="lc-aide lc-sous">Coche ce que tu as acheté : ça passe dans « Chez moi ».</p>` : `<p class="lc-aide">Ta liste est vide.</p>`}</section>`;
+      <p class="lc-aide lc-sous">Coche ce que tu as acheté : ça passe dans « Mon stock ».</p>` : `<p class="lc-aide">Ta liste est vide.</p>`}</section>`;
   return liste + idees;
 }
 
@@ -4231,7 +4230,7 @@ document.addEventListener("click", ev => {
     // Un ingrédient ajouté depuis « À ajouter » : 100 g, 100 ml ou 1 pièce, à régler ensuite.
     const premier = l.quantite === 0 && Number(pas.dataset.stockPas) > 0 ? pasStock(l) : null;
     return agir("/api/stock", { nom: pas.dataset.nom, unite: pas.dataset.unite, quantite: premier ?? Math.max(0, Math.round((l.quantite + Number(pas.dataset.stockPas) * pasStock(l)) * 10) / 10) },
-      premier ? `${pas.dataset.nom} ajouté : règle sa quantité dans « Chez toi ».` : ""); }
+      premier ? `${pas.dataset.nom} ajouté : règle sa quantité plus bas.` : ""); }
   const plat = ev.target.closest('a.repas[href^="#/plat/"], a.rp-plat[href^="#/plat/"]');
   if (plat && !ev.target.closest("#dialogue, .carte-fond")) {
     ev.preventDefault();
