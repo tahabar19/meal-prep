@@ -105,3 +105,128 @@ alter table public.usage_claude add column if not exists modele text;
 alter table public.usage_claude add column if not exists tokens_entree integer;
 alter table public.usage_claude add column if not exists tokens_sortie integer;
 alter table public.usage_claude add column if not exists cle text;   -- 'perso' (sa clé), 'partagee' (celle de l'appli), 'gemini'
+-- Mode famille (Taha, 23/11/2026) : un stock commun, les mêmes plats pour tous (chacun à ses quantités).
+-- On rejoint une famille avec son code ; le créateur accepte ou refuse la demande.
+create table if not exists public.familles (
+  id uuid primary key default gen_random_uuid(),
+  nom text not null check (length(nom) between 1 and 40),
+  code text unique not null,
+  createur uuid not null references auth.users(id) on delete cascade,
+  cree_le timestamptz not null default now()
+);
+create table if not exists public.membres_famille (
+  famille_id uuid not null references public.familles(id) on delete cascade,
+  user_id uuid not null unique references auth.users(id) on delete cascade,
+  statut text not null check (statut in ('attente', 'membre')),
+  demande_le timestamptz not null default now(),
+  primary key (famille_id, user_id)
+);
+create table if not exists public.fichiers_famille (
+  famille_id uuid not null references public.familles(id) on delete cascade,
+  nom text not null check (nom in ('stock.csv', 'mouvements.csv')),
+  contenu text not null,
+  maj timestamptz not null default now(),
+  primary key (famille_id, nom)
+);
+create table if not exists public.operations_famille (
+  id bigint generated always as identity primary key,
+  famille_id uuid not null references public.familles(id) on delete cascade,
+  auteur uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  quand timestamptz not null default now(),
+  operation jsonb not null
+);
+create index if not exists operations_famille_fam on public.operations_famille (famille_id, id);
+alter table public.familles enable row level security;
+alter table public.membres_famille enable row level security;
+alter table public.fichiers_famille enable row level security;
+alter table public.operations_famille enable row level security;
+
+create or replace function public.ma_famille() returns uuid language sql stable security definer set search_path = public as $$
+  select famille_id from public.membres_famille where user_id = auth.uid() and statut = 'membre'
+$$;
+drop policy if exists "famille lue par ses membres" on public.familles;
+create policy "famille lue par ses membres" on public.familles for select using (id = public.ma_famille());
+drop policy if exists "fichiers de la famille" on public.fichiers_famille;
+create policy "fichiers de la famille" on public.fichiers_famille for all
+  using (famille_id = public.ma_famille()) with check (famille_id = public.ma_famille());
+drop policy if exists "operations lues par la famille" on public.operations_famille;
+create policy "operations lues par la famille" on public.operations_famille for select using (famille_id = public.ma_famille());
+drop policy if exists "operations ecrites par un membre" on public.operations_famille;
+create policy "operations ecrites par un membre" on public.operations_famille for insert
+  with check (famille_id = public.ma_famille() and auteur = auth.uid());
+
+-- Tout le reste passe par ces fonctions (elles vérifient qui demande quoi).
+create or replace function public.famille_etat() returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare m record; f record;
+begin
+  select * into m from membres_famille where user_id = auth.uid();
+  if not found then return jsonb_build_object('famille', null); end if;
+  select * into f from familles where id = m.famille_id;
+  return jsonb_build_object('statut', m.statut, 'famille', jsonb_build_object('id', f.id, 'nom', f.nom,
+      'code', case when m.statut = 'membre' then f.code end, 'createur', f.createur = auth.uid(),
+      'createur_ident', (select identifiant from profils where id = f.createur)),
+    'membres', case when m.statut = 'membre' then (select coalesce(jsonb_agg(jsonb_build_object('id', mf.user_id,
+        'identifiant', p.identifiant, 'statut', mf.statut, 'createur', mf.user_id = f.createur, 'moi', mf.user_id = auth.uid())
+        order by mf.statut desc, mf.demande_le), '[]') from membres_famille mf join profils p on p.id = mf.user_id
+        where mf.famille_id = f.id and (mf.statut = 'membre' or f.createur = auth.uid())) end);
+end $$;
+
+create or replace function public.famille_creer(p_nom text, p_stock text, p_mouvements text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare fid uuid; c text;
+begin
+  if auth.uid() is null then raise exception 'Reconnecte-toi.'; end if;
+  if exists (select 1 from membres_famille where user_id = auth.uid()) then raise exception 'Tu fais déjà partie d''une famille.'; end if;
+  loop
+    c := 'FAM-' || (select string_agg(substr('ABCDEFGHJKMNPQRSTUVWXYZ23456789', 1 + floor(random() * 31)::int, 1), '') from generate_series(1, 4));
+    exit when length(c) = 8 and not exists (select 1 from familles where code = c);
+  end loop;
+  insert into familles (nom, code, createur) values (left(coalesce(nullif(trim(p_nom), ''), 'Ma famille'), 40), c, auth.uid()) returning id into fid;
+  insert into membres_famille (famille_id, user_id, statut) values (fid, auth.uid(), 'membre');
+  insert into fichiers_famille (famille_id, nom, contenu) values (fid, 'stock.csv', coalesce(p_stock, '')), (fid, 'mouvements.csv', coalesce(p_mouvements, ''));
+  return public.famille_etat();
+end $$;
+
+create or replace function public.famille_rejoindre(p_code text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare fid uuid;
+begin
+  if auth.uid() is null then raise exception 'Reconnecte-toi.'; end if;
+  if exists (select 1 from membres_famille where user_id = auth.uid()) then raise exception 'Tu fais déjà partie d''une famille, ou ta demande est en attente.'; end if;
+  select id into fid from familles where code = upper(trim(p_code));
+  if fid is null then raise exception 'Aucune famille avec ce code.'; end if;
+  insert into membres_famille (famille_id, user_id, statut) values (fid, auth.uid(), 'attente');
+  return public.famille_etat();
+end $$;
+
+create or replace function public.famille_repondre(p_user uuid, p_accepter boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare fid uuid;
+begin
+  select id into fid from familles where createur = auth.uid();
+  if fid is null then raise exception 'Seul le créateur de la famille accepte les demandes.'; end if;
+  if p_accepter then
+    update membres_famille set statut = 'membre' where famille_id = fid and user_id = p_user and statut = 'attente';
+  else
+    delete from membres_famille where famille_id = fid and user_id = p_user and user_id <> auth.uid();
+  end if;
+  return public.famille_etat();
+end $$;
+
+create or replace function public.famille_quitter() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare f record;
+begin
+  select fa.* into f from familles fa join membres_famille m on m.famille_id = fa.id where m.user_id = auth.uid();
+  if not found then return public.famille_etat(); end if;
+  if f.createur = auth.uid() then
+    delete from familles where id = f.id;            -- le créateur part : la famille est dissoute
+  else
+    delete from membres_famille where user_id = auth.uid();
+  end if;
+  return public.famille_etat();
+end $$;
+revoke all on function public.famille_creer(text, text, text), public.famille_rejoindre(text), public.famille_repondre(uuid, boolean),
+  public.famille_quitter(), public.famille_etat() from public, anon;
+grant execute on function public.famille_creer(text, text, text), public.famille_rejoindre(text), public.famille_repondre(uuid, boolean),
+  public.famille_quitter(), public.famille_etat(), public.ma_famille() to authenticated;

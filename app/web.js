@@ -3,7 +3,7 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-23-044934";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-23-045833";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const reponse = (status, corps) => new Response(JSON.stringify(corps), { status, headers: { "Content-Type": "application/json" } });
@@ -19,7 +19,8 @@ async function compte(action, corps = {}) {
 const PHOTOS_V = "202611230002";                                // change quand les photos du catalogue changent (construire.py)
 function urlPhoto(r, largeur) {
   const id = String(r.photo_de || r.id);              // une copie « Banane (2) » a la photo de l'original
-  if (id.startsWith("perso-")) return `${MP.url}/storage/v1/object/public/photos/${M.uid}/${encodeURIComponent(id)}.jpg?v=${r.photo}`;
+  // un plat reçu de la famille : sa photo est rangée chez le membre qui l'a créé (photo_uid)
+  if (id.startsWith("perso-")) return `${MP.url}/storage/v1/object/public/photos/${r.photo_uid || M.uid}/${encodeURIComponent(id)}.jpg?v=${r.photo}`;
   const l = [160, 480, 960].reduce((a, b) => (Math.abs(b - largeur) < Math.abs(a - largeur) ? b : a));
   return `photos/${encodeURIComponent(id)}-${l}.jpg?v=${PHOTOS_V}`;      // la version : de nouvelles photos se rechargent
 }
@@ -59,16 +60,29 @@ async function demarrerMoteur(session) {
   const { data: p, error } = await sb.from("profils").select("identifiant").eq("id", M.uid).single();
   if (error || !p) throw new Error("Ce compte n'a pas encore de profil.");
   M.ident = p.identifiant;
-  const [{ data: fichiers }, { data: objets }, { data: infos }] = await Promise.all([
+  const [{ data: fichiersPropres }, { data: objets }, { data: infos }, { data: fam }] = await Promise.all([
     sb.from("fichiers").select("nom, contenu").limit(5000),
     sb.storage.from("photos").list(M.uid, { limit: 1000 }),
     sb.functions.invoke("claude", { body: { action: "infos" } }).catch(() => ({ data: null })),
+    sb.rpc("famille_etat").then((r) => r, () => ({ data: null })),
   ]);
+  // Mode famille : le stock commun remplace le sien (le sien reste de côté, il revient si l'on quitte la famille).
+  M.familleEtat = fam || null;
+  M.famille = fam && fam.statut === "membre" ? fam : null;
+  M.familleMaj = {};
+  let fichiers = fichiersPropres || [];
+  if (M.famille) {
+    const { data: communs } = await sb.from("fichiers_famille").select("nom, contenu, maj").eq("famille_id", M.famille.famille.id);
+    for (const f of communs || []) M.familleMaj[f.nom] = f.maj;
+    fichiers = fichiers.filter((f) => !PARTAGES.includes(f.nom)).concat((communs || []).map(({ nom, contenu }) => ({ nom, contenu })));
+    try { M.familleDerniere = JSON.parse((fichiers.find((f) => f.nom === "famille.json") || {}).contenu || "{}").derniere || 0; } catch { M.familleDerniere = 0; }
+  }
   M.claude = infos && infos.propre ? infos.propre : infos && infos.partage ? { partage: true, modele: infos.modele } : null;
   M.temps = { supabase: Math.round(performance.now() - t0) };
   const ri = await envoyer({
     type: "init", version: VERSION, url: MP.url, anon: MP.anon, jeton: session.access_token, identifiant: M.ident,
-    reglages: { "repas.plat_perso_ia": !!M.claude },      // sans compte Claude : rien d'automatique, tout à la main
+    reglages: { "repas.plat_perso_ia": !!M.claude,       // sans compte Claude : rien d'automatique, tout à la main
+                "repas.famille": M.famille ? (M.famille.famille.createur ? "createur" : "membre") : "" },
     fichiers: fichiers || [],
     photos: (objets || []).filter((o) => o.name.endsWith(".jpg")).map((o) => ({ nom: "photos/" + o.name, maj: Date.parse(o.updated_at || o.created_at) || 0 })),
   });
@@ -79,9 +93,27 @@ async function demarrerMoteur(session) {
 
 function arreterMoteur() {
   if (M.worker) M.worker.terminate();
-  M.pret = null; M.prete = false; M.uid = null; M.ident = null; M.claude = null;
+  M.pret = null; M.prete = false; M.uid = null; M.ident = null; M.claude = null; M.famille = null; M.familleEtat = null;
   nouveauMoteur();
 }
+
+// Entrer dans une famille ou en sortir : le moteur repart avec le bon stock et le bon rôle (Taha, 23/11/2026).
+async function relancerMoteur() {
+  arreterMoteur();
+  await moteurPret();
+  if (typeof demarrer === "function") await demarrer();
+}
+// Au retour sur l'appli : le menu et le stock de la famille ont peut-être changé ; une demande a peut-être été acceptée.
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState !== "visible" || !M.prete) return;
+  try {
+    if (M.familleEtat && M.familleEtat.statut === "attente") {
+      const { data } = await sb.rpc("famille_etat");
+      if (data && data.statut === "membre") return relancerMoteur();
+      M.familleEtat = data;
+    } else if (M.famille && Date.now() - M.familleVue > 20000 && typeof demarrer === "function") demarrer();
+  } catch (e) { console.warn("famille", e); }
+});
 
 async function moteurPret() {
   if (M.pret) return M.pret;
@@ -145,6 +177,11 @@ async function sauver(ch) {
     } else if (c.retire) {
       if (/\.(jpe?g|png)$/.test(c.nom)) await sb.storage.from("photos").remove([`${M.uid}/${c.nom.replace(/^photos\//, "")}`]);
       else await sb.from("fichiers").delete().eq("user_id", M.uid).eq("nom", c.nom);
+    } else if (M.famille && PARTAGES.includes(c.nom)) {          // le stock commun de la famille
+      const maj = new Date().toISOString();
+      const { error } = await sb.from("fichiers_famille").upsert({ famille_id: M.famille.famille.id, nom: c.nom, contenu: c.texte, maj });
+      if (error) throw new Error("Enregistrement du stock commun impossible : " + error.message);
+      M.familleMaj[c.nom] = maj;
     } else {
       const { error } = await sb.from("fichiers").upsert({ user_id: M.uid, nom: c.nom, contenu: c.texte, maj: new Date().toISOString() });
       if (error) throw new Error("Enregistrement impossible : " + error.message);
@@ -170,8 +207,69 @@ async function taches() {
   enFond = false;
 }
 
+// ---------- Mode famille (Taha, 23/11/2026) ----------
+// Le stock commun est relu s'il a changé chez un autre membre ; les menus partagés par les autres sont appliqués
+// chez soi (mêmes plats, ses quantités) ; un menu composé par le créateur, ou un plat changé « pour toute la
+// famille », est partagé. Toujours dans la file du moteur, jamais en même temps qu'une requête.
+const PARTAGES = ["stock.csv", "mouvements.csv"];
+M.familleVue = 0;
+async function syncFamille(force) {
+  if (!M.famille || (!force && Date.now() - M.familleVue < 20000)) return;
+  M.familleVue = Date.now();
+  const fid = M.famille.famille.id;
+  const { data: f } = await sb.from("fichiers_famille").select("nom, maj").eq("famille_id", fid);
+  const neufs = (f || []).filter((x) => x.maj !== M.familleMaj[x.nom]).map((x) => x.nom);
+  if (neufs.length) {
+    const { data: c } = await sb.from("fichiers_famille").select("nom, contenu, maj").eq("famille_id", fid).in("nom", neufs);
+    if (c && c.length) {
+      await envoyer({ type: "fichiers", fichiers: c.map(({ nom, contenu }) => ({ nom, contenu })) });
+      for (const x of c) M.familleMaj[x.nom] = x.maj;
+    }
+  }
+  let q = sb.from("operations_famille").select("id, auteur, operation").eq("famille_id", fid);
+  // Nouveau dans la famille : seulement le dernier menu partagé, pas tout l'historique.
+  q = M.familleDerniere ? q.gt("id", M.familleDerniere).order("id").limit(30) : q.order("id", { ascending: false }).limit(1);
+  const { data: ops } = await q;
+  if (!ops || !ops.length) return;
+  for (const o of ops.sort((a, b) => a.id - b.id)) {
+    if (o.auteur !== M.uid) {
+      const r = await envoyer({ type: "requete", methode: "POST", chemin: "/api/famille/appliquer",
+        corps: JSON.stringify({ menu: o.operation, auteur: o.operation.auteur_ident || "" }) });
+      await sauver(r.ch);
+      if (r.r.status !== 200) console.warn("menu de la famille", r.r.corps);
+    }
+    M.familleDerniere = o.id;
+  }
+  await sb.from("fichiers").upsert({ user_id: M.uid, nom: "famille.json", contenu: JSON.stringify({ derniere: M.familleDerniere }), maj: new Date().toISOString() });
+  M.familleChange = true;
+}
+async function partagerMenu(params) {
+  if (!M.famille) return;
+  const r = await envoyer({ type: "requete", methode: "GET", chemin: "/api/famille/menu?" + new URLSearchParams(params).toString(), corps: "" });
+  if (r.r.status !== 200) return console.warn("partage du menu", r.r.corps);
+  const menu = { ...JSON.parse(r.r.corps), auteur_ident: M.ident, auteur_uid: M.uid };
+  if (!menu.jours.length) return;
+  const { data, error } = await sb.from("operations_famille").insert({ famille_id: M.famille.famille.id, operation: menu }).select("id").single();
+  if (error) return console.warn("partage du menu", error.message);
+  if (data && data.id > (M.familleDerniere || 0)) M.familleDerniere = data.id;
+}
+const aujourdhuiIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+
 async function versMoteur(methode, chemin, corps) {
-  const r = await (M.file = M.file.catch(() => {}).then(() => envoyer({ type: "requete", methode, chemin, corps })));
+  let partage = null;
+  try { partage = methode === "POST" && corps ? (JSON.parse(corps).famille || null) : null; } catch {}
+  const r = await (M.file = M.file.catch(() => {}).then(async () => {
+    try { await syncFamille(methode === "POST"); } catch (e) { console.warn("famille", e); }
+    const rep = await envoyer({ type: "requete", methode, chemin, corps });
+    // Ce qui vaut pour toute la famille : une composition du créateur, ou un plat changé « pour toute la famille ».
+    if (M.famille && rep.r.status === 200 && (partage || (rep.r.compose && M.famille.famille.createur))) {
+      try {
+        await sauver(rep.ch); rep.ch = [];
+        await partagerMenu(partage && partage.date ? { date: partage.date, moments: (partage.moments || []).join(",") } : { depuis: aujourdhuiIso() });
+      } catch (e) { console.warn("famille", e); }
+    }
+    return rep;
+  }));
   (M.mesures = M.mesures || []).push([chemin, r.r.ms]);
   await sauver(r.ch);
   setTimeout(taches, 50);
