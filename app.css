@@ -1788,3 +1788,53 @@ button.stock-nom .ic{width:15px;height:15px;flex:none}
 .stock-tous > summary .ic{width:16px;height:16px;margin-left:auto;color:var(--discret);transition:transform .15s}
 .stock-tous[open] > summary .ic{transform:rotate(90deg)}
 .stock-tous .stock-astuce{margin:0 0 10px}
+
+/* Produits choisis dans le stock : une carte flottante au-dessus des onglets, plutôt qu'une barre plate (Taha, 23/11/2026) */
+.barre:has(.bi){left:12px;right:12px;bottom:calc(var(--nav-bas) + var(--bas) + 10px);background:none;box-shadow:none;pointer-events:none}
+.barre:has(.bi) .barre-in{display:block;max-width:520px;padding:0}
+.bi{pointer-events:auto;display:grid;gap:12px;padding:14px;border-radius:var(--r-carte);background:var(--surface-fort);
+  border:1px solid var(--filet);box-shadow:0 12px 32px rgba(0,0,0,.55);animation:bi-entre .18s ease-out}
+@keyframes bi-entre{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.bi-tete{display:flex;align-items:center;gap:12px}
+.bi-tete > div{flex:1;min-width:0}
+.barre .bi-tete b{display:block;font-size:.95rem;font-weight:600;color:var(--encre)}
+.barre .bi-tete small{display:block;margin-top:1px;font-size:.78rem;color:var(--discret)}
+.bi-ic{flex:none;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--choisi);color:var(--accent)}
+.bi-ic .ic{width:18px;height:18px}
+.bi-vide .bi-ic{background:rgba(167,139,250,.14);color:#c4b5fd}
+.bi-x{flex:none;display:grid;place-items:center;width:36px;height:36px;margin:-4px -4px 0 0;border:0;border-radius:50%;background:none;color:var(--discret);cursor:pointer}
+.bi-x:hover{background:var(--survol);color:var(--encre)}
+.bi-x .ic{width:16px;height:16px}
+.bi-puces{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.bi-puce{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:0 10px 0 12px;border:1px solid var(--filet);border-radius:var(--r-pilule);
+  background:var(--surface);color:var(--texte);font:inherit;font-size:.8rem;cursor:pointer}
+.bi-puce .ic{width:12px;height:12px;opacity:.6}
+.bi-puce:hover{border-color:var(--discret)}
+.bi-ouvrir{border-style:dashed;color:var(--discret);padding:0 12px 0 10px}
+.barre .bi-ouvert{display:inline;font-size:.76rem;color:#e9bf6a;margin-left:2px}
+.bi-actions{display:flex;flex-wrap:wrap;gap:8px}
+.bi-actions .bouton{flex:1 1 auto;min-height:42px;font-size:.86rem}
+.bi-vide .bi-actions .bouton.second{flex:1 1 40%}
+.bi-vide .bi-actions .bouton-ia{flex:1 1 100%}
+@media (min-width:900px){.barre:has(.bi){bottom:16px}}
+body:has(.bi) main{padding-bottom:calc(var(--nav-bas) + var(--bas) + 190px)}
+/* un produit ouvert, dans la liste du stock */
+.st-ouvert{margin-left:6px;padding:0 6px;border-radius:var(--r-pilule);background:rgba(233,191,106,.12);color:#e9bf6a;font-style:normal;font-size:.68rem;vertical-align:1px}
+
+/* Filtres du catalogue plus élégants (Taha, 23/11/2026 : « pas élégant quand on y clique ») : une rangée qui défile par
+   groupe, nom au-dessus ; choisi = teinte douce + coche, sans gras ni contour épais (plus de saut au toucher). */
+#contenu .filtres{border:1px solid var(--filet-doux)}
+#contenu .filtre-groupe{display:block;padding:10px 0 8px;border-top:1px solid var(--filet-doux)}
+#contenu .filtre-nom{display:block;padding:0 0 7px;font-size:.66rem;font-weight:600;letter-spacing:.09em;color:var(--discret)}
+#contenu .filtre-groupe .gouts{flex-wrap:nowrap;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -14px;padding:0 14px 2px;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 24px),transparent)}
+#contenu .filtre-groupe .gouts::-webkit-scrollbar{display:none}
+#contenu .filtres .filtre-groupe button{flex:none;gap:5px;min-height:32px;padding:0 13px;border:1px solid var(--filet);border-radius:var(--r-pilule);
+  background:transparent;color:var(--texte);font-size:.8rem;font-weight:400;white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+#contenu .filtres .filtre-groupe button:hover{background:var(--survol)}
+#contenu .filtres .filtre-groupe button[aria-pressed="true"]{border-color:rgba(200,240,75,.5);background:rgba(200,240,75,.1);color:var(--encre);font-weight:400}
+#contenu .filtres .filtre-groupe button[aria-pressed="true"]::before{content:"";width:9px;height:5px;margin:-3px 1px 0 -2px;border:solid var(--accent);border-width:0 0 1.5px 1.5px;transform:rotate(-45deg)}
+#contenu .filtres .filtre-groupe #ingCat{min-height:36px;border-radius:var(--r-pilule);padding:0 14px;font-size:.84rem}
+/* le message passe au-dessus de la carte des produits choisis */
+.barre:has(.bi):not([hidden]) ~ .toast{bottom:calc(var(--nav-bas) + var(--bas) + 250px)}
+@media (min-width:900px){.barre:has(.bi):not([hidden]) ~ .toast{bottom:260px}}

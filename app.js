@@ -2642,6 +2642,7 @@ function boutonsGout(r) {
   return `<div class="gouts" role="group" aria-label="Ton avis sur ${esc(r.nom)}">
     ${r.nb_notes ? "" : bouton("tester", "check", "Je veux bien tester")}${bouton("non", "x", "J'aime pas")}</div>`;
 }
+const FILTRES_DEFIL = {};
 function vueCatalogue({ params }) {
   barre("");
   if (params.get && params.get("stock") === "1") { Object.assign(filtresCat, { stock: true, ouvert: true, debut: 0 }); history.replaceState(null, "", "#/catalogue"); }
@@ -2675,6 +2676,9 @@ function vueCatalogue({ params }) {
   const ici = repas.filter(r => !F.cats.size || F.cats.has(r.cat));
   const origines = [...new Set(ici.map(r => r.filtres.origine).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
   const proteines = PROTEINES.filter(([id]) => ici.some(r => r.filtres.proteine === id));
+  // Chaque rangée garde sa position quand on touche une puce (la page se redessine).
+  apresRendu.push(() => document.querySelectorAll(".filtre-groupe .gouts").forEach(g => { const k = g.getAttribute("aria-label");
+    g.scrollLeft = FILTRES_DEFIL[k] || 0; g.addEventListener("scroll", () => { FILTRES_DEFIL[k] = g.scrollLeft; }, { passive: true }); }));
   const groupe = (nom, puces) => puces ? `<div class="filtre-groupe"><span class="filtre-nom">${nom}</span><div class="gouts" role="group" aria-label="${nom}">${puces}</div></div>` : "";
   return `<div class="titre"><h1 tabindex="-1">Catalogue</h1>
     <p>${repas.length} recettes. Dis ce que tu veux bien tester et ce que tu n'aimes pas : l'appli en tient compte quand il compose ta semaine. ${nb("tester")} à tester, ${nb("non")} que tu n'aimes pas.</p></div>
@@ -2810,12 +2814,23 @@ function vueStockMaison({ params } = {}) {
     <small class="erreur" id="eStockTaper" role="alert"></small>`;
   for (const n of [...ING_CHOISIS]) if (!st.some(l => l.nom === n && l.quantite > 0)) ING_CHOISIS.delete(n);
   if (ING_CHOISIS.size) {
-    const n = platsAvec(ING_CHOISIS).length;
-    // Aucun plat avec tout ça : l'IA en invente un (Taha, 23/11/2026).
-    barre(`<div><b>${esc([...ING_CHOISIS].join(", "))}</b><span>${n ? `${n} plat${n > 1 ? "s" : ""} avec ${ING_CHOISIS.size > 1 ? "tout ça" : "ça"}` : "Aucun plat avec tout ça"}</span></div>
-      <button type="button" class="bouton sobre" data-action="lacherIngs" aria-label="Tout désélectionner">${icone("x")}</button>
-      ${n ? `<button type="button" class="bouton" data-action="voirPlatsIngs">Voir les plats</button>`
-        : `<button type="button" class="bouton bouton-ia" data-action="inventerPlat">${icone("sparkle")}Un plat avec l'IA</button>`}`);
+    // Une carte posée au-dessus des onglets (Taha, 23/11/2026 : « pas élégant ») : les produits choisis en pastilles
+    // qu'on retire d'un toucher, et quand rien ne va ensemble, le produit à enlever pour retrouver des plats.
+    const ch = [...ING_CHOISIS], n = platsAvec(ING_CHOISIS).length, pl = k => `${k} plat${k > 1 ? "s" : ""}`;
+    const sans = n ? [] : ch.map(x => ({ x, k: platsAvec(ch.filter(y => y !== x)).length })).filter(o => o.k && ch.length > 1)
+      .sort((a, b) => b.k - a.k).slice(0, 2);
+    const ouv = ch.length === 1 && E.ouverts && ch[0] in E.ouverts ? E.ouverts[ch[0]] : undefined;
+    barre(`<div class="bi${n ? "" : " bi-vide"}">
+      <div class="bi-tete"><span class="bi-ic">${icone(n ? "cooking-pot" : "sparkle")}</span>
+        <div><b>${n ? `${pl(n)} avec ${ch.length > 1 ? "ces produits" : "ça"}` : `Aucun plat avec ${ch.length > 1 ? `ces ${ch.length} produits` : "ce produit"}`}</b>
+        <small>${n ? "Touche un autre produit pour affiner." : sans.length ? "Retire un produit, ou laisse l'IA en inventer un." : "L'IA peut t'en inventer un."}</small></div>
+        <button type="button" class="bi-x" data-action="lacherIngs" aria-label="Tout désélectionner">${icone("x")}</button></div>
+      <div class="bi-puces">${ch.map(x => `<button type="button" class="bi-puce" data-action="choisirIng" data-nom="${esc(x)}" aria-label="Retirer ${esc(x)}">${esc(x)}${icone("x")}</button>`).join("")}
+        ${ouv === null ? `<button type="button" class="bi-puce bi-ouvrir" data-action="ouvrirIng" data-nom="${esc(ch[0])}">${icone("plus")}Je l'ai ouvert</button>`
+          : ouv != null ? `<span class="bi-ouvert">ouvert ${ouv ? `il y a ${ouv} j` : "aujourd'hui"}</span>` : ""}</div>
+      <div class="bi-actions">${n ? `<button type="button" class="bouton large" data-action="voirPlatsIngs">Voir les ${pl(n)}</button>`
+        : `${sans.map(o => `<button type="button" class="bouton second" data-action="choisirIng" data-nom="${esc(o.x)}">Sans ${esc(o.x.toLowerCase())} · ${pl(o.k)}</button>`).join("")}
+           <button type="button" class="bouton bouton-ia" data-action="inventerPlat">${icone("sparkle")}Inventer un plat</button>`}</div></div>`);
   }
   return `<div class="m-tete"><div><h1 tabindex="-1">Stock</h1>
       ${onglets}
@@ -2829,7 +2844,7 @@ function vueStockMaison({ params } = {}) {
       const parRayon = liste => { const m = new Map(); for (const l of liste) { const g = rayons[l.nom] != null && E.rayons && E.rayons[rayons[l.nom]] ? E.rayons[rayons[l.nom]] : "Autres"; m.set(g, [...(m.get(g) || []), l]); } return [...m.entries()].sort(ordre); };
       const chez = trouves.filter(l => l.quantite > 0), reste = trouves.filter(l => !(l.quantite > 0));
       const ligne = l => `<li><button type="button" class="stock-nom" data-action="choisirIng" data-nom="${esc(l.nom)}" aria-pressed="${ING_CHOISIS.has(l.nom)}"
-          aria-label="${esc(l.nom)} : choisir pour voir les plats qui en ont">${ING_CHOISIS.has(l.nom) ? icone("check") : ""}${esc(l.nom)}</button><span class="stock-q">
+          aria-label="${esc(l.nom)} : choisir pour voir les plats qui en ont">${ING_CHOISIS.has(l.nom) ? icone("check") : ""}${esc(l.nom)}${E.ouverts && E.ouverts[l.nom] != null ? `<em class="st-ouvert">ouvert</em>` : ""}</button><span class="stock-q">
           <button type="button" data-stock-pas="-1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Moins de ${esc(l.nom)}">−</button>
           <input class="stock-saisie" type="number" inputmode="decimal" min="0" step="any" value="${enAffiche(l).q}" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-facteur="${enAffiche(l).f}" aria-label="Quantité de ${esc(l.nom)}, en ${esc(enAffiche(l).u)}">
           <span class="stock-u">${esc(enAffiche(l).u)}</span>
@@ -2839,18 +2854,14 @@ function vueStockMaison({ params } = {}) {
       const finir = (E.a_finir || []).filter(x => chez.some(l => l.nom === x.nom));
       const quand = x => x.reste < 0 ? "à vérifier" : x.reste === 0 ? "aujourd'hui" : x.reste === 1 ? "demain" : `dans ${x.reste} jours`;
       return `${finir.length && !voulus.length ? `<section class="bloc a-finir" aria-labelledby="tFinir"><h2 id="tFinir">${icone("warning-circle")}À finir bientôt</h2>
-        <ul>${finir.map(x => `<li><span><b>${esc(x.nom)}</b><small>entré il y a ${x.depuis} jour${x.depuis > 1 ? "s" : ""}</small></span><span class="af-quand${x.reste <= 0 ? " urgent" : ""}">${quand(x)}</span></li>`).join("")}</ul>
+        <ul>${finir.map(x => `<li><span><b>${esc(x.nom)}</b><small>${x.ouvert != null ? (x.ouvert ? `ouvert il y a ${x.ouvert} jour${x.ouvert > 1 ? "s" : ""}` : "ouvert aujourd'hui") : `entré il y a ${x.depuis} jour${x.depuis > 1 ? "s" : ""}`}</small></span><span class="af-quand${x.reste <= 0 ? " urgent" : ""}">${quand(x)}</span></li>`).join("")}</ul>
         <button type="button" class="bouton large second" data-action="platsAFinir">${icone("cooking-pot")}Des plats pour les finir</button></section>` : ""}
       ${chez.length ? `<p class="petit discret stock-astuce">Touche un produit pour voir les plats qui en ont.</p>
       <div class="stock-rayons">${parRayon(chez).map(([g, lignes]) => `<details class="stock-rayon stock-chez" data-rayon="chez|${esc(g)}"${voulus.length || STOCK_OUVERTS.has("chez|" + g) || lignes.some(l => ING_CHOISIS.has(l.nom)) ? " open" : ""}>
         <summary><span class="sr-nom">${esc(g)}</span><small>${lignes.length}</small>${icone("caret-right")}</summary>
         <ul class="stock-liste">${lignes.map(ligne).join("")}</ul></details>`).join("")}</div>`
         : `<p class="petit discret stock-vide">${voulus.length ? "" : "Ton stock est vide : tape un produit, ou prends en photo ton frigo ou un ticket."}</p>`}
-      ${reste.length && !voulus.length ? `<details class="stock-tous"${STOCK_OUVERTS.has("tous") ? " open" : ""} data-rayon="tous"><summary>Tous les produits<small>${reste.length}</small>${icone("caret-right")}</summary>
-        <p class="petit discret stock-astuce">Touche un produit pour l'ajouter, puis règle sa quantité.</p>
-        <div class="stock-rayons">${parRayon(reste).map(([g, lignes]) => `<details class="stock-rayon" data-rayon="${esc(g)}"${STOCK_OUVERTS.has(g) ? " open" : ""}>
-          <summary><span class="sr-nom">${esc(g)}</span><small>${lignes.length}</small>${icone("caret-right")}</summary>
-          <div class="stock-puces">${lignes.map(l => `<button type="button" class="stock-puce" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="0" aria-label="Ajouter ${esc(l.nom)} au stock">${esc(l.nom)}${icone("plus")}</button>`).join("")}</div></details>`).join("")}</div></details>` : ""}`;
+`;
     })()}`;
 }
 const STOCK_OUVERTS = new Set();
@@ -2895,7 +2906,20 @@ function vueCourses() {
         `<h3 class="lc-rayon">${esc(g)}</h3><ul>${xs.map(ligne).join("")}</ul>`).join("")}
       <button type="button" class="bouton large" id="lcValider" data-action="lcValider"${LC_COCHES.size ? "" : " disabled"}>${lcTexte()}</button>
       <p class="lc-aide lc-sous">Coche ce que tu as acheté : ça passe dans « Mon stock ».</p>` : `<p class="lc-aide">Ta liste est vide.</p>`}</section>`;
-  return liste + idees;
+  // Tous les produits de l'appli, ici plutôt que dans Mon stock (Taha, 23/11/2026) : ce qu'on n'a pas, par rayon, replié ;
+  // un toucher le met sur la liste.
+  const chez = new Set((E.stock || []).filter(x => x.quantite > 0).map(x => x.nom));
+  const autres = tous.filter(n => !chez.has(n) && !l.some(x => x.nom === n)), parR = new Map();
+  for (const n of autres) { const g = rayons[n] != null && E.rayons && E.rayons[rayons[n]] ? E.rayons[rayons[n]] : "Autres"; parR.set(g, [...(parR.get(g) || []), n]); }
+  apresRendu.push(() => document.querySelectorAll("details[data-rayon]").forEach(d => d.addEventListener("toggle", () =>
+    d.open ? STOCK_OUVERTS.add(d.dataset.rayon) : STOCK_OUVERTS.delete(d.dataset.rayon))));
+  const tousProduits = autres.length && !mots.length ? `<details class="stock-tous"${STOCK_OUVERTS.has("lc-tous") ? " open" : ""} data-rayon="lc-tous"><summary>Tous les produits<small>${autres.length}</small>${icone("caret-right")}</summary>
+      <p class="petit discret stock-astuce">Touche un produit pour le mettre sur ta liste.</p>
+      <div class="stock-rayons">${[...parR.entries()].sort(([a], [b]) => (a === "Autres") - (b === "Autres") || a.localeCompare(b, "fr")).map(([g, ns]) => `<details class="stock-rayon" data-rayon="lc|${esc(g)}"${STOCK_OUVERTS.has("lc|" + g) ? " open" : ""}>
+        <summary><span class="sr-nom">${esc(g)}</span><small>${ns.length}</small>${icone("caret-right")}</summary>
+        <div class="stock-puces">${ns.map(n => { const u = unite(n);
+          return `<button type="button" class="stock-puce" data-action="lcAjouter" data-nom="${esc(n)}" data-unite="${esc(u)}" data-q="${u === "g" ? 500 : u === "ml" ? 1000 : 1}" aria-label="Mettre ${esc(n)} sur ma liste">${esc(n)}${icone("plus")}</button>`; }).join("")}</div></details>`).join("")}</div></details>` : "";
+  return liste + idees + tousProduits;
 }
 
 const LC_NB = { n: (() => { try { const v = parseInt(localStorage.getItem("mp-lc-nb"), 10); return v >= 1 && v <= 50 ? v : 8; } catch (e) { return 8; } })() };
@@ -4197,6 +4221,7 @@ const ACTIONS = {
     rendre();
   },
   lacherIngs: () => { ING_CHOISIS.clear(); rendre(); },
+  ouvrirIng: b => agir("/api/stock/ouvert", { nom: b.dataset.nom }, `${b.dataset.nom} : ouvert aujourd'hui.`),
   voirPlatsIngs: () => { Object.assign(filtresCat, { ings: new Set(ING_CHOISIS), debut: 0 }); ING_CHOISIS.clear(); location.hash = "#/catalogue"; },
   sansIngCat: b => { filtresCat.ings.delete(b.dataset.nom); filtresCat.debut = 0; rendre(); },
   lcRemplir: async () => {
