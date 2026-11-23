@@ -3453,7 +3453,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
   if (E.claude === false && remplacer.main) return remplacer.main();
   const site = remplacer.lien ? (/instagram/i.test(remplacer.lien) ? "Instagram" : /tiktok/i.test(remplacer.lien) ? "TikTok" : /youtu/i.test(remplacer.lien) ? "YouTube"
     : /facebook|fb\.watch/i.test(remplacer.lien) ? "Facebook" : (remplacer.lien.match(/^https?:\/\/(?:www\.)?([^/]+)/i) || [, "le site"])[1]) : "";
-  d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">${icone("sparkle")} ${site ? "L'appli lit la recette…" : "L'IA calcule…"}</h2>
+  d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">${icone("sparkle")} ${remplacer.auto ? "La recette arrive dans tes plats…" : site ? "L'appli lit la recette…" : "L'IA calcule…"}</h2>
     <p class="discret" role="status">${site ? `Sur ${esc(site)}, puis l'IA en fait un plat pour une portion, avec ses étapes. Quelques secondes.`
       : `« ${esc(texte)} » : Claude cherche les aliments, les grammes et les macros.`}</p>
     <p class="petit" style="margin-top:14px"><button type="button" class="lien" id="nrAnnulerIA">Annuler</button></p></div>`;
@@ -3463,13 +3463,22 @@ function noterRepas({ date, entree = null, remplacer = null }) {
     let rep, r;
     try {
       r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texte, moment, date, ...(remplacer.lien ? { lien: remplacer.lien, description: remplacer.description || "" } : {}) }) });
+        body: JSON.stringify({ texte, moment, date, ...(remplacer.lien || remplacer.description ? { lien: remplacer.lien || "", description: remplacer.description || "" } : {}) }) });
       rep = await r.json();
     } catch (e) { if (!annule) { remplacer.retour(); dire("L'appli ne répond pas."); } return; }
     if (annule) return;
     if (!r.ok) { remplacer.retour(); dire(rep.erreur || "Claude n'a pas pu calculer."); return; }
     if (remplacer.creer) moment = rep.proposition.moment || moment;      // depuis le catalogue : l'IA dit le repas
     recetteVue = rep.proposition.recette || null;
+    if (remplacer.auto) {                      // partagé depuis une autre appli : le plat s'ajoute sans étape de plus
+      const p = rep.proposition;
+      const ok = await appel("/api/repas/au_menu", { date, moment: moment || "din", nom: p.nom, items: p.items, seulement_plat: true, ...(recetteVue ? { recette: recetteVue } : {}) });
+      if (ok === true && E.au_menu && E.au_menu.plat) {
+        d.close("oui"); rendre();
+        dire(E.au_menu.existant ? `Ce plat existe déjà : « ${recette(E.au_menu.plat).nom} ».` : `« ${recette(E.au_menu.plat).nom} » ajouté à tes plats.`);
+        return ficheRapide(E.au_menu.plat, null);
+      }
+    }
     verifier(rep.proposition, false, true);
   })();
 }
@@ -4453,7 +4462,26 @@ document.addEventListener("input", ev => {
 window.addEventListener("hashchange", rendre);
 
 async function demarrer() {
-  if (await appel("/api/etat") === true) rendre();
+  if (await appel("/api/etat") === true) { rendre(); traiterPartage(); }
+}
+// « Partager avec Mon Meal Prep » depuis Instagram, TikTok, YouTube… (Taha, 23/11/2026) : le lien arrive dans l'adresse
+// (?texte=, ?lien=, ?titre= : appli Android ou appli installée par Chrome). Gardé le temps de la connexion, puis le plat
+// se crée tout seul et sa carte s'ouvre.
+(() => {
+  try {
+    const q = new URLSearchParams(location.search), t = [q.get("titre"), q.get("texte"), q.get("lien")].filter(Boolean).join(" ").trim();
+    if (t) { sessionStorage.setItem("mp-partage", t.slice(0, 6000)); history.replaceState(null, "", location.pathname + "#/catalogue"); }
+  } catch (e) {}
+})();
+function traiterPartage() {
+  let t = "";
+  try { t = sessionStorage.getItem("mp-partage") || ""; } catch (e) { return; }
+  if (!t || !E || !E.journal_repas || $("dialogue").open) return;
+  try { sessionStorage.removeItem("mp-partage"); } catch (e) {}
+  const lien = (t.match(/https?:\/\/[^\s<>"']+/) || [""])[0], description = t.replace(lien, "").trim();
+  if (location.hash !== "#/catalogue") location.hash = "#/catalogue";
+  noterRepas({ date: E.journal_repas.aujourdhui, remplacer: { texte: "", lien, description, creer: true, auto: true,
+    retour: () => creerPlatIA("plat", "", lien, description), main: () => demanderPlatPerso({ cat: "plat" }) } });
 }
 demarrer();
 

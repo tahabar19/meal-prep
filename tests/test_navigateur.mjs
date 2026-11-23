@@ -710,6 +710,14 @@ try {
     await pret();
   });
 
+  await test('Partage : un lien reçu ouvre la création du plat', async () => {
+    // « Partager avec Mon Meal Prep » (Taha, 23/11/2026) : ?texte=… est gardé, l'adresse nettoyée, la création lancée.
+    await B.js(`location.href = location.pathname + '?texte=' + encodeURIComponent('Regarde ça https://www.tiktok.com/@chef/video/1')`);
+    vrai(await attendre(`!location.search && document.getElementById('dialogue') && document.getElementById('dialogue').open`, 60000) >= 0, 'le partage n\'ouvre rien');
+    vrai(await B.js(`!sessionStorage.getItem('mp-partage') && location.hash === '#/catalogue'`), 'le partage reste en attente');
+    await B.js(`document.getElementById('dialogue').close()`); await att(200);
+  });
+
   await test('Déconnexion', async () => {
     await aller('#/profil');
     await B.js(`document.querySelector('[data-action=deconnexion]').click()`); await att(400);
