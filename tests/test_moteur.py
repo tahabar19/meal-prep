@@ -290,6 +290,22 @@ class G_SansClaude(unittest.TestCase):
             r = M.serveur._lire_p("reglages_site.json", {})
             M.serveur._ecrire_p("reglages_site.json", {**r, "retires": [x for x in r.get("retires", []) if x != "skyrmiel"]})
 
+    def test_a_finir(self):
+        # Un lait entré au stock il y a 6 jours est « à finir » ; le riz (épicerie) jamais (Taha, 23/11/2026).
+        import datetime
+        st = M.serveur.mod_stock
+        stock = st.charger()
+        st.ajouter(stock, "Lait", 1000, "ml"); st.ajouter(stock, "Riz basmati", 500, "g")
+        st.enregistrer(stock, motif="commande", detail="test")
+        f = st.chemin_mouvements()
+        vieux = (datetime.date.today() - datetime.timedelta(days=6)).isoformat()
+        lignes = f.read_text(encoding="utf-8-sig").splitlines()
+        f.write_text("\n".join(l.replace(l[:10], vieux, 1) if l.endswith(";test") or ";test" in l else l for l in lignes) + "\n", encoding="utf-8")
+        noms = {x["nom"]: x for x in M.etat()["a_finir"]}
+        self.assertIn("Lait", noms)
+        self.assertEqual(noms["Lait"]["reste"], 1)
+        self.assertNotIn("Riz basmati", noms)
+
     def test_aucun_appel_claude_en_fond(self):
         avant = len(M.appels_claude)
         M.serveur.vitamines_en_fond()

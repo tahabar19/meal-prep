@@ -468,6 +468,7 @@ try {
     await taper('');
     vrai(await attendre(`document.querySelectorAll('.stock-liste li').length >= 3`, 10000) >= 0, 'le stock ne montre pas les produits');
     const avant = await B.js(`document.querySelector('.stock-saisie').value`);
+    vrai(await B.js(`!!document.querySelector('details.stock-tous .stock-puce')`), 'pas de « Tous les produits »');
     // Un produit choisi dans Chez moi → les plats qui en ont, dans le catalogue (Taha, 23/11/2026).
     await B.js(`document.querySelector('button.stock-nom').click()`); await att(300);
     vrai(await B.js(`/plat/.test(document.getElementById('barre').textContent)`), 'pas de barre « N plats avec ça »');
