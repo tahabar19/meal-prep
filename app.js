@@ -2384,7 +2384,9 @@ function formulaireProfil(avecCode) {
   const nombreChamp = (id, min, max, pas, exemple) => `<input id="${id}" name="${id}" type="number" inputmode="decimal" min="${min}" max="${max}" step="${pas}" autocomplete="off" placeholder="${exemple}…" required>`;
   const choix = (id, options) => `<select id="${id}" name="${id}">${options.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select>`;
   const coche = (id, titre, aide, defaut) => `<label class="option"><input type="checkbox" id="${id}" name="${id}"${defaut ? " checked" : ""}><span><b>${titre}</b><small>${aide}</small></span></label>`;
+  const rubrique = t => avecCode ? `<p class="auth-rubrique">${t}</p>` : "";
   return `<form class="formulaire" id="fProfil" novalidate>
+    ${rubrique("Ton compte")}
     ${avecCode ? champ("pCode", "Code d'invitation", `<input id="pCode" name="code" type="text" autocomplete="off" spellcheck="false" autocapitalize="none" required>`, "Demande-le à la personne qui gère le site.") : ""}
     <div class="champs2">
     ${champ("pNom", "Prénom", `<input id="pNom" name="prenom" type="text" autocomplete="given-name" maxlength="40" required>`)}
@@ -2393,13 +2395,17 @@ function formulaireProfil(avecCode) {
     ${champ("pIdent", "Identifiant de connexion", `<input id="pIdent" name="identifiant" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" required>`, "3 à 20 lettres minuscules, chiffres ou tirets. Il ne pourra plus changer.")}
     ${avecCode ? champ("pEmail", "Email", `<input id="pEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120" required>`, "Pour te connecter et retrouver ton mot de passe.") : ""}
     ${champ("pMdp", "Mot de passe", avecCode ? champMdp("pMdp", "mot_de_passe", "new-password") : `<input id="pMdp" name="mot_de_passe" type="password" autocomplete="new-password" minlength="10" required>`)}
+    ${rubrique("Toi")}
     <div class="champs2">
     ${champ("date_naissance", "Date de naissance", `<input id="date_naissance" name="date_naissance" type="date" required>`)}
     ${champ("sexe", "Sexe", choix("sexe", [["femme", "Femme"], ["homme", "Homme"]]))}
     </div>
     ${champ("telephone", "Téléphone", `<input id="telephone" name="telephone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" required>`)}
-    ${champ("taille_cm", "Taille, en centimètres", nombreChamp("taille_cm", 130, 220, 1, "170"))}
-    ${champ("poids_kg", "Poids, en kilos", nombreChamp("poids_kg", 35, 250, 0.1, "70"))}
+    <div class="champs2 deux">
+    ${champ("taille_cm", "Taille (cm)", nombreChamp("taille_cm", 130, 220, 1, "170"))}
+    ${champ("poids_kg", "Poids (kg)", nombreChamp("poids_kg", 35, 250, 0.1, "70"))}
+    </div>
+    ${rubrique("Ton objectif")}
     ${champ("activite", "Activité", choix("activite", [["sedentaire", "Sédentaire, peu ou pas de sport"], ["leger", "Sport léger, 1 à 3 fois par semaine"], ["modere", "Sport modéré, 3 à 5 fois par semaine"], ["actif", "Sport intense, 6 à 7 fois par semaine"], ["intense", "Sport très intense ou métier physique"]]))}
     ${champ("objectif", "Objectif", choix("objectif", [["perte", "Perdre du poids"], ["maintien", "Garder mon poids"], ["prise", "Prendre du muscle"]]))}
     <div style="margin-bottom:18px"></div>
@@ -2418,8 +2424,10 @@ function vueCreation() {
   clearTimeout(minuteur);
   rendreNavigation("");
   barre("");
-  $("contenu").innerHTML = `<button class="retour" data-action="versConnexion" style="border:0;background:none;cursor:pointer">${icone("caret-left")}Connexion</button>
-    <div class="titre"><h1 tabindex="-1">Créer mon profil</h1><p>Quelques informations pour calculer tes besoins.</p></div>${formulaireProfil(true)}`;
+  $("contenu").innerHTML = accueil(`<div class="auth-carte auth-large">
+    <h1 tabindex="-1">Créer mon profil</h1><p class="auth-intro">Quelques informations, et l'appli calcule tes besoins et compose tes repas.</p>
+    ${formulaireProfil(true)}</div>
+    <p class="auth-bas">Déjà un compte ? <button type="button" class="lien" data-action="versConnexion">Me connecter</button></p>`);
   window.scrollTo(0, 0);
 }
 function lienDesMontants(c) {
@@ -3221,7 +3229,6 @@ function vueSuivi({ params }) {
       <form id="formSuivi" class="formulaire" novalidate>
         ${champ("poids", "Poids", "kg")}
         <div class="mesures mesures-3">${champ("biceps_avant", "Biceps", "cm")}${champ("tour_avant", "Hanches", "cm")}${champ("torse_avant", "Torse", "cm")}</div>
-        <p class="petit discret" style="margin:-2px 0 10px">Quand tu veux, pas besoin de séance. Toujours au même endroit : le biceps contracté au plus large, les hanches, le torse sous les bras.</p>
         <details class="seance"${["biceps_apres", "tour_apres", "torse_apres"].some(k => ce[k] != null) ? " open" : ""}>
           <summary>Après la séance <small class="discret">(facultatif)</small>${icone("caret-right")}</summary>
           <div class="mesures mesures-3">${champ("biceps_apres", "Biceps", "cm")}${champ("tour_apres", "Hanches", "cm")}${champ("torse_apres", "Torse", "cm")}</div>
@@ -3660,22 +3667,27 @@ function vuePanne() {
 const lienAndroid = () => /Android/i.test(navigator.userAgent) && !window.Capacitor
   ? `<p style="margin-top:18px"><a class="bouton second" href="telecharger/mon-meal-prep.apk" download>${icone("arrows-clockwise")}Installer l'appli Android</a></p>
      <p class="petit discret">Android te demandera d'autoriser l'installation depuis ton navigateur, une seule fois.</p>` : "";
+// Connexion, inscription, mot de passe oublié : un fond à motifs (haltères, biceps, assiettes, verres…) et une carte
+// au centre (Taha, 23/11/2026 : « trop froide, pas accueillante »).
+const accueil = (contenu, sous = "") => `<div class="auth"><div class="auth-tete"><img class="auth-logo" src="icone.svg" alt="" width="52" height="52">
+    <b>Mon Meal Prep</b>${sous ? `<span>${sous}</span>` : ""}</div>${contenu}</div>`;
 function vueConnexion(erreur = "") {
   clearTimeout(minuteur);
   rendreNavigation("");
   barre("");
-  $("contenu").innerHTML = `<div class="titre" style="margin-top:24px"><h1 tabindex="-1">Connexion</h1><p>Chaque personne a son identifiant et ne voit que son profil.</p></div>
+  $("contenu").innerHTML = accueil(`<div class="auth-carte">
+    <h1 tabindex="-1">Bon retour</h1><p class="auth-intro">Tes repas, tes macros et ton suivi t'attendent.</p>
     <form class="formulaire" id="fConnexion" novalidate>
       <div class="champ"><label for="ident">Identifiant ou email</label>
-        <input id="ident" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+        <input id="ident" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ton identifiant" required></div>
       <div class="champ"><label for="mdp">Mot de passe</label>
-        <input id="mdp" name="password" type="password" autocomplete="current-password" spellcheck="false" required aria-describedby="eMdp">
+        <input id="mdp" name="password" type="password" autocomplete="current-password" spellcheck="false" placeholder="••••••••••" required aria-describedby="eMdp">
         <small id="eMdp" class="erreur" role="alert">${esc(erreur)}</small></div>
       <button class="bouton large" type="submit">Entrer</button>
-      <p style="margin-top:12px;text-align:center"><button type="button" class="lien" data-action="oubliMdp">Mot de passe oublié ?</button></p>
-    </form>
-    <p style="margin-top:22px"><button class="bouton sobre" data-action="versCreation">Créer mon profil</button></p>
-    ${lienAndroid()}`;
+      <p class="auth-oubli"><button type="button" class="lien" data-action="oubliMdp">Mot de passe oublié ?</button></p>
+    </form></div>
+    <p class="auth-bas">Pas encore de compte ? <button type="button" class="lien" data-action="versCreation">Créer mon profil</button></p>
+    ${lienAndroid()}`, "Cuisine malin, mange juste.");
 }
 
 /* ------------------------------------------------------------ rendu */
@@ -3867,12 +3879,13 @@ const ACTIONS = {
       agir("/api/stock/appliquer", { choix }, `${choix.length} repas refait${choix.length > 1 ? "s" : ""} avec ton stock.`); });
   },
   oubliMdp: () => {
-    $("contenu").innerHTML = `<button class="retour" data-action="versConnexion" style="border:0;background:none;cursor:pointer">${icone("caret-left")}Connexion</button>
-      <div class="titre"><h1 tabindex="-1">Mot de passe oublié</h1><p>Écris ton identifiant ou ton email : un lien pour choisir un nouveau mot de passe part sur ton email.</p></div>
+    $("contenu").innerHTML = accueil(`<div class="auth-carte">
+      <h1 tabindex="-1">Mot de passe oublié</h1><p class="auth-intro">Écris ton identifiant ou ton email : un lien pour en choisir un nouveau part sur ton email.</p>
       <form class="formulaire" id="fOubli" novalidate>
         <div class="champ"><label for="oQui">Identifiant ou email</label><input id="oQui" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
         <small id="eOubli" role="status" style="display:block;margin-bottom:10px"></small>
-        <button class="bouton large" type="submit">Envoyer le lien</button></form>`;
+        <button class="bouton large" type="submit">Envoyer le lien</button></form></div>
+      <p class="auth-bas"><button type="button" class="lien" data-action="versConnexion">Retour à la connexion</button></p>`);
   },
   filtreCat(b) {
     const F = filtresCat, v = b.dataset.valeur;
