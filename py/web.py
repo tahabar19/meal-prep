@@ -372,5 +372,12 @@ def journaux() -> str:
     return json.dumps(lignes, ensure_ascii=False)
 
 
+def compose_recente() -> bool:
+    """Vrai si la dernière requête a composé ou refait des menus (la page les partage alors à la famille)."""
+    v = bool(getattr(serveur, "COMPOSE", False))
+    serveur.COMPOSE = False
+    return v
+
+
 def instantane_json() -> str:
     return json.dumps(instantane())

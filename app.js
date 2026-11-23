@@ -11,7 +11,7 @@ const ONGLETS = [
   { id: "suivi", nom: "Suivi", icone: "chart-line" },
   { id: "plus", nom: "Plus", icone: "dots-three-outline" },
 ];
-const DANS_PLUS = ["plus", "courses", "cuisine", "historique", "budget", "vitamines", "profil", "profils", "nouveau", "stock", "journal", "reglages", "conso"];
+const DANS_PLUS = ["plus", "courses", "cuisine", "historique", "budget", "vitamines", "profil", "profils", "nouveau", "stock", "journal", "reglages", "conso", "famille"];
 // Mode flemmard : plus d'onglet « Plus » ; les vitamines ont leur onglet, « Profil » ouvre sa page (Taha, 19/11/2026).
 const ONGLETS_FLEMMARD = [
   { id: "semaine", nom: "Jour", icone: "calendar-blank" },
@@ -116,6 +116,24 @@ function confirmer({ titre, texte, oui, non = "Annuler" }) {
   });
 }
 
+// Mode famille (Taha, 23/11/2026) : un plat changé, ajouté ou retiré vaut pour soi seul, ou pour toute la famille
+// (chacun à ses quantités). Rien à demander hors famille. → {} ou { famille: { date, moments } } à joindre à la requête.
+const enFamille = () => typeof M !== "undefined" && !!M.famille;
+const dateFamille = (k, n) => { const s = k === (E.mois ? E.mois.rang : 0) ? E.semaine : planDe(k);
+  return s && s.debut ? new Date(new Date(s.debut + "T12:00").getTime() + n * 864e5).toISOString().slice(0, 10) : ""; };
+async function pourQui(date, moments) {
+  if (!enFamille() || !date) return {};
+  const tous = await confirmer({ titre: "Pour qui ?", oui: "Toute la famille", non: "Seulement moi",
+    texte: "Ce changement vaut pour toi seulement, ou pour toute la famille ? Chacun garde ses quantités." });
+  return tous ? { famille: { date, moments: [...new Set(moments)] } } : {};
+}
+function momentsTouches(op) {
+  const m = String(op.moment || "");
+  if (op.type === "ajouter") return ["col", ...(["pdj", "dej", "din"].includes(m) ? [m] : [])];
+  if (m.startsWith("col")) return ["col"];
+  return op.ensemble !== false && ["dej", "din"].includes(m) ? ["dej", "din"] : [m];
+}
+
 /* ------------------------------------------------------------ dialogue avec l'appli */
 async function appel(chemin, corps) {
   let r, donnees;
@@ -171,7 +189,7 @@ function route() {
 }
 function ongletDe(vue) {
   if (vue === "plat") return "semaine";
-  if (enSuivi()) return vue === "historique" ? "semaine" : ["plus", "profil", "profils", "nouveau", "reglages", "journal", "conso"].includes(vue) ? "profil" : vue;
+  if (enSuivi()) return vue === "historique" ? "semaine" : ["plus", "profil", "profils", "nouveau", "reglages", "journal", "conso", "famille"].includes(vue) ? "profil" : vue;
   return DANS_PLUS.includes(vue) ? "plus" : vue;
 }
 
@@ -975,12 +993,13 @@ async function apercuChangement(k, operation, titre, retour) {
   if (["objectif", "reequilibrer"].includes(operation.type) && !(a.reglages || []).length) {
     const ok = d.querySelector("[type=submit]"); if (ok) ok.style.display = "none";     // rien a enregistrer
   }
-  d.querySelector("form").addEventListener("submit", ev => {
+  d.querySelector("form").addEventListener("submit", async ev => {
     ev.preventDefault(); ev.stopPropagation();
     if (a.confirmation_requise && !$("auCourant").checked) { $("eCourant").textContent = "Coche la case pour confirmer que tu as vu les écarts."; return $("auCourant").focus(); }
     const supplements = [...d.querySelectorAll("[name=supplement]:checked")].map(i => i.value);
     d.close("oui");
-    const fini = agir("/api/semaine/modifier", { operation, semaine: k, confirme: true, supplements }, choisi && fois !== 1 ? "" : "Changement enregistré.");
+    const qui = ["changer", "ajouter", "retirer"].includes(operation.type) ? await pourQui(dateFamille(k, operation.jour), momentsTouches(operation)) : {};
+    const fini = agir("/api/semaine/modifier", { operation, semaine: k, confirme: true, supplements, ...qui }, choisi && fois !== 1 ? "" : "Changement enregistré.");
     if (choisi && fois !== 1) fini.then(ok => {
       // Puis la quantité choisie, sur le plat tel qu'il est maintenant au menu (une copie « (2) » si le plat y était déjà).
       const jn = ok && planDe(k) && planDe(k).jours[operation.jour], m = operation.moment || "";
@@ -2276,6 +2295,7 @@ function vueProfilFlemmard() {
       ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul></section>
   <ul class="menu" style="margin-top:16px">
     ${lien("#/reglages", "sliders-horizontal", "Réglages", "")}
+    ${typeof sb !== "undefined" ? lien("#/famille", "users", "Ma famille", enFamille() ? esc(M.famille.famille.nom) : (M.familleEtat && M.familleEtat.statut === "attente") ? "Demande en attente" : "Stock et plats en commun") : ""}
     ${estAdminConso() ? lien("#/conso", "chart-bar", "Suivi de conso", "Ce que chaque compte consomme en IA") : ""}
     ${E.utilisateur.admin ? lien("#/profils", "users", "Profils", "") : ""}
   </ul>
@@ -2340,6 +2360,68 @@ function vueConso() {
     <p class="petit discret" style="margin:4px 0 12px">Tokens envoyés → reçus. ${CONSO.charge ? "Mise à jour…" : `<button type="button" class="lien" id="consoMaj">Actualiser</button>`}</p>
     ${bloc("Tous les comptes", total)}
     ${comptes.length ? comptes.map(([qui, x]) => bloc(qui, x)).join("") : `<p class="petit discret">Aucun appel sur cette période.</p>`}`;
+}
+// « Ma famille » (Taha, 23/11/2026) : un stock commun et les mêmes plats pour tous, chacun à ses quantités. On rejoint
+// une famille avec son code ; le créateur accepte. Seul le créateur compose les menus ; les autres les reçoivent.
+async function famille(action, args = {}, message = "") {
+  const { data, error } = await sb.rpc(action, args);
+  if (error) { dire(error.message.replace(/^.*?:\s*/, "")); return null; }
+  const avant = enFamille();
+  M.familleEtat = data;
+  if (message) dire(message);
+  // Entrer dans une famille ou en sortir change le stock et la composition : le moteur repart avec.
+  if (avant !== (data && data.statut === "membre")) { await relancerMoteur(); return data; }
+  M.famille = data && data.statut === "membre" ? data : null;
+  rendre();
+  return data;
+}
+function vueFamille() {
+  barre("");
+  if (typeof sb === "undefined") return vueIntrouvable();
+  const f = M.familleEtat, tete = `<a class="retour" href="#/profil">${icone("caret-left")}Profil</a>
+    <div class="m-tete"><div><h1 tabindex="-1">Ma famille</h1><p class="petit discret">Un stock commun, et les mêmes plats pour tous, chacun à ses quantités.</p></div></div>`;
+  apresRendu.push(() => {
+    const on = (id, fn) => { const b = $(id); if (b) b.addEventListener("click", fn); };
+    on("famCreer", () => sb.from("fichiers").select("nom, contenu").in("nom", ["stock.csv", "mouvements.csv"]).then(({ data }) => {
+      const c = n => ((data || []).find(x => x.nom === n) || {}).contenu || "";
+      famille("famille_creer", { p_nom: $("famNom").value.trim(), p_stock: c("stock.csv"), p_mouvements: c("mouvements.csv") }, "Famille créée.");
+    }));
+    on("famRejoindre", () => { const c = $("famCode").value.trim(); if (!c) return $("famCode").focus();
+      famille("famille_rejoindre", { p_code: c }, "Demande envoyée : le créateur doit l'accepter."); });
+    document.querySelectorAll("[data-fam-repondre]").forEach(b => b.addEventListener("click", () =>
+      famille("famille_repondre", { p_user: b.dataset.famRepondre, p_accepter: b.dataset.oui === "1" }, b.dataset.oui === "1" ? "Accepté dans la famille." : "Demande refusée.")));
+    on("famCopier", () => navigator.clipboard && navigator.clipboard.writeText(f.famille.code).then(() => dire("Code copié.")));
+    on("famQuitter", async () => {
+      const chef = f.famille && f.famille.createur && f.statut === "membre";
+      if (await confirmer({ titre: f.statut === "attente" ? "Annuler la demande ?" : chef ? "Dissoudre la famille ?" : "Quitter la famille ?",
+        oui: f.statut === "attente" ? "Annuler la demande" : chef ? "Dissoudre" : "Quitter", non: "Rester",
+        texte: f.statut === "attente" ? "Ta demande sera retirée." : chef ? "Chacun retrouve son propre stock et compose de nouveau ses menus." : "Tu retrouves ton propre stock et tu composes de nouveau tes menus." }))
+        famille("famille_quitter", {}, f.statut === "attente" ? "Demande annulée." : "C'est fait.");
+    });
+  });
+  if (!f || !f.famille) return tete + `
+    <section class="bloc fam-bloc"><h2>Créer une famille</h2><p class="petit discret">Ton stock devient celui de la famille. Tu composes les menus, les autres les reçoivent à leurs quantités.</p>
+      <div class="fam-ligne"><input id="famNom" type="text" maxlength="40" placeholder="Nom de la famille" aria-label="Nom de la famille" autocomplete="off">
+      <button type="button" class="bouton" id="famCreer">Créer</button></div></section>
+    <section class="bloc fam-bloc"><h2>Rejoindre une famille</h2><p class="petit discret">Tape le code que le créateur voit sur sa page « Ma famille ». Il devra accepter ta demande.</p>
+      <div class="fam-ligne"><input id="famCode" type="text" maxlength="12" placeholder="FAM-XXXX" aria-label="Code de la famille" autocapitalize="characters" autocomplete="off" spellcheck="false">
+      <button type="button" class="bouton second" id="famRejoindre">Rejoindre</button></div></section>`;
+  if (f.statut === "attente") return tete + `<section class="bloc fam-bloc"><h2>Demande envoyée</h2>
+    <p class="petit discret">Ta demande pour rejoindre « ${esc(f.famille.nom)} » attend l'accord de ${esc(f.famille.createur_ident || "son créateur")}. Rouvre l'appli une fois acceptée.</p>
+    <button type="button" class="bouton sobre" id="famQuitter">${icone("x")}Annuler la demande</button></section>`;
+  const membres = (f.membres || []).filter(m => m.statut === "membre"), attente = (f.membres || []).filter(m => m.statut === "attente");
+  return tete + `
+    <section class="bloc fam-bloc"><h2>${esc(f.famille.nom)}</h2>
+      <div class="fam-code"><span>Code pour rejoindre</span><b class="chiffres">${esc(f.famille.code || "")}</b><button type="button" class="bouton sobre" id="famCopier">${icone("copy")}Copier</button></div>
+      <ul class="lignes">${membres.map(m => `<li><span>${esc(m.identifiant)}${m.moi ? " (toi)" : ""}</span><span class="q">${m.createur ? "compose les menus" : "reçoit les menus"}</span></li>`).join("")}</ul></section>
+    ${attente.length ? `<section class="bloc fam-bloc"><h2>Demandes</h2><ul class="lignes">${attente.map(m => `<li><span>${esc(m.identifiant)}</span>
+      <span class="fam-choix"><button type="button" class="bouton sobre" data-fam-repondre="${m.id}" data-oui="0">Refuser</button>
+      <button type="button" class="bouton" data-fam-repondre="${m.id}" data-oui="1">Accepter</button></span></li>`).join("")}</ul></section>` : ""}
+    <section class="bloc fam-bloc"><h2>Comment ça marche</h2><ul class="fam-regles petit discret">
+      <li>Le stock est le même pour tous : ce que chacun mange en sort.</li>
+      <li>${f.famille.createur ? "Tu composes les menus" : `${esc(f.famille.createur_ident || "Le créateur")} compose les menus`} ; chacun reçoit les mêmes plats, à ses calories.</li>
+      <li>Quand tu changes, ajoutes ou retires un plat, l'appli te demande si c'est pour toi seul ou pour toute la famille.</li></ul></section>
+    <p><button type="button" class="bouton sobre" id="famQuitter">${icone("sign-out")}${f.famille.createur ? "Dissoudre la famille" : "Quitter la famille"}</button></p>`;
 }
 function vueProfils() {
   barre("");
@@ -3124,7 +3206,8 @@ function noterRepas({ date, entree = null, remplacer = null }) {
         if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
         return;
       }
-      const rep = await appel("/api/repas/au_menu", { id: entree ? entree.id : "", date, moment, nom, items, ...(photoPlat ? { photo: photoPlat } : {}) });
+      const qui = await pourQui(date, ["col", moment || "dej"]);
+      const rep = await appel("/api/repas/au_menu", { id: entree ? entree.id : "", date, moment, nom, items, ...(photoPlat ? { photo: photoPlat } : {}), ...qui });
       bouton.disabled = false;
       if (rep === true) { d.close("oui"); rendre(); dire(E.au_menu && E.au_menu.note ? "Repas noté." : `Ajouté au menu : « ${(recette(E.au_menu.plat) || { nom }).nom} »${E.au_menu.existant ? ", un plat qui existait déjà, à tes quantités" : ""}.`); }
       else if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
@@ -3694,7 +3777,7 @@ function vueConnexion(erreur = "") {
 const VUES = { semaine: vueSemaine, plat: vuePlat, courses: vueCourses, cuisine: a => a.arg ? vueRecette(a) : vueCuisine(a),
                plus: vuePlus, avancement: vueAvancement, budget: vueBudget, vitamines: vueVitamines, profil: vueProfil, profils: vueProfils,
                nouveau: vueNouveau, stock: vueStock, catalogue: vueCatalogue, journal: vueJournal, reglages: vueReglages, suivi: vueSuivi,
-               historique: vueHistorique, conso: vueConso };
+               historique: vueHistorique, conso: vueConso, famille: vueFamille };
 let derniereAdresse = "", adressePrecedente = "";
 // Revenir d'un pas (Taha, 22/11/2026 : « le retour remet à la première page ») : la page d'où l'on vient garde sa
 // position, et une page ouverte depuis la carte d'un plat (« Voir la recette ») ramène sur cette carte.
@@ -3714,7 +3797,7 @@ function rendre() {
   apresRendu = [];
   const NOMS = { semaine: "", plat: "Plat", courses: "Courses", cuisine: "Cuisine", plus: "Plus", catalogue: "Catalogue", avancement: "Avancement",
                  budget: "Budget", vitamines: "Vitamines", stock: "Stock", journal: "Journal de l'appli", profil: "Mon profil", profils: "Profils",
-                 nouveau: "Nouveau profil", reglages: "Réglages", suivi: "Mon suivi", historique: "Historique", conso: "Suivi de conso" };
+                 nouveau: "Nouveau profil", reglages: "Réglages", suivi: "Mon suivi", historique: "Historique", conso: "Suivi de conso", famille: "Ma famille" };
   const fin = r.arg && recette(r.arg) ? recette(r.arg).nom : "";
   $("fil").innerHTML = [NOMS[r.vue], fin].filter(Boolean).map(t => `<span>/</span><span>${esc(t)}</span>`).join("");
   $("pucePhase").textContent = `Phase ${E.phase.n} · ${E.phase.nom}`;

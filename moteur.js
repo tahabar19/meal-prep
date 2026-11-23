@@ -115,12 +115,17 @@ async function suite() {
     else if (m.type === "init") { await init(m); postMessage({ id: m.id, ok: true, temps }); }
     else if (m.type === "jeton") cfg.jeton = m.jeton;
     else if (m.type === "reglages") web.regler(JSON.stringify(m.reglages));      // compte Claude branché ou non
+    else if (m.type === "fichiers") {            // le stock commun de la famille, changé par un autre membre
+      for (const f of m.fichiers) ecrire(`${dossier}/${f.nom}`, f.contenu);
+      postMessage({ id: m.id, ok: true });
+    }
     else if (m.type === "requete") {
       if (AVEC_PHOTOS.some((c) => m.chemin.startsWith(c))) await avecPillow();
       const avant = web.instantane_json();
       const t0 = performance.now();
       const r = JSON.parse(web.traiter(m.methode, m.chemin, m.corps || ""));
       r.ms = Math.round(performance.now() - t0);
+      r.compose = web.compose_recente();
       const [ch, t] = changements(avant);
       postMessage({ id: m.id, r, ch }, t);
     } else if (m.type === "apres") {
