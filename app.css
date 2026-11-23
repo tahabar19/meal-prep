@@ -1892,3 +1892,56 @@ body:has(.bi) main{padding-bottom:calc(var(--nav-bas) + var(--bas) + 190px)}
 #contenu .ft-choix #ingCat{width:100%;height:36px;min-height:0;padding:0 14px;border-radius:var(--r-pilule);font-size:16px}
 #contenu .ft .tri{margin-top:8px;padding-top:8px;border-top:1px solid var(--filet-doux)}
 #contenu .ft .tri label{font-weight:400}
+
+/* Passe « plus fin » (Taha, 23/11/2026 : catalogue, Suivi, Réglages, Ma famille trop gros ; motifs un peu plus verts) */
+body::before{opacity:.085}
+.auth::before{opacity:.17}
+/* les onglets des filtres ne glissent que de côté */
+.ft-onglets{overflow-y:hidden;touch-action:pan-x;overscroll-behavior-x:contain}
+.ft-onglets button[aria-selected="true"]::after{bottom:0}
+/* « 2 manquent » + une toute petite ligne qui dit de toucher */
+.manque small{display:block;margin-top:1px;font-size:.52rem;font-weight:400;letter-spacing:.01em;opacity:.75;text-align:center}
+@media (max-width:899px){
+  /* Catalogue : « Créer mon propre plat » discret */
+  #contenu .bouton[data-action="creerPlat"]{min-height:36px;padding:0 14px;font-size:.8rem;font-weight:500;gap:6px}
+  #contenu .bouton[data-action="creerPlat"] .ic{width:15px;height:15px}
+  /* Créer un plat : la fenêtre plus fine */
+  .creer-plat .rp-tete h2{font-size:1.05rem}
+  .creer-plat .rp-intro{font-size:.78rem;line-height:1.4;margin-bottom:10px}
+  .creer-plat .rp-recherche input{height:42px;font-size:.9rem}
+  .creer-plat .cp-ou{margin:8px 0}
+  .creer-plat .cp-desc{min-height:60px;font-size:.88rem}
+  .creer-plat .bouton{min-height:42px;font-size:.88rem}
+  .creer-plat .lien{font-size:.78rem}
+  /* Suivi */
+  #contenu .suivi-chiffres .fait{padding:10px 12px}
+  #contenu .suivi-chiffres .fait b{font-size:1.05rem}
+  #contenu .suivi-chiffres .fait span{font-size:.72rem}
+  #contenu .suivi-noter{padding:12px 14px}
+  #contenu .suivi-noter-tete h2,#contenu .suivi-noter h2{font-size:.95rem;font-weight:500}
+  #contenu .suivi-noter .champ{margin-top:8px}
+  #contenu .suivi-noter label{font-size:.76rem;color:var(--discret);font-weight:400}
+  #contenu .suivi-noter input{height:38px;min-height:38px;font-size:.92rem;padding:0 10px}
+  #contenu .suivi-noter .date-discrete,#contenu .suivi-noter input[type=date]{height:34px;min-height:34px;font-size:.82rem}
+  #contenu .suivi-noter .seance summary,#contenu .suivi-noter .seance{font-size:.84rem}
+  #contenu .suivi-noter .bouton{min-height:40px;font-size:.88rem}
+  #contenu .suivi-courbe{padding:12px 14px}
+  #contenu .suivi-courbe .jours button,#contenu .suivi-courbe .jours a{min-height:30px;height:30px;padding:0 12px;font-size:.8rem;font-weight:400}
+  /* Réglages : options et blocs resserrés */
+  #contenu .options{gap:6px}
+  #contenu .option{padding:9px 12px;gap:10px;border-radius:12px}
+  #contenu .option b{font-size:.86rem;font-weight:500}
+  #contenu .option small{font-size:.72rem;line-height:1.35}
+  #contenu .option input[type=checkbox]{width:18px;height:18px;min-width:18px}
+  #contenu details.bloc > summary,#contenu .bloc > summary{min-height:44px;font-size:.88rem}
+  #contenu .bloc h2{font-size:.95rem}
+  /* Ma famille */
+  #contenu .fam-bloc{padding:12px 14px}
+  #contenu .fam-bloc h2{font-size:.95rem;font-weight:500;margin-bottom:4px}
+  #contenu .fam-bloc p{font-size:.78rem;line-height:1.4}
+  #contenu .fam-bloc input{height:40px;min-height:40px;font-size:.9rem}
+  #contenu .fam-bloc .bouton{min-height:40px;padding:0 16px;font-size:.86rem}
+  #contenu .titre p{font-size:.8rem}
+}
+.lc-idees + .liste-courses{margin-top:12px}
+.lc-champ input{border-color:var(--filet)}.lc-champ input:focus{border-color:var(--discret);box-shadow:none}
