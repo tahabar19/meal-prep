@@ -618,8 +618,8 @@ function semaineCompacte(s, k, n) {
     const donnees = cle => s.jours.map((x, i) => ({ etiquette: court(x), valeur: x[cle] || 0, detail: x.jour, choisi: i === n,
                                                     couleur: i === n ? "var(--accent)" : "var(--s1)" }));
     const tracer = () => { if (!plus.open || plus.dataset.trace) return; plus.dataset.trace = "1";
-      Graph.barres($("gKcal"), { donnees: donnees("kcal"), unite: "kcal", cible: o.kcal, hauteur: 190, titre: "Calories prévues chaque jour" });
-      Graph.barres($("gProt"), { donnees: donnees("prot"), unite: "g", cible: o.prot, hauteur: 190, titre: "Protéines prévues chaque jour" }); };
+      Graph.barres($("gKcal"), { donnees: donnees("kcal"), unite: "kcal", cible: o.kcal, hauteur: 190, titre: "Calories prévues chaque jour", nom: "Calories prévues" });
+      Graph.barres($("gProt"), { donnees: donnees("prot"), unite: "g", cible: o.prot, hauteur: 190, titre: "Protéines prévues chaque jour", nom: "Protéines prévues" }); };
     plus.addEventListener("toggle", tracer);
     tracer();
   });
@@ -1913,7 +1913,11 @@ function vueCoursesDuMois() {
     </div>
   </div>`;
 }
+// Les rayons de ma liste se replient et se déploient (Taha, 23/11/2026) ; ouverts par défaut, on retient ceux qu'on ferme.
+const LC_FERMES = new Set();
 function vueCourses() {
+  apresRendu.push(() => document.querySelectorAll("details[data-lc-rayon]").forEach(d => d.addEventListener("toggle", () =>
+    d.open ? LC_FERMES.delete(d.dataset.lcRayon) : LC_FERMES.add(d.dataset.lcRayon))));
   if (E.rythme === "mois" && E.courses_mois && E.semaine) return vueCoursesDuMois();
   const c = E.courses, s = E.semaine, t = E.tache;
   if (!c) { barre(""); return `${enSuivi() ? "" : `<a class="retour" href="#/plus">${icone("caret-left")}Plus</a>`}<div class="titre"><h1 tabindex="-1">Courses</h1></div>${vide("Pas encore de liste", "Compose d'abord ta semaine : la liste de courses en découle.", "#/semaine", "Aller à la semaine")}`; }
@@ -2125,7 +2129,7 @@ function vueAvancement({ params }) {
       yMin: ys.length ? Math.max(0, Math.min(Math.min(...ys) - 500, obj - 100)) : null,
       yMax: ys.length ? Math.max(Math.max(...ys) + 200, obj + 100) : null,
       videTexte: "La courbe apparaît dès la première journée finie.",
-      series: manges.length ? [{ nom: "Mangé", couleur: "var(--s1)", marques: true, points: manges },
+      series: manges.length ? [{ nom: "Calories mangées", couleur: "var(--s1)", marques: true, points: manges },
         { nom: "Objectif", couleur: "var(--s2)", pointille: true, points: jours.map(d => ({ x: d.date, y: a.objectif.kcal })) }] : [] });
   });
   if (p !== "jour" && !enSuivi()) apresRendu.push(() => Graph.courbes($("gMange"), { unite: "kcal", hauteur: 230, aujourdhui: enSuivi() ? null : a.aujourdhui,
@@ -2504,6 +2508,14 @@ document.addEventListener("click", ev => {
 });
 // Ce que la personne mange (Taha, 23/11/2026) : à la création du compte et dans Réglages. Des pastilles à cocher.
 const ALLERGENES = ["Arachides", "Fruits à coque", "Œufs", "Poisson", "Crustacés", "Soja", "Sésame"];
+// Le résumé de « Mon alimentation », replié comme les autres rubriques (Taha, 23/11/2026).
+function resumeAlimentation(r, fodmap) {
+  const g = E.regime || {}, evite = [g.lactose ? "lactose" : "", g.gluten ? "gluten" : "", g.vegetarien ? "viande" : ""].filter(Boolean);
+  const n = evite.length + (g.allergies || []).length + autresListe(g.autres).length;
+  return [r.meme_plat !== false ? "Même plat midi et soir" : "Deux plats", r.stock_seul ? "Stock" : "", fodmap ? "FODMAP" : "",
+          n ? `${n} à éviter` : ""].filter(Boolean).join(" · ");
+}
+const autresListe = t => String(t || "").split(",").map(x => x.trim()).filter(Boolean);
 function champsRegime(r = {}, enDirect = false) {
   const puce = (nom, valeur, texte, coche) => `<label class="puce-choix"><input type="checkbox" name="${nom}" value="${esc(valeur)}"${coche ? " checked" : ""}${enDirect ? " data-regime" : ""}><span>${texte}</span></label>`;
   return `<div class="regime">
@@ -2511,9 +2523,41 @@ function champsRegime(r = {}, enDirect = false) {
     <div class="puces-choix">${puce("reg", "lactose", "Le lactose", r.lactose)}${puce("reg", "gluten", "Le gluten", r.gluten)}${puce("reg", "vegetarien", "La viande et le poisson", r.vegetarien)}</div>
     <p class="regime-titre">Allergies</p>
     <div class="puces-choix">${ALLERGENES.map(a => puce("allergie", a, a, (r.allergies || []).includes(a))).join("")}</div>
-    <input type="text" name="autres" maxlength="200" autocomplete="off" placeholder="Autre chose à éviter : champignons, kiwi…" value="${esc(r.autres || "")}"${enDirect ? " data-regime" : ""} aria-label="Autre chose à éviter">
+    <p class="regime-titre">Autre chose à éviter</p>
+    ${(() => {
+      // Un aliment à la fois, avec + ; chacun devient une pastille qu'on retire (Taha, 23/11/2026).
+      const liste = autresListe(r.autres);
+      return `<input type="hidden" name="autres" value="${esc(liste.join(", "))}"${enDirect ? " data-regime" : ""}>
+      <div class="puces-choix regime-autres">${liste.map(x => `<button type="button" class="regime-autre" data-retirer-autre="${esc(x)}" aria-label="Ne plus éviter ${esc(x)}">${esc(x)}${icone("x")}</button>`).join("")}</div>
+      <div class="regime-ajout"><input type="text" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Champignons, kiwi…" aria-label="Un aliment à éviter">
+        <button type="button" class="regime-plus" aria-label="Ajouter cet aliment">${icone("plus")}</button></div>`; })()}
   </div>`;
 }
+// « Autre chose à éviter » : ajouter (+ ou Entrée) et retirer une pastille ; le champ caché garde la liste pour lireRegime.
+function regimeAutres(racine, liste) {
+  const cache = racine.querySelector('input[name="autres"]');
+  cache.value = liste.join(", ");
+  racine.querySelector(".regime-autres").innerHTML = liste.map(x => `<button type="button" class="regime-autre" data-retirer-autre="${esc(x)}" aria-label="Ne plus éviter ${esc(x)}">${esc(x)}${icone("x")}</button>`).join("");
+  cache.dispatchEvent(new Event("change", { bubbles: true }));
+}
+function regimeAjouter(champ) {
+  const racine = champ.closest(".regime"), v = champ.value.replace(/,/g, " ").trim().replace(/\s+/g, " ");
+  if (!v) return;
+  const liste = autresListe(racine.querySelector('input[name="autres"]').value);
+  if (!liste.some(x => x.toLowerCase() === v.toLowerCase())) liste.push(v.charAt(0).toUpperCase() + v.slice(1));
+  champ.value = "";
+  regimeAutres(racine, liste);
+  champ.focus();
+}
+document.addEventListener("click", ev => {
+  const plus = ev.target.closest && ev.target.closest(".regime-plus");
+  if (plus) return regimeAjouter(plus.parentElement.querySelector("input"));
+  const x = ev.target.closest && ev.target.closest("[data-retirer-autre]");
+  if (x) { const racine = x.closest(".regime"); regimeAutres(racine, autresListe(racine.querySelector('input[name="autres"]').value).filter(v => v !== x.dataset.retirerAutre)); }
+});
+document.addEventListener("keydown", ev => {
+  if (ev.key === "Enter" && ev.target.closest && ev.target.closest(".regime-ajout")) { ev.preventDefault(); regimeAjouter(ev.target); }
+});
 function lireRegime(racine) {
   const coches = nom => [...racine.querySelectorAll(`input[name="${nom}"]:checked`)].map(i => i.value);
   const reg = coches("reg");
@@ -2935,7 +2979,8 @@ function vueCourses() {
   const liste = `<section class="bloc liste-courses" aria-labelledby="tListe"><h2 id="tListe">Ma liste${l.length ? `<span>${l.length}</span>` : ""}</h2>
     ${ajout}
     ${l.length ? `${[...groupes.entries()].sort(([a], [b]) => (a === "Autres") - (b === "Autres") || a.localeCompare(b, "fr")).map(([g, xs]) =>
-        `<h3 class="lc-rayon">${esc(g)}</h3><ul>${xs.map(ligne).join("")}</ul>`).join("")}
+        `<details class="lc-groupe" data-lc-rayon="${esc(g)}"${LC_FERMES.has(g) ? "" : " open"}><summary><span>${esc(g)}</span><small>${xs.length}</small>${icone("caret-right")}</summary>
+          <ul>${xs.map(ligne).join("")}</ul></details>`).join("")}
       <button type="button" class="bouton large" id="lcValider" data-action="lcValider"${LC_COCHES.size ? "" : " disabled"}>${lcTexte()}</button>
       <p class="lc-aide lc-sous">Coche ce que tu as acheté : ça passe dans « Mon stock ».</p>` : `<p class="lc-aide">Ta liste est vide.</p>`}</section>`;
   // Tous les ingrédients de l'appli, ici plutôt que dans Mon stock (Taha, 23/11/2026) : ce qu'on n'a pas, par rayon, replié ;
@@ -3718,7 +3763,7 @@ function vueReglagesFlemmard() {
   return `<a class="retour" href="#/profil">${icone("caret-left")}Profil</a>
   <div class="titre"><h1 tabindex="-1">Réglages</h1></div>
   <div class="reglages">
-  <section class="bloc toujours" aria-labelledby="tRepas"><h2 id="tRepas">Mon alimentation</h2>
+  <section class="bloc" aria-labelledby="tRepas" data-resume="${esc(resumeAlimentation(r, fodmap))}"><h2 id="tRepas">Mon alimentation</h2>
     <div class="options">
       <label class="option"><input type="checkbox" id="rStockSeul"${r.stock_seul ? " checked" : ""}><span><b>Stock uniquement</b><small>Seulement des plats faits avec ce que tu as en stock. Décoché : surtout ton stock, avec un peu de variété.</small></span></label>
       <label class="option"><input type="checkbox" id="rMemePlat"${r.meme_plat !== false ? " checked" : ""}><span><b>Le même plat midi et soir</b><small>Un seul plat par jour, au déjeuner et au dîner. Décoche pour deux plats différents.</small></span></label>

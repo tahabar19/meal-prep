@@ -1945,3 +1945,28 @@ body::before{opacity:.085}
 }
 .lc-idees + .liste-courses{margin-top:12px}
 .lc-champ input{border-color:var(--filet)}.lc-champ input:focus{border-color:var(--discret);box-shadow:none}
+/* Légende des graphiques : les lignes, puis ce que disent les axes (Taha, 23/11/2026) */
+.graph .axe.unite{font-size:10px;fill:var(--discret);opacity:.85}
+.graph-legende{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;margin:6px 0 0;font-size:.74rem;color:var(--texte)}
+.graph-legende span{display:inline-flex;align-items:center;gap:6px}
+.graph-legende i{display:inline-block;width:16px;height:0;border-top:2px solid var(--c)}
+.graph-legende i.gl-pointille{border-top-style:dashed}
+.graph-legende i.gl-barre{width:10px;height:10px;border:0;border-radius:3px;background:var(--c)}
+.graph-legende small{flex-basis:100%;font-size:.7rem;color:var(--discret)}
+/* Ma liste : rayons repliables */
+.lc-groupe{margin-top:6px;border-top:1px solid var(--filet-doux)}
+.lc-groupe summary{display:flex;align-items:center;gap:8px;min-height:40px;cursor:pointer;list-style:none;font-size:.74rem;letter-spacing:.04em;text-transform:uppercase;color:var(--discret)}
+.lc-groupe summary::-webkit-details-marker{display:none}
+.lc-groupe summary small{font-size:.7rem;letter-spacing:0;opacity:.8}
+.lc-groupe summary .ic{width:14px;height:14px;margin-left:auto;transition:transform .15s}
+.lc-groupe[open] summary .ic{transform:rotate(90deg)}
+.lc-groupe ul{margin:0 0 4px}
+/* Réglages : autre chose à éviter, un aliment à la fois */
+.regime-autres:empty{display:none}
+.regime-autre{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:0 9px 0 12px;border:1px solid rgba(200,240,75,.45);border-radius:var(--r-pilule);
+  background:rgba(200,240,75,.1);color:var(--encre);font:inherit;font-size:.8rem;cursor:pointer}
+.regime-autre .ic{width:11px;height:11px;color:var(--accent)}
+.regime-ajout{display:flex;gap:8px;margin-top:6px}
+.regime-ajout input{flex:1;min-width:0;height:40px;margin:0!important}
+.regime-plus{flex:none;display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--filet);border-radius:var(--r-ctl);background:var(--surface-fort);color:var(--accent);cursor:pointer}
+.regime-plus .ic{width:16px;height:16px}
