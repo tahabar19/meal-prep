@@ -301,10 +301,17 @@ class G_SansClaude(unittest.TestCase):
         vieux = (datetime.date.today() - datetime.timedelta(days=6)).isoformat()
         lignes = f.read_text(encoding="utf-8-sig").splitlines()
         f.write_text("\n".join(l.replace(l[:10], vieux, 1) if l.endswith(";test") or ";test" in l else l for l in lignes) + "\n", encoding="utf-8")
-        noms = {x["nom"]: x for x in M.etat()["a_finir"]}
+        # Fermé, le lait se garde : il compte à partir de son ouverture (3 jours ouvert).
+        self.assertNotIn("Lait", {x["nom"] for x in M.etat()["a_finir"]})
+        deux = (datetime.date.today() - datetime.timedelta(days=2)).isoformat()
+        self.assertEqual(M.api("POST", "/api/stock/ouvert", {"nom": "Lait", "date": deux})[0], 200)
+        e = M.etat()
+        noms = {x["nom"]: x for x in e["a_finir"]}
         self.assertIn("Lait", noms)
-        self.assertEqual(noms["Lait"]["reste"], 1)
+        self.assertEqual((noms["Lait"]["reste"], noms["Lait"]["ouvert"]), (1, 2))
+        self.assertEqual(e["ouverts"]["Lait"], 2)
         self.assertNotIn("Riz basmati", noms)
+        self.assertNotEqual(M.api("POST", "/api/stock/ouvert", {"nom": "Lait", "date": "2020-01-01"})[0], 200)
 
     def test_aucun_appel_claude_en_fond(self):
         avant = len(M.appels_claude)

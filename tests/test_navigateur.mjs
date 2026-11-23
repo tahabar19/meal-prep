@@ -468,16 +468,24 @@ try {
     await taper('');
     vrai(await attendre(`document.querySelectorAll('.stock-liste li').length >= 3`, 10000) >= 0, 'le stock ne montre pas les produits');
     const avant = await B.js(`document.querySelector('.stock-saisie').value`);
-    vrai(await B.js(`!!document.querySelector('details.stock-tous .stock-puce')`), 'pas de « Tous les produits »');
+    vrai(await B.js(`!document.querySelector('details.stock-tous')`), '« Tous les produits » encore dans Mon stock');
     // Un produit choisi dans Chez moi → les plats qui en ont, dans le catalogue (Taha, 23/11/2026).
     await B.js(`document.querySelector('button.stock-nom').click()`); await att(300);
     vrai(await B.js(`/plat/.test(document.getElementById('barre').textContent)`), 'pas de barre « N plats avec ça »');
+    await B.photo('stock-choisi');
+    // Deux produits sans plat commun : la carte propose « Inventer un plat ».
+    await B.js(`(() => { const ns = [...document.querySelectorAll('button.stock-nom')]; for (const b of ns.slice(1)) { b.click(); if (document.querySelector('[data-action=inventerPlat]')) break; } })()`); await att(300);
+    if (await B.js(`!!document.querySelector('.bi-vide')`)) await B.photo('stock-aucun-plat');
+    await B.js(`document.querySelector('[data-action=lacherIngs]').click()`); await att(200);
+    await B.js(`document.querySelector('button.stock-nom').click()`); await att(300);
     if (await B.js(`!!document.querySelector('[data-action=voirPlatsIngs]')`)) {
       await B.js(`document.querySelector('[data-action=voirPlatsIngs]').click()`); await att(800);
       vrai(await B.js(`!!document.querySelector('.cat-ings button')`), 'le catalogue ne montre pas l\'ingrédient choisi');
       await B.js(`document.querySelector('.cat-ings button').click()`); await att(300);
     }
     await aller('#/stock?v=courses');
+    // « Tous les produits » est dans Courses : un toucher met le produit sur la liste (Taha, 23/11/2026).
+    vrai(await B.js(`!!document.querySelector('details.stock-tous .stock-puce[data-action=lcAjouter]')`), 'pas de « Tous les produits » dans Courses');
     // Ma liste de courses : « Remplir ma liste » (N au choix), cocher, « Ajouter au stock » (Taha, 23/11/2026).
     await B.js(`document.querySelector('.liste-courses') && document.querySelector('.liste-courses').scrollIntoView()`); await att(200); await B.photo('stock-liste-vide');
     if (await B.js(`!!document.querySelector('[data-action=lcRemplir]')`)) {
@@ -620,6 +628,10 @@ try {
     const decale = await B.js(`Math.max(...[...document.querySelectorAll('.cat-pages button')].map(b => { const r = b.getBoundingClientRect(), i = b.querySelector('.ic').getBoundingClientRect();
       return Math.max(Math.abs(r.left + r.width / 2 - i.left - i.width / 2), Math.abs(r.top + r.height / 2 - i.top - i.height / 2)); }))`);
     vrai(decale <= 1.5, `flèche décalée de ${decale} px dans son cercle`);
+    await B.js(`document.querySelector('.filtres-bascule').click()`); await att(300);
+    await B.js(`document.querySelector('.filtre-groupe button').click()`); await att(300); await B.photo('catalogue-filtres');
+    await B.js(`document.querySelector('[data-cle=raz]') && document.querySelector('[data-cle=raz]').click()`); await att(200);
+    if (await B.js(`!!document.querySelector('.filtre-groupe')`)) { await B.js(`document.querySelector('.filtres-bascule').click()`); await att(300); }
     const premier = await B.js(`document.querySelector('.cat-liste b').textContent`);
     await B.js(`document.querySelector('[data-action="pageCat"][data-pas="5"]').click()`); await att(300);
     const suivant = await B.js(`document.querySelector('.cat-liste b').textContent`);
