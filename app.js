@@ -377,6 +377,7 @@ function pourCombien(c, j) {
   const repas = c.repas ?? Math.max(1, Math.round(c.portions / tailleDe(j, c.id)));
   return `pour ${repas} repas`;
 }
+const P_MOMENTS = j => [j.pdj, j.dej, j.din, ...(j.collations || [])].filter(x => x && x !== "rien");
 // Un plat tel qu'il se cuisine un jour donne : avec les quantites ajustees pour ce jour seulement.
 // Le dejeuner « reste » suit le diner de la veille.
 function platDuJour(s, n, id, moment = "") {
@@ -1539,7 +1540,8 @@ function ficheRapide(id, ctx, depuis, vu = null) {
   const quand = ctx ? [(MOMENTS_REPAS.find(([m]) => m === place) || [, ""])[1], j.jour].filter(Boolean).join(" · ") : "";
   const courante = ctx && (!E.mois || ctx.k === E.mois.rang);
   const mange = !!(ctx && courante && fait(s, ctx.n, id));
-  const libre = ctx && (enSuivi() || !mange) && !(ctx.moment === "dej" && j.dej_reste);
+  // La part gardée d'hier soir se change, se modifie et se retire comme les autres (Taha, 23/11/2026).
+  const libre = ctx && (enSuivi() || !mange) && !(!enSuivi() && ctx.moment === "dej" && j.dej_reste);
   const reg = ctx && reglable(s, ctx.k, ctx.n, id, ctx.moment);
   // Les ingrédients de l'assiette : le plat ce jour-là (quantités réglées comprises) × la taille de l'assiette.
   // Depuis l'historique : la taille se déduit des calories notées ce jour-là.
@@ -1567,7 +1569,7 @@ function ficheRapide(id, ctx, depuis, vu = null) {
         <div class="cp-ing-liste">${listeIngredients(rIng, tIng)}</div></details>` : ""}
       ${ctx && enSuivi() ? `<div class="cp-mange">${courante && ctx.n <= rangDuJour(s)
           ? `<button class="bouton${mange ? " second" : ""}" data-action="manger" data-jour="${ctx.n}" data-plat="${id}" data-annuler="${mange ? 1 : 0}">${icone("check")}${mange ? "Pas encore mangé" : "J'ai mangé"}</button>` : ""}
-        <a class="bouton sobre" href="${courante ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Voir la recette</a></div>`
+        <a class="bouton sobre" href="${courante ? `#/cuisine/${id}?jour=${ctx.n}&moment=${ctx.moment}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Voir la recette</a></div>`
       : enSuivi() ? `${vu && vu.date && vu.date < E.journal_repas.aujourdhui && semainePourDate(E.journal_repas.aujourdhui)
           ? `<button type="button" class="bouton cp-cuisiner" data-action="mangerAujourdhui" data-plat="${id}" data-moment="${esc(vu.moment || "")}">${icone("check")}Manger aujourd'hui</button>` : ""}
         <a class="bouton sobre cp-cuisiner" href="#/cuisine/${id}">${icone("cooking-pot")}Voir la recette</a>`
@@ -1575,7 +1577,7 @@ function ficheRapide(id, ctx, depuis, vu = null) {
       ${ctx && (libre || reg) ? `<div class="cp-choix">
         ${libre ? `<button type="button" data-action="changer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}">${icone("swap")}
           <span><b>Remplacer par un autre plat</b><small>Du catalogue ou un des tiens</small></span>${icone("caret-right")}</button>` : ""}
-        ${(libre || enSuivi()) && !(ctx.moment === "dej" && j.dej_reste) ? `<button type="button" data-action="ajusterJour" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}">${icone("notebook")}
+        ${libre || enSuivi() ? `<button type="button" data-action="ajusterJour" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-plat="${id}">${icone("notebook")}
           <span><b>Modifier les ingrédients</b><small>Retirer, ajouter, changer, pour ce jour</small></span>${icone("caret-right")}</button>` : ""}
       </div>` : ctx ? "" : `${estRepas(r0) && !vu ? `<div class="cp-choix"><button type="button" data-action="ajuster" data-plat="${id}">${icone("sliders-horizontal")}
           <span><b>${r0.ajustee ? "Recette ajustée : modifier" : "Ajuster la recette"}</b><small>Les quantités, pour tous les jours</small></span>${icone("caret-right")}</button></div>` : ""}
@@ -2008,10 +2010,14 @@ function vueRecette({ arg, params }) {
     seance = n >= 0 ? s.jours[n].cuisine.find(c => c.id === arg) : null;
   }
   if (seance) r = platDuJour(s, n, arg);                   // les quantites de ce jour-la, si elles ont ete ajustees
+  // Mode suivi : la recette telle qu'elle est dans l'assiette ce jour-là, même sans séance (part gardée d'hier soir,
+  // plat d'un autre repas) (Taha, 23/11/2026 : « la recette avec les portions du jour »).
+  const auJour = !seance && s && n >= 0 && enSuivi() && P_MOMENTS(s.jours[n]).includes(arg);
+  if (auJour) r = platDuJour(s, n, arg, params.get("moment") || (s.jours[n].dej === arg ? "dej" : ""));
   const portions = seance ? seance.portions : 1, ok = seance && fait(s, n, arg);
   const k = E.mois ? E.mois.rang : 0;
   const goute = s && Object.keys(s.prepares || {}).some(k => k.endsWith("|" + arg));
-  const combien = seance ? pourCombien(seance, s.jours[n]) : "pour 1 repas", facteur = seance ? tailleDe(s.jours[n], arg) : 1;
+  const combien = seance ? pourCombien(seance, s.jours[n]) : "pour 1 repas", facteur = seance || auJour ? tailleDe(s.jours[n], arg) : 1;
   // Taha, 22/11/2026 : « dans Modifier les ingrédients des portions, dans Cuisine d'autres » → en mode flemmard, les
   // quantités d'UNE assiette (comme Modifier) ; ce qui se cuisine pour plusieurs repas, à part, sur demande.
   const listeRecette = mult => `<ul class="ingredients">${r.ing.map(i => `<li><span>${i.u === "qs" ? esc(i.n) : `<button type="button" class="lien" data-action="ingredient" data-nom="${esc(i.n)}"
@@ -2031,7 +2037,7 @@ function vueRecette({ arg, params }) {
     <div class="fc-tete">${photo(r, 240, "carre", r.nom)}
       <div><h1 tabindex="-1">${esc(r.nom)}</h1>
         <p class="discret chiffres">${[`${nombre(r.kcal * facteur)} kcal`, `${nombre(r.prot * facteur)} g prot.`, r.temps ? `${r.temps} min` : "",
-          seance && facteur !== 1 ? `${nombre(facteur * 100)} %` : ""].filter(Boolean).join(" · ")}</p>
+          (seance || auJour) && facteur !== 1 ? `${nombre(facteur * 100)} %` : ""].filter(Boolean).join(" · ")}</p>
         ${goute && estRepas(r) ? `<div class="etoiles fc-note" role="group" aria-label="Ta note, de 1 à 5 : elle décide si ce plat revient" title="Ta note : elle décide si ce plat revient">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-action="noter" data-plat="${r.id}" data-note="${i}"
           class="${r.note && i <= Math.round(r.note) ? "pleine" : ""}" aria-label="${i} étoile${i > 1 ? "s" : ""} sur 5">${icone(r.note && i <= Math.round(r.note) ? "star-fill" : "star")}</button>`).join("")}</div>` : ""}
         ${enSuivi() ? "" : `<p class="discret petit">${seance ? `${s.jours[n].jour}, ` : ""}${combien}${seance && seance.pour_demain ? " : ce soir et demain midi" : ""}.</p>`}</div></div>
@@ -2906,15 +2912,15 @@ function vueCourses() {
         `<h3 class="lc-rayon">${esc(g)}</h3><ul>${xs.map(ligne).join("")}</ul>`).join("")}
       <button type="button" class="bouton large" id="lcValider" data-action="lcValider"${LC_COCHES.size ? "" : " disabled"}>${lcTexte()}</button>
       <p class="lc-aide lc-sous">Coche ce que tu as acheté : ça passe dans « Mon stock ».</p>` : `<p class="lc-aide">Ta liste est vide.</p>`}</section>`;
-  // Tous les produits de l'appli, ici plutôt que dans Mon stock (Taha, 23/11/2026) : ce qu'on n'a pas, par rayon, replié ;
+  // Tous les ingrédients de l'appli, ici plutôt que dans Mon stock (Taha, 23/11/2026) : ce qu'on n'a pas, par rayon, replié ;
   // un toucher le met sur la liste.
   const chez = new Set((E.stock || []).filter(x => x.quantite > 0).map(x => x.nom));
   const autres = tous.filter(n => !chez.has(n) && !l.some(x => x.nom === n)), parR = new Map();
   for (const n of autres) { const g = rayons[n] != null && E.rayons && E.rayons[rayons[n]] ? E.rayons[rayons[n]] : "Autres"; parR.set(g, [...(parR.get(g) || []), n]); }
   apresRendu.push(() => document.querySelectorAll("details[data-rayon]").forEach(d => d.addEventListener("toggle", () =>
     d.open ? STOCK_OUVERTS.add(d.dataset.rayon) : STOCK_OUVERTS.delete(d.dataset.rayon))));
-  const tousProduits = autres.length && !mots.length ? `<details class="stock-tous"${STOCK_OUVERTS.has("lc-tous") ? " open" : ""} data-rayon="lc-tous"><summary>Tous les produits<small>${autres.length}</small>${icone("caret-right")}</summary>
-      <p class="petit discret stock-astuce">Touche un produit pour le mettre sur ta liste.</p>
+  const tousProduits = autres.length && !mots.length ? `<details class="stock-tous"${STOCK_OUVERTS.has("lc-tous") ? " open" : ""} data-rayon="lc-tous"><summary>Tous les ingrédients<small>${autres.length}</small>${icone("caret-right")}</summary>
+      <p class="petit discret stock-astuce">Touche un ingrédient pour le mettre sur ta liste.</p>
       <div class="stock-rayons">${[...parR.entries()].sort(([a], [b]) => (a === "Autres") - (b === "Autres") || a.localeCompare(b, "fr")).map(([g, ns]) => `<details class="stock-rayon" data-rayon="lc|${esc(g)}"${STOCK_OUVERTS.has("lc|" + g) ? " open" : ""}>
         <summary><span class="sr-nom">${esc(g)}</span><small>${ns.length}</small>${icone("caret-right")}</summary>
         <div class="stock-puces">${ns.map(n => { const u = unite(n);
