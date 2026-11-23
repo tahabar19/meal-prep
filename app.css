@@ -1970,3 +1970,11 @@ body::before{opacity:.085}
 .regime-ajout input{flex:1;min-width:0;height:40px;margin:0!important}
 .regime-plus{flex:none;display:grid;place-items:center;width:40px;height:40px;border:1px solid var(--filet);border-radius:var(--r-ctl);background:var(--surface-fort);color:var(--accent);cursor:pointer}
 .regime-plus .ic{width:16px;height:16px}
+/* Téléphone : drapeau et indicatif à gauche (Taha, 23/11/2026) */
+.tel{display:flex;gap:8px;align-items:stretch}
+.tel-ind{position:relative;flex:none;display:flex;align-items:center;gap:4px;padding:0 12px;min-height:44px;border:1px solid var(--filet);border-radius:var(--r-ctl);
+  background:var(--surface-fort);color:var(--encre);font-size:.9rem;white-space:nowrap;cursor:pointer}
+.tel-ind span::after{content:"";display:inline-block;width:6px;height:6px;margin:0 0 3px 8px;border:solid var(--discret);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+.tel-ind select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
+.tel input{flex:1;min-width:0}
+.tel-ind:focus-within{outline:2px solid var(--accent);outline-offset:2px}
