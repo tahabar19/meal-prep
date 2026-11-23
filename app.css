@@ -1693,3 +1693,5 @@ input[type=date]::-webkit-datetime-edit{padding:0}
   body.clavier .nav-bas{display:none}
   body.clavier .barre{bottom:var(--bas)}
 }
+.stock-refaire{display:grid;gap:8px;margin:4px 0 14px}
+.stock-refaire .lien{justify-self:start;font-size:.84rem}
