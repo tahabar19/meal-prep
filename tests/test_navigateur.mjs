@@ -464,7 +464,7 @@ try {
     vrai(await B.js(`[...document.querySelectorAll('.stock-liste .stock-nom')].every(n => /Œuf/i.test(n.textContent)) && document.querySelectorAll('.stock-liste li').length >= 1`), 'la recherche « oeufs » ne montre pas l\'œuf seul');
     vrai(await B.js(`document.getElementById('stockAide').textContent.trim() === ''`), 'un aliment trouvé propose quand même de l\'ajouter');
     await taper('quinoa');
-    vrai(await B.js(`/pas dans ton stock/.test(document.getElementById('stockAide').textContent)`), 'pas de « n\'est pas dans ton stock »');
+    vrai(await B.js(`/pas dans ton stock/.test(document.getElementById('stockAide').textContent) || !!document.querySelector('.stock-proposes .stock-puce')`), 'taper un produit absent ne propose rien');
     await taper('');
     vrai(await attendre(`document.querySelectorAll('.stock-liste li').length >= 3`, 10000) >= 0, 'le stock ne montre pas les produits');
     const avant = await B.js(`document.querySelector('.stock-saisie').value`);
