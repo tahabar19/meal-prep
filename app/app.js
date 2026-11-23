@@ -2311,7 +2311,7 @@ function vueProfil() {
   <section aria-labelledby="tQui"><h2 id="tQui" style="margin-bottom:8px">${esc(p.nom)}</h2>
     <ul class="lignes">${i.nom_famille ? l("Nom", esc(`${i.nom || p.nom} ${i.nom_famille}`)) : ""}${l("Identifiant de connexion", esc(p.id))}
       ${i.date_naissance ? l("Date de naissance", `${esc(dateLongueCourte(i.date_naissance).replace(/^[a-zé]+ /i, ""))} (${i.age} ans)`) : i.age ? l("Âge", `${i.age} ans`) : ""}
-      ${i.sexe ? l("Sexe", esc(i.sexe)) : ""}${i.telephone ? l("Téléphone", esc(i.telephone)) : ""}
+      ${i.sexe ? l("Sexe", esc(i.sexe)) : ""}${i.pays ? l("Pays", `${drapeau(i.pays)} ${esc(paysDe(i.pays)[2])}`) : ""}${i.telephone ? l("Téléphone", esc(i.telephone)) : ""}
       ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul>
     <p class="petit discret" style="margin-top:8px"><a href="#/reglages">Modifier mes informations</a> (l'identifiant ne change pas).</p></section>
   <section class="bloc" aria-labelledby="tBesoins"><h2 id="tBesoins" style="margin-bottom:8px">Mes besoins par jour</h2>
@@ -2336,7 +2336,7 @@ function vueProfilFlemmard() {
   <p class="petit discret" style="margin:-4px 0 16px">Phase ${ph.n}, ${esc(ph.nom).toLowerCase()}. Ces repères ne remplacent pas un avis médical.</p>
   <section class="bloc" aria-labelledby="tQui"><h2 id="tQui" style="margin-bottom:8px">Mes informations</h2>
     <ul class="lignes">${i.date_naissance ? l("Date de naissance", `${esc(dateLongueCourte(i.date_naissance).replace(/^[a-zé]+ /i, ""))} (${i.age} ans)`) : i.age ? l("Âge", `${i.age} ans`) : ""}
-      ${i.sexe ? l("Sexe", esc(i.sexe)) : ""}${i.telephone ? l("Téléphone", esc(i.telephone)) : ""}
+      ${i.sexe ? l("Sexe", esc(i.sexe)) : ""}${i.pays ? l("Pays", `${drapeau(i.pays)} ${esc(paysDe(i.pays)[2])}`) : ""}${i.telephone ? l("Téléphone", esc(i.telephone)) : ""}
       ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul></section>
   <ul class="menu" style="margin-top:16px">
     ${lien("#/reglages", "sliders-horizontal", "Réglages", "")}
@@ -2564,6 +2564,70 @@ function lireRegime(racine) {
   return { lactose: reg.includes("lactose"), gluten: reg.includes("gluten"), vegetarien: reg.includes("vegetarien"),
            allergies: coches("allergie"), autres: (racine.querySelector('input[name="autres"]') || {}).value || "" };
 }
+// Pays et indicatif du téléphone, avec leur drapeau (Taha, 23/11/2026). Le pays proposé vient de la région du téléphone.
+const PAYS = [["FR", 33, "France"], ["MA", 212, "Maroc"], ["DZ", 213, "Algérie"], ["TN", 216, "Tunisie"], ["BE", 32, "Belgique"],
+  ["CH", 41, "Suisse"], ["LU", 352, "Luxembourg"], ["MC", 377, "Monaco"], ["CA", 1, "Canada"], ["US", 1, "États-Unis"],
+  ["GB", 44, "Royaume-Uni"], ["IE", 353, "Irlande"], ["DE", 49, "Allemagne"], ["NL", 31, "Pays-Bas"], ["ES", 34, "Espagne"],
+  ["PT", 351, "Portugal"], ["IT", 39, "Italie"], ["AT", 43, "Autriche"], ["SE", 46, "Suède"], ["NO", 47, "Norvège"],
+  ["DK", 45, "Danemark"], ["FI", 358, "Finlande"], ["PL", 48, "Pologne"], ["RO", 40, "Roumanie"], ["GR", 30, "Grèce"],
+  ["TR", 90, "Turquie"], ["EG", 20, "Égypte"], ["SA", 966, "Arabie saoudite"], ["AE", 971, "Émirats arabes unis"],
+  ["QA", 974, "Qatar"], ["KW", 965, "Koweït"], ["LB", 961, "Liban"], ["JO", 962, "Jordanie"], ["SN", 221, "Sénégal"],
+  ["CI", 225, "Côte d'Ivoire"], ["ML", 223, "Mali"], ["CM", 237, "Cameroun"], ["CD", 243, "RD Congo"], ["CG", 242, "Congo"],
+  ["GA", 241, "Gabon"], ["BF", 226, "Burkina Faso"], ["GN", 224, "Guinée"], ["MR", 222, "Mauritanie"], ["MG", 261, "Madagascar"],
+  ["NE", 227, "Niger"], ["TD", 235, "Tchad"], ["BJ", 229, "Bénin"], ["TG", 228, "Togo"], ["HT", 509, "Haïti"],
+  ["RE", 262, "La Réunion"], ["GP", 590, "Guadeloupe"], ["MQ", 596, "Martinique"], ["GF", 594, "Guyane"],
+  ["NC", 687, "Nouvelle-Calédonie"], ["PF", 689, "Polynésie française"], ["BR", 55, "Brésil"], ["MX", 52, "Mexique"],
+  ["IN", 91, "Inde"], ["PK", 92, "Pakistan"], ["JP", 81, "Japon"], ["CN", 86, "Chine"], ["AU", 61, "Australie"]]
+  .sort((a, b) => a[2].localeCompare(b[2], "fr"));
+const drapeau = c => String.fromCodePoint(...[...String(c || "FR")].map(x => 0x1F1E6 + x.charCodeAt(0) - 65));
+const paysDe = c => PAYS.find(p => p[0] === c) || PAYS.find(p => p[0] === "FR");
+function paysProbable() {
+  const FUSEAUX = { "Africa/Casablanca": "MA", "Africa/Algiers": "DZ", "Africa/Tunis": "TN", "Europe/Brussels": "BE", "Europe/Zurich": "CH",
+    "Europe/Luxembourg": "LU", "Europe/Monaco": "MC", "America/Montreal": "CA", "America/Toronto": "CA", "Europe/London": "GB",
+    "Europe/Berlin": "DE", "Europe/Madrid": "ES", "Europe/Lisbon": "PT", "Europe/Rome": "IT", "Europe/Amsterdam": "NL",
+    "Africa/Dakar": "SN", "Africa/Abidjan": "CI", "Indian/Reunion": "RE", "America/Guadeloupe": "GP", "America/Martinique": "MQ" };
+  try { const f = FUSEAUX[Intl.DateTimeFormat().resolvedOptions().timeZone]; if (f) return f; } catch (e) {}
+  const r = (String(navigator.language || "").split("-")[1] || "").toUpperCase();
+  return PAYS.some(p => p[0] === r) ? r : "FR";
+}
+const optionsPays = (choisi, avecIndicatif) => PAYS.map(([c, i, n]) => `<option value="${c}"${c === choisi ? " selected" : ""}>${drapeau(c)} ${n}${avecIndicatif ? ` +${i}` : ""}</option>`).join("");
+// Le numéro : l'indicatif (drapeau + « +33 ») à gauche, choisi dans la liste des pays ; le numéro du pays à droite.
+function champTel(id, nom, pays, valeur = "", plus = "") {
+  const [c, i] = paysDe(pays);
+  return `<div class="tel"><label class="tel-ind"><span aria-hidden="true">${drapeau(c)} +${i}</span>
+      <select data-tel-ind aria-label="Indicatif du pays">${optionsPays(c, true)}</select></label>
+    <input id="${id}" name="${nom}" type="tel" autocomplete="tel-national" inputmode="tel" maxlength="20" value="${esc(valeur)}" placeholder="6 12 34 56 78" ${plus}></div>`;
+}
+// « 06 12… » ou « 6 12… » + l'indicatif choisi → +33612… ; un numéro déjà international reste tel quel.
+function telComplet(input) {
+  const v = String(input.value || "").replace(/[\s.\-()]/g, ""), sel = input.closest(".tel").querySelector("[data-tel-ind]");
+  if (!v) return "";
+  if (/^\+/.test(v)) return v;
+  if (/^00/.test(v)) return "+" + v.slice(2);
+  return "+" + paysDe(sel.value)[1] + v.replace(/^0/, "");
+}
+// Un numéro +33612… → [pays, numéro sans l'indicatif] pour remplir le champ.
+function telDecoupe(t, pays) {
+  t = String(t || "");
+  if (!t.startsWith("+")) return [pays, t];
+  const p = [...PAYS].sort((a, b) => String(b[1]).length - String(a[1]).length).find(([c, i]) => t.startsWith("+" + i) && (c === pays || !PAYS.some(x => x[0] === pays && x[1] === i)));
+  return p ? [p[0], t.slice(String(p[1]).length + 1)] : [pays, t];
+}
+function telRemplir(input, t) {
+  const sel = input.closest(".tel").querySelector("[data-tel-ind]"), [c, n] = telDecoupe(t, sel.value);
+  sel.value = c; sel.dispatchEvent(new Event("change", { bubbles: true })); input.value = n;
+}
+document.addEventListener("change", ev => {
+  if (ev.target.matches && ev.target.matches("[data-tel-ind]")) {
+    const [c, i] = paysDe(ev.target.value);
+    ev.target.previousElementSibling.textContent = `${drapeau(c)} +${i}`;
+  }
+  // Choisir son pays règle aussi l'indicatif du téléphone.
+  if (ev.target.matches && ev.target.matches("[data-pays]")) {
+    const sel = ev.target.form && ev.target.form.querySelector("[data-tel-ind]");
+    if (sel) { sel.value = ev.target.value; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+  }
+});
 function formulaireProfil(avecCode) {
   const champ = (id, libelle, corps, aide = "") => `<div class="champ"><label for="${id}">${libelle}</label>${corps}${aide ? `<small>${aide}</small>` : ""}</div>`;
   const nombreChamp = (id, min, max, pas, exemple) => `<input id="${id}" name="${id}" type="number" inputmode="decimal" min="${min}" max="${max}" step="${pas}" autocomplete="off" placeholder="${exemple}…" required>`;
@@ -2585,7 +2649,8 @@ function formulaireProfil(avecCode) {
     ${champ("date_naissance", "Date de naissance", `<input id="date_naissance" name="date_naissance" type="date" required>`)}
     ${champ("sexe", "Sexe", choix("sexe", [["femme", "Femme"], ["homme", "Homme"]]))}
     </div>
-    ${champ("telephone", "Téléphone", `<input id="telephone" name="telephone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" required>`)}
+    ${(() => { const p = paysProbable(); return champ("pays", "Pays", `<select id="pays" name="pays" data-pays autocomplete="country">${optionsPays(p)}</select>`)
+      + champ("telephone", "Téléphone", champTel("telephone", "telephone", p, "", "required")); })()}
     <div class="champs2 deux">
     ${champ("taille_cm", "Taille (cm)", nombreChamp("taille_cm", 130, 220, 1, "170"))}
     ${champ("poids_kg", "Poids (kg)", nombreChamp("poids_kg", 35, 250, 0.1, "70"))}
@@ -3783,6 +3848,7 @@ function vueReglagesFlemmard() {
         ${champ("iNom", "Nom", saisie("iNom", "nom_famille", i.nom_famille, "text", 'maxlength="60" autocomplete="family-name"'))}</div>
       <div class="champs2">${champ("iNaissance", "Date de naissance", saisie("iNaissance", "date_naissance", i.date_naissance, "date"))}
         ${champ("iSexe", "Sexe", choix("iSexe", "sexe", i.sexe || "homme", [["femme", "Femme"], ["homme", "Homme"]]))}</div>
+      ${champ("iPays", "Pays", `<select id="iPays" name="pays" autocomplete="country">${optionsPays(i.pays || paysProbable())}</select>`)}
       <div class="champs2">${champ("iTaille", "Taille, en cm", saisie("iTaille", "taille_cm", i.taille_cm, "text", 'inputmode="numeric"'))}
         ${champ("iPoids", "Poids, en kg", saisie("iPoids", "poids_kg", virgule(i.poids_kg), "text", 'inputmode="decimal"'))}</div>
       ${E.profil.calcule ? `<div class="champs2">${champ("iActivite", "Activité", choix("iActivite", "activite", i.activite, [["sedentaire", "Sédentaire"], ["leger", "Sport léger, 1 à 3 fois par semaine"], ["modere", "Sport modéré, 3 à 5 fois par semaine"], ["actif", "Sport intense, 6 à 7 fois par semaine"], ["intense", "Sport très intense ou métier physique"]]))}
@@ -3795,13 +3861,13 @@ function vueReglagesFlemmard() {
   ${(() => { apresRendu.push(async () => {
       const f = $("fCoord"); if (!f) return;
       try { const r = await fetch("/api/compte/moi"); if (!r.ok) throw 0; const m = await r.json();
-        if (m.erreur) throw 0; $("cEmail").value = m.email || ""; $("cTel").value = m.telephone || ""; }
+        if (m.erreur) throw 0; $("cEmail").value = m.email || ""; telRemplir($("cTel"), m.telephone); }
       catch (e) { f.hidden = true; }                   // sur le PC : pas de compte en ligne
     }); return ""; })()}
   <section class="bloc" aria-labelledby="tCompte" data-resume="Email, mot de passe"><h2 id="tCompte">Mon compte</h2>
     <form class="formulaire" id="fCoord" novalidate>
       <div class="champ"><label for="cEmail">Email</label><input id="cEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="120" placeholder="prenom@gmail.com"></div>
-      <div class="champ"><label for="cTel">Téléphone</label><input id="cTel" name="telephone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="06 12 34 56 78"></div>
+      <div class="champ"><label for="cTel">Téléphone</label>${champTel("cTel", "telephone", (E.profil.identite || {}).pays || paysProbable())}</div>
       <small id="eCoord" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
       <button class="bouton second" type="submit">Enregistrer email et téléphone</button></form>
     <form class="formulaire" id="fMdp" novalidate style="margin-top:18px">
@@ -4415,6 +4481,7 @@ document.addEventListener("submit", async ev => {
     corps.regime = lireRegime(ev.target);
     for (const cle of ["reg", "allergie", "autres"]) delete corps[cle];
     corps.identifiant = String(corps.identifiant || "").trim().toLowerCase();
+    corps.telephone = telComplet($("telephone"));
     const libelle = bouton.textContent;
     bouton.textContent = "Création…"; bouton.disabled = true;
     const rep = await appel("/api/profil/creer", corps);
@@ -4442,10 +4509,10 @@ document.addEventListener("submit", async ev => {
     bouton.disabled = true;
     try {
       const r = await fetch("/api/compte/coordonnees", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: $("cEmail").value.trim(), telephone: $("cTel").value.trim() }) });
+        body: JSON.stringify({ email: $("cEmail").value.trim(), telephone: telComplet($("cTel")) }) });
       const rep = await r.json();
       $("eCoord").textContent = rep.erreur || "";
-      if (!rep.erreur) { $("cEmail").value = rep.email || ""; $("cTel").value = rep.telephone || ""; dire("Email et téléphone enregistrés."); }
+      if (!rep.erreur) { $("cEmail").value = rep.email || ""; telRemplir($("cTel"), rep.telephone); dire("Email et téléphone enregistrés."); }
     } catch (e) { $("eCoord").textContent = "Le serveur ne répond pas, réessaie."; }
     bouton.disabled = false;
   }
