@@ -1769,3 +1769,22 @@ button.stock-nom .ic{width:15px;height:15px;flex:none}
 .puce-choix input:focus-visible + span{outline:2px solid var(--accent);outline-offset:2px}
 .regime input[type=text]{margin-top:4px}
 .stock-proposes{padding:0;margin:-12px 0 18px}
+/* À finir bientôt, Tous les produits (23/11/2026) */
+.a-finir{padding:12px 14px 14px!important;margin-bottom:16px;border:1px solid rgba(240,190,90,.28)}
+.a-finir h2{display:flex;align-items:center;gap:8px;margin:0 0 6px}
+.a-finir h2 .ic{width:18px;height:18px;color:#e9bf6a}
+.a-finir ul{list-style:none;margin:0 0 12px;padding:0}
+.a-finir li{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:46px}
+.a-finir li + li{border-top:1px solid var(--filet-doux)}
+.a-finir li > span:first-child{display:grid;min-width:0}
+.a-finir b{font-weight:500;font-size:.9rem}
+.a-finir small{font-size:.74rem;color:var(--discret)}
+.af-quand{flex:none;font-size:.8rem;color:#e9bf6a}
+.af-quand.urgent{color:#e79a86}
+.stock-tous{margin-top:22px}
+.stock-tous > summary{display:flex;align-items:center;gap:8px;min-height:44px;list-style:none;cursor:pointer;color:var(--encre);font-size:.95rem;font-weight:600}
+.stock-tous > summary::-webkit-details-marker{display:none}
+.stock-tous > summary small{color:var(--discret);font-size:.78rem;font-weight:400}
+.stock-tous > summary .ic{width:16px;height:16px;margin-left:auto;color:var(--discret);transition:transform .15s}
+.stock-tous[open] > summary .ic{transform:rotate(90deg)}
+.stock-tous .stock-astuce{margin:0 0 10px}

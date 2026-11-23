@@ -2811,9 +2811,11 @@ function vueStockMaison({ params } = {}) {
   for (const n of [...ING_CHOISIS]) if (!st.some(l => l.nom === n && l.quantite > 0)) ING_CHOISIS.delete(n);
   if (ING_CHOISIS.size) {
     const n = platsAvec(ING_CHOISIS).length;
+    // Aucun plat avec tout ça : l'IA en invente un (Taha, 23/11/2026).
     barre(`<div><b>${esc([...ING_CHOISIS].join(", "))}</b><span>${n ? `${n} plat${n > 1 ? "s" : ""} avec ${ING_CHOISIS.size > 1 ? "tout ça" : "ça"}` : "Aucun plat avec tout ça"}</span></div>
       <button type="button" class="bouton sobre" data-action="lacherIngs" aria-label="Tout désélectionner">${icone("x")}</button>
-      ${n ? `<button type="button" class="bouton" data-action="voirPlatsIngs">Voir les plats</button>` : ""}`);
+      ${n ? `<button type="button" class="bouton" data-action="voirPlatsIngs">Voir les plats</button>`
+        : `<button type="button" class="bouton bouton-ia" data-action="inventerPlat">${icone("sparkle")}Un plat avec l'IA</button>`}`);
   }
   return `<div class="m-tete"><div><h1 tabindex="-1">Stock</h1>
       ${onglets}
@@ -2834,11 +2836,21 @@ function vueStockMaison({ params } = {}) {
           <button type="button" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="${l.quantite}" aria-label="Plus de ${esc(l.nom)}">+</button></span></li>`;
       apresRendu.push(() => document.querySelectorAll("details[data-rayon]").forEach(d => d.addEventListener("toggle", () =>
         d.open ? STOCK_OUVERTS.add(d.dataset.rayon) : STOCK_OUVERTS.delete(d.dataset.rayon))));
-      return `${chez.length ? `<p class="petit discret stock-astuce">Touche un produit pour voir les plats qui en ont (un lait à finir, par exemple).</p>
+      const finir = (E.a_finir || []).filter(x => chez.some(l => l.nom === x.nom));
+      const quand = x => x.reste < 0 ? "à vérifier" : x.reste === 0 ? "aujourd'hui" : x.reste === 1 ? "demain" : `dans ${x.reste} jours`;
+      return `${finir.length && !voulus.length ? `<section class="bloc a-finir" aria-labelledby="tFinir"><h2 id="tFinir">${icone("warning-circle")}À finir bientôt</h2>
+        <ul>${finir.map(x => `<li><span><b>${esc(x.nom)}</b><small>entré il y a ${x.depuis} jour${x.depuis > 1 ? "s" : ""}</small></span><span class="af-quand${x.reste <= 0 ? " urgent" : ""}">${quand(x)}</span></li>`).join("")}</ul>
+        <button type="button" class="bouton large second" data-action="platsAFinir">${icone("cooking-pot")}Des plats pour les finir</button></section>` : ""}
+      ${chez.length ? `<p class="petit discret stock-astuce">Touche un produit pour voir les plats qui en ont.</p>
       <div class="stock-rayons">${parRayon(chez).map(([g, lignes]) => `<details class="stock-rayon stock-chez" data-rayon="chez|${esc(g)}"${voulus.length || STOCK_OUVERTS.has("chez|" + g) || lignes.some(l => ING_CHOISIS.has(l.nom)) ? " open" : ""}>
         <summary><span class="sr-nom">${esc(g)}</span><small>${lignes.length}</small>${icone("caret-right")}</summary>
         <ul class="stock-liste">${lignes.map(ligne).join("")}</ul></details>`).join("")}</div>`
-        : `<p class="petit discret stock-vide">${voulus.length ? "" : "Ton stock est vide : tape un produit, ou prends en photo ton frigo ou un ticket."}</p>`}`;
+        : `<p class="petit discret stock-vide">${voulus.length ? "" : "Ton stock est vide : tape un produit, ou prends en photo ton frigo ou un ticket."}</p>`}
+      ${reste.length && !voulus.length ? `<details class="stock-tous"${STOCK_OUVERTS.has("tous") ? " open" : ""} data-rayon="tous"><summary>Tous les produits<small>${reste.length}</small>${icone("caret-right")}</summary>
+        <p class="petit discret stock-astuce">Touche un produit pour l'ajouter, puis règle sa quantité.</p>
+        <div class="stock-rayons">${parRayon(reste).map(([g, lignes]) => `<details class="stock-rayon" data-rayon="${esc(g)}"${STOCK_OUVERTS.has(g) ? " open" : ""}>
+          <summary><span class="sr-nom">${esc(g)}</span><small>${lignes.length}</small>${icone("caret-right")}</summary>
+          <div class="stock-puces">${lignes.map(l => `<button type="button" class="stock-puce" data-stock-pas="1" data-nom="${esc(l.nom)}" data-unite="${esc(l.unite)}" data-q="0" aria-label="Ajouter ${esc(l.nom)} au stock">${esc(l.nom)}${icone("plus")}</button>`).join("")}</div></details>`).join("")}</div></details>` : ""}`;
     })()}`;
 }
 const STOCK_OUVERTS = new Set();
@@ -3055,6 +3067,7 @@ function vueJourSuivi(params) {
     ${dec === 1 ? `<p class="petit discret" style="margin:-2px 0 12px">Provisoire : les quantités de demain se règlent demain matin, d'après ce que tu auras vraiment mangé aujourd'hui.</p>` : ""}
     ${jaugesDuJour(j, o, mangeJour)}
     <p class="reste-jour">${reste}</p>
+    ${(E.a_finir || []).length && dec === 0 ? `<a class="rappel" href="#/stock">${icone("warning-circle")}<span>À finir : ${esc(E.a_finir.slice(0, 3).map(x => x.nom).join(", "))}${E.a_finir.length > 3 ? "…" : ""}</span>${icone("caret-right")}</a>` : ""}
     ${(E.vitamines_a_completer || []).length && dec === 0 ? `<a class="rappel" href="#/vitamines?completer=1">${icone("warning-circle")}<span>${E.vitamines_a_completer.length} aliment${E.vitamines_a_completer.length > 1 ? "s" : ""} sans vitamines : complète-les</span>${icone("caret-right")}</a>` : ""}
     ${E.eau && dec === 0 ? (() => {
       // L'eau : un seul bouton, coché = l'objectif du jour est bu (Taha, 21/11/2026 : « juste un bouton check »).
@@ -4175,6 +4188,14 @@ const ACTIONS = {
   lcNb: b => { lcNbGarder(LC_NB.n + Number(b.dataset.pas)); const i = $("lcNb"); if (i) i.value = LC_NB.n; },
   lcAjouter: b => { filtreCourses = ""; return agir("/api/liste_courses", { nom: b.dataset.nom, unite: b.dataset.unite, quantite: Number(b.dataset.q) }, `${b.dataset.nom} : sur ta liste.`); },
   choisirIng: b => { const n = b.dataset.nom; ING_CHOISIS.has(n) ? ING_CHOISIS.delete(n) : ING_CHOISIS.add(n); rendre(); },
+  inventerPlat: () => creerPlatIA("plat", `Une recette avec ${[...ING_CHOISIS].join(", ").toLowerCase()}`),
+  // « À finir bientôt » : ce qui a des plats ensemble ; sinon le plus pressé seul.
+  platsAFinir: () => {
+    const f = (E.a_finir || []).map(x => x.nom).filter(n => (E.stock || []).some(l => l.nom === n && l.quantite > 0));
+    ING_CHOISIS.clear();
+    for (const n of f) { ING_CHOISIS.add(n); if (!platsAvec(ING_CHOISIS).length && ING_CHOISIS.size > 1) ING_CHOISIS.delete(n); }
+    rendre();
+  },
   lacherIngs: () => { ING_CHOISIS.clear(); rendre(); },
   voirPlatsIngs: () => { Object.assign(filtresCat, { ings: new Set(ING_CHOISIS), debut: 0 }); ING_CHOISIS.clear(); location.hash = "#/catalogue"; },
   sansIngCat: b => { filtresCat.ings.delete(b.dataset.nom); filtresCat.debut = 0; rendre(); },
