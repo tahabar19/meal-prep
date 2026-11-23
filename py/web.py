@@ -144,6 +144,7 @@ def preparer() -> None:
     s._claude_json = _claude_json
     s._claude_avec_photo = _claude_avec_photo
     s._image_generee = _image_generee
+    s._lire_recette = lambda url: _pont("recette_lien", {"url": url})      # une recette vue en ligne (23/11/2026)
     s._octets_photo_du_site = _photo_du_catalogue
     s.sauvegarder = lambda *a, **k: None          # les sauvegardes, c'est Supabase
     # Un seul journal, centralisé (Taha, 19/11/2026) : plus de journal.json dans le profil.

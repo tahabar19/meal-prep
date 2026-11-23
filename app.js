@@ -36,7 +36,7 @@ let apresRendu = [];     // graphiques a tracer une fois la vue posee dans la pa
 let filtreStock = "";
 let filtreCatalogue = "";
 const filtresCat = { cats: new Set(), avis: "", regimes: new Set(), atouts: new Set(), proteines: new Set(), origines: new Set(), prix: 0, temps: 0,
-                     stock: false, ings: new Set(), tri: "nom", sens: 1, debut: 0, ouvert: matchMedia("(min-width: 900px)").matches };   // filtres du catalogue
+                     stock: false, ings: new Set(), tri: "nom", sens: 1, debut: 0, groupe: "cat", ouvert: matchMedia("(min-width: 900px)").matches };   // filtres du catalogue
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -830,28 +830,43 @@ function demanderChangement(k, n, moment) {
 // « Créer mon propre plat » du catalogue (Taha, 22/11/2026 : « pas à jour avec ce qu'on a fait ») : le même champ IA que
 // « Remplacer un plat ». L'IA trouve aliments, grammes et macros, tu vérifies, le plat rejoint tes plats.
 // Sans compte Claude : les ingrédients à la main, comme avant.
-function creerPlatIA(cat = "plat", texte = "") {
+// Un plat écrit, ou le lien d'une recette vue en ligne : Instagram, TikTok, YouTube, Facebook, un site de recettes
+// (Taha, 23/11/2026). L'appli lit ce que le lien laisse lire, l'IA en fait un plat pour une portion, avec ses étapes.
+const RE_LIEN = /^\s*(https?:\/\/|www\.)\S+\s*$/i;
+function creerPlatIA(cat = "plat", texte = "", lien = "", description = "") {
   if (E.claude === false) return demanderPlatPerso({ cat });
   const d = $("dialogue");
   d.innerHTML = `<form class="feuille rp creer-plat" novalidate>
     <div class="rp-tete"><div><p class="rp-sur">Catalogue</p><h2 id="dialogueTitre">Créer un plat</h2></div>
       <button type="button" class="rp-fermer" data-fermer aria-label="Fermer">${icone("x")}</button></div>
-    <p class="petit discret rp-intro">Écris ton plat ou ce que tu manges. L'IA trouve les aliments, les grammes et les macros ; tu vérifies avant d'enregistrer.</p>
+    <p class="petit discret rp-intro">Écris ton plat, ou colle le lien d'une recette vue en ligne. L'IA trouve les aliments, les grammes et les étapes ; tu vérifies avant d'enregistrer.</p>
     <div class="rp-recherche champ-ia">${icone("sparkle")}<input id="cpTexte" type="text" enterkeyhint="go" autocomplete="off"
         placeholder="Ex. : 2 œufs, pain pita 70 g" aria-label="Ton plat, ou ce que tu manges" value="${esc(texte)}"><span class="rp-badge-ia">IA</span></div>
+    <p class="cp-ou" aria-hidden="true"><span>ou</span></p>
+    <div class="rp-recherche cp-lien">${icone("link")}<input id="cpLien" type="url" inputmode="url" enterkeyhint="go" autocomplete="off"
+        placeholder="Colle un lien de recette" aria-label="Lien d'une recette : Instagram, TikTok, YouTube, Facebook, site de recettes" value="${esc(lien)}"></div>
+    <p class="cp-sites">Instagram · TikTok · YouTube · Facebook · sites de recettes</p>
+    <textarea id="cpDesc" class="cp-desc" rows="3" maxlength="6000" ${lien ? "" : "hidden "}placeholder="Sa description ou ses ingrédients, si tu les as (facultatif, plus précis)" aria-label="Description de la recette">${esc(description)}</textarea>
     <small class="erreur" id="eCp" role="alert" style="display:block;min-height:1em;margin-top:6px;color:var(--critique)"></small>
     <button class="bouton bouton-ia" type="submit" style="width:100%;margin-top:6px">${icone("sparkle")}Créer avec l'IA</button>
     <p class="petit" style="margin:14px 0 0;text-align:center"><button type="button" class="lien" data-main>Sans l'IA : entrer les ingrédients moi-même</button></p></form>`;
-  const f = d.querySelector("form");
+  const f = d.querySelector("form"), champ = $("cpTexte"), lienCh = $("cpLien"), desc = $("cpDesc");
+  const montrer = () => { desc.hidden = !lienCh.value.trim(); };
+  // Un lien collé dans le premier champ passe dans le champ du lien.
+  champ.addEventListener("input", () => { if (RE_LIEN.test(champ.value)) { lienCh.value = champ.value.trim(); champ.value = ""; montrer(); desc.focus(); } });
+  lienCh.addEventListener("input", montrer);
   f.querySelector("[data-fermer]").addEventListener("click", () => d.close("non"));
   f.querySelector("[data-main]").addEventListener("click", () => demanderPlatPerso({ cat }));
   f.addEventListener("submit", ev => {
     ev.preventDefault();
-    const t = $("cpTexte").value.trim();
-    if (t.length < 2) { $("eCp").textContent = "Écris ton plat d'abord."; return; }
-    noterRepas({ date: E.journal_repas.aujourdhui, remplacer: { texte: t, creer: true,
-      place: cat === "petitdej" ? "pdj" : cat === "collation" ? "col" : undefined,
-      retour: () => creerPlatIA(cat, t), main: () => demanderPlatPerso({ cat }) } });
+    const t = champ.value.trim(), l = lienCh.value.trim().replace(/^www\./i, "https://www."), de = desc.value.trim();
+    const retour = () => creerPlatIA(cat, t, l, de), place = cat === "petitdej" ? "pdj" : cat === "collation" ? "col" : undefined;
+    if (l) {
+      if (!/^https?:\/\/\S+\.\S+/.test(l)) { $("eCp").textContent = "Ce lien n'a pas l'air complet : copie-le depuis « Partager »."; return; }
+      return noterRepas({ date: E.journal_repas.aujourdhui, remplacer: { texte: "", lien: l, description: de, creer: true, place, retour, main: () => demanderPlatPerso({ cat }) } });
+    }
+    if (t.length < 2) { $("eCp").textContent = "Écris ton plat, ou colle un lien."; return; }
+    noterRepas({ date: E.journal_repas.aujourdhui, remplacer: { texte: t, creer: true, place, retour, main: () => demanderPlatPerso({ cat }) } });
   });
   if (!d.open) d.showModal();
 }
@@ -1559,6 +1574,7 @@ function ficheRapide(id, ctx, depuis, vu = null) {
       ${quand || vu ? `<p class="petit discret">${esc(vu ? vu.quand : quand)}</p>` : ""}
       <h2 id="cpTitre">${esc(r0.nom)}</h2>
       ${labels.length ? `<p class="cp-etiquettes">${labels.map(x => `<span>${esc(x)}</span>`).join("")}</p>` : ""}
+      ${r0.source && /^https?:\/\//.test(r0.source.lien || "") ? `<p class="cp-source"><a href="${esc(r0.source.lien)}" target="_blank" rel="noopener">${icone("link")}Vue sur ${esc(r0.source.site || "le web")}${r0.source.auteur ? ` · ${esc(r0.source.auteur)}` : ""}</a></p>` : ""}
       <div class="cp-chiffres">
         <div><b data-cp-v="${val("kcal")}" data-u="">${nombre(val("kcal"))}</b><span>kcal</span></div><div><b data-cp-v="${val("prot")}" data-u=" g">${nombre(val("prot"))} g</b><span>prot.</span></div>
         <div><b data-cp-v="${val("gluc")}" data-u=" g">${nombre(val("gluc"))} g</b><span>gluc.</span></div><div><b data-cp-v="${val("lip")}" data-u=" g">${nombre(val("lip"))} g</b><span>lip.</span></div>
@@ -2048,6 +2064,7 @@ function vueRecette({ arg, params }) {
         <div hidden data-ing-total>${listeRecette(portions)}</div>` : ""}
 </section>
     <section class="fc-bloc" aria-labelledby="tEtapes"><h2 id="tEtapes">Préparation</h2>
+      ${r.source && /^https?:\/\//.test(r.source.lien || "") ? `<p class="cp-source"><a href="${esc(r.source.lien)}" target="_blank" rel="noopener">${icone("link")}Recette vue sur ${esc(r.source.site || "le web")}${r.source.auteur ? ` · ${esc(r.source.auteur)}` : ""}</a></p>` : ""}
       <ol class="etapes">${r.etapes.map(e => `<li>${esc(e)}</li>`).join("")}</ol>
       ${r.four ? `<p class="petit discret" style="margin-top:10px">Four : ${esc(r.four)}.</p>` : ""}</section>
   </article>`;
@@ -2683,27 +2700,36 @@ function vueCatalogue({ params }) {
   const origines = [...new Set(ici.map(r => r.filtres.origine).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
   const proteines = PROTEINES.filter(([id]) => ici.some(r => r.filtres.proteine === id));
   // Chaque rangée garde sa position quand on touche une puce (la page se redessine).
-  apresRendu.push(() => document.querySelectorAll(".filtre-groupe .gouts").forEach(g => { const k = g.getAttribute("aria-label");
+  apresRendu.push(() => document.querySelectorAll(".ft-onglets, .ft-choix").forEach(g => { const k = g.className.split(" ")[0] + (g.getAttribute("aria-label") || "");
     g.scrollLeft = FILTRES_DEFIL[k] || 0; g.addEventListener("scroll", () => { FILTRES_DEFIL[k] = g.scrollLeft; }, { passive: true }); }));
-  const groupe = (nom, puces) => puces ? `<div class="filtre-groupe"><span class="filtre-nom">${nom}</span><div class="gouts" role="group" aria-label="${nom}">${puces}</div></div>` : "";
   return `<div class="titre"><h1 tabindex="-1">Catalogue</h1>
     <p>${repas.length} recettes. Dis ce que tu veux bien tester et ce que tu n'aimes pas : l'appli en tient compte quand il compose ta semaine. ${nb("tester")} à tester, ${nb("non")} que tu n'aimes pas.</p></div>
   <p class="actions" style="margin:-6px 0 14px"><button class="bouton second" data-action="creerPlat" data-cat="${F.cats.size === 1 ? [...F.cats][0] : "plat"}">${icone("cooking-pot")}Créer mon propre plat</button></p>
-  <section class="filtres" aria-labelledby="tFiltres">
-    <h2 id="tFiltres"><button type="button" class="filtres-bascule" data-action="filtreCat" data-cle="ouvert" data-valeur="" aria-expanded="${F.ouvert}">${icone("sliders-horizontal")}Filtres${actifs ? ` <span class="puce accent">${actifs}</span>` : ""}${icone("caret-right")}</button>
-      ${actifs ? `<button type="button" class="bouton sobre" data-action="filtreCat" data-cle="raz" data-valeur="">Tout enlever</button>` : ""}</h2>
-    ${F.ouvert ? `${groupe("Repas", CATS.map(([id, nom]) => puce("cat", id, nom, F.cats.has(id))).join(""))}
-    ${groupe("Ton avis", AVIS.filter(([id]) => id).concat([["sans", "Pas encore d'avis"]]).map(([id, nom]) => puce("avis", id, nom, F.avis === id)).join(""))}
-    ${groupe("Régime", REGIMES.map(x => puce("regime", x, x, F.regimes.has(x))).join(""))}
-    ${groupe("Protéine", proteines.map(([id, nom]) => puce("proteine", id, nom, F.proteines.has(id))).join(""))}
-    ${groupe("Cuisine du monde", origines.map(x => puce("origine", x, x, F.origines.has(x))).join(""))}
-    ${groupe("Temps", TEMPS.map(([v, t]) => puce("temps", v, t, F.temps === v)).join(""))}
-    ${groupe("Atouts", ATOUTS.map(x => puce("atout", x, x, F.atouts.has(x))).join(""))}
-    ${groupe("Prix", PRIX.map(([v, t]) => puce("prix", v, t, F.prix === v)).join(""))}
-    ${groupe("Stock", puce("stock", "", "Faisable avec ton stock", F.stock))}
-    <div class="filtre-groupe"><span class="filtre-nom">Avec un ingrédient</span>
-      <input id="ingCat" type="search" list="ingCatListe" autocomplete="off" placeholder="Lait, poulet…" aria-label="Voir les plats avec cet ingrédient">
-      <datalist id="ingCatListe">${[...new Set(repas.flatMap(r => (r.ing || []).filter(i => i.u !== "qs").map(i => i.n)))].sort((a, b) => a.localeCompare(b, "fr")).map(n => `<option value="${esc(n)}">`).join("")}</datalist></div>` : ""}
+  <section class="filtres ft" aria-labelledby="tFiltres">
+    <h2 id="tFiltres"><button type="button" class="filtres-bascule" data-action="filtreCat" data-cle="ouvert" data-valeur="" aria-expanded="${F.ouvert}">${icone("sliders-horizontal")}Filtres${actifs ? ` <span class="ft-nb">${actifs}</span>` : ""}${icone("caret-right")}</button>
+      ${actifs ? `<button type="button" class="ft-raz" data-action="filtreCat" data-cle="raz" data-valeur="">Effacer</button>` : ""}</h2>
+    ${(() => {
+      // Une rangée d'onglets, un seul groupe ouvert à la fois, les filtres actifs en pastilles (Taha, 23/11/2026 :
+      // « trop d'espacement, pas de gras, pas de texte collé, quelque chose de moderne »).
+      const G = [
+        ["cat", "Repas", CATS.map(([id, nom]) => [puce("cat", id, nom, F.cats.has(id)), F.cats.has(id), nom, "cat", id])],
+        ["avis", "Avis", AVIS.filter(([id]) => id).concat([["sans", "Pas encore d'avis"]]).map(([id, nom]) => [puce("avis", id, nom, F.avis === id), F.avis === id, nom, "avis", id])],
+        ["regime", "Régime", REGIMES.map(x => [puce("regime", x, x, F.regimes.has(x)), F.regimes.has(x), x, "regime", x])],
+        ["proteine", "Protéine", proteines.map(([id, nom]) => [puce("proteine", id, nom, F.proteines.has(id)), F.proteines.has(id), nom, "proteine", id])],
+        ["origine", "Cuisine", origines.map(x => [puce("origine", x, x, F.origines.has(x)), F.origines.has(x), x, "origine", x])],
+        ["temps", "Temps", TEMPS.map(([v, t]) => [puce("temps", v, t, F.temps === v), F.temps === v, t, "temps", v])],
+        ["prix", "Prix", PRIX.map(([v, t]) => [puce("prix", v, t, F.prix === v), F.prix === v, t, "prix", v])],
+        ["atout", "Atouts", ATOUTS.map(x => [puce("atout", x, x, F.atouts.has(x)), F.atouts.has(x), x, "atout", x])],
+        ["stock", "Stock", [[puce("stock", "", "Faisable avec ton stock", F.stock), F.stock, "Avec mon stock", "stock", ""]]],
+        ["ing", "Ingrédient", []]].filter(([id, , xs]) => id === "ing" || xs.length);
+      const ouvert = G.find(([id]) => id === F.groupe) || G[0];
+      const actives = G.flatMap(([, , xs]) => xs.filter(x => x[1]));
+      return `${actives.length ? `<div class="ft-actifs">${actives.map(([, , nom, cle, v]) => `<button type="button" data-action="filtreCat" data-cle="${cle}" data-valeur="${esc(v)}" aria-label="Retirer le filtre ${esc(nom)}">${esc(nom)}${icone("x")}</button>`).join("")}</div>` : ""}
+      ${F.ouvert ? `<div class="ft-onglets" role="tablist" aria-label="Familles de filtres">${G.map(([id, nom, xs]) => { const n = xs.filter(x => x[1]).length + (id === "ing" ? F.ings.size : 0);
+        return `<button type="button" role="tab" aria-selected="${id === ouvert[0]}" data-action="filtreCat" data-cle="groupe" data-valeur="${id}">${nom}${n ? `<i>${n}</i>` : ""}</button>`; }).join("")}</div>
+      <div class="ft-choix gouts" role="group" aria-label="${ouvert[1]}">${ouvert[0] === "ing" ? `<input id="ingCat" type="search" list="ingCatListe" autocomplete="off" placeholder="Lait, poulet…" aria-label="Voir les plats avec cet ingrédient">
+        <datalist id="ingCatListe">${[...new Set(repas.flatMap(r => (r.ing || []).filter(i => i.u !== "qs").map(i => i.n)))].sort((a, b) => a.localeCompare(b, "fr")).map(n => `<option value="${esc(n)}">`).join("")}</datalist>`
+        : ouvert[2].map(x => x[0]).join("")}</div>` : ""}`; })()}
     <div class="champ formulaire tri"><label for="triCat">Trier par</label>
       <select id="triCat" name="tri">${TRIS.map(([id, nom]) => `<option value="${id}"${F.tri === id ? " selected" : ""}>${nom}</option>`).join("")}</select>
       <button type="button" class="tri-sens${F.sens < 0 ? " bas" : ""}" data-action="filtreCat" data-cle="sens" data-valeur="" aria-label="Ordre ${F.sens > 0 ? "croissant" : "décroissant"}, toucher pour inverser">${icone("caret-right")}${F.sens > 0 ? "Croissant" : "Décroissant"}</button></div>
@@ -3184,6 +3210,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
   const d = $("dialogue"), heure = new Date().getHours();
   let moment = remplacer ? remplacer.place : entree ? entree.moment : heure < 11 ? "pdj" : heure < 15 ? "dej" : heure < 18 ? "col" : "din";
   let photoJointe = null, texte = remplacer ? remplacer.texte : "", photoPlat;      // photoPlat : la photo qui deviendra celle du plat
+  let recetteVue = null;                           // une recette vue en ligne : ses étapes et son lien suivent jusqu'au plat
   // Un nouveau repas : plus de Matin / Midi / Soir à choisir, l'IA le dit d'après le plat (Taha, 21/11/2026).
   // Ils restent pour changer un repas déjà noté.
   const puces = () => !entree ? "" : `<div class="gouts" role="group" aria-label="Repas">${MOMENTS_REPAS.map(([m, nom]) => `<button type="button" data-moment="${m}" aria-pressed="${m === moment}">${nom}</button>`).join("")}</div>`;
@@ -3335,6 +3362,8 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       <h2 id="dialogueTitre">${entree ? "Modifier ce repas" : aLaMain ? "Tes chiffres" : "Vérifie avant d'enregistrer"}</h2>
       ${puces()}
       ${p.remarque ? `<p class="dujour" style="margin-top:12px">${esc(p.remarque)}</p>` : ""}
+      ${recetteVue && (recetteVue.etapes || []).length ? `<details class="nr-etapes"><summary>${icone("cooking-pot")}Les étapes (${recetteVue.etapes.length})${recetteVue.source && recetteVue.source.site ? `<small>d'après ${esc(recetteVue.source.site)}</small>` : ""}${icone("caret-right")}</summary>
+        <ol>${recetteVue.etapes.map(e => `<li>${esc(e)}</li>`).join("")}</ol></details>` : ""}
       <div class="champ" style="margin-top:12px"><label for="nrNom">${remplacer && remplacer.creer ? "Nom du plat" : "Nom du repas"}</label><input id="nrNom" type="text" maxlength="80" value="${esc(p.nom || "")}"></div>
       <div class="aj-jour" id="nrJour" role="status"></div>
       <p class="petit discret nr-titre-macros">Les macros du plat</p>
@@ -3385,7 +3414,8 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       bouton.disabled = true;
       const nom = $("nrNom").value.trim();
       if (remplacer) {                               // le plat est créé ; le menu change après l'aperçu
-        const rep = await appel("/api/repas/au_menu", { date, moment: moment || "dej", nom, items, seulement_plat: true, ...(photoPlat ? { photo: photoPlat } : {}) });
+        const rep = await appel("/api/repas/au_menu", { date, moment: moment || "dej", nom, items, seulement_plat: true, ...(photoPlat ? { photo: photoPlat } : {}),
+          ...(recetteVue ? { recette: recetteVue } : {}) });
         bouton.disabled = false;
         if (rep === true && remplacer.creer) {
           d.close("oui"); rendre();
@@ -3421,20 +3451,25 @@ function noterRepas({ date, entree = null, remplacer = null }) {
   // Depuis « Remplacer un plat » : l'IA calcule ce qui a été écrit, sans repasser par la saisie.
   // Sans compte Claude branché : les ingrédients à la main, comme « Mon propre plat ».
   if (E.claude === false && remplacer.main) return remplacer.main();
-  d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">${icone("sparkle")} L'IA calcule…</h2>
-    <p class="discret" role="status">« ${esc(texte)} » : Claude cherche les aliments, les grammes et les macros.</p>
+  const site = remplacer.lien ? (/instagram/i.test(remplacer.lien) ? "Instagram" : /tiktok/i.test(remplacer.lien) ? "TikTok" : /youtu/i.test(remplacer.lien) ? "YouTube"
+    : /facebook|fb\.watch/i.test(remplacer.lien) ? "Facebook" : (remplacer.lien.match(/^https?:\/\/(?:www\.)?([^/]+)/i) || [, "le site"])[1]) : "";
+  d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">${icone("sparkle")} ${site ? "L'appli lit la recette…" : "L'IA calcule…"}</h2>
+    <p class="discret" role="status">${site ? `Sur ${esc(site)}, puis l'IA en fait un plat pour une portion, avec ses étapes. Quelques secondes.`
+      : `« ${esc(texte)} » : Claude cherche les aliments, les grammes et les macros.`}</p>
     <p class="petit" style="margin-top:14px"><button type="button" class="lien" id="nrAnnulerIA">Annuler</button></p></div>`;
   let annule = false;
   $("nrAnnulerIA").addEventListener("click", () => { annule = true; remplacer.retour(); });
   (async () => {
     let rep, r;
     try {
-      r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texte, moment, date }) });
+      r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texte, moment, date, ...(remplacer.lien ? { lien: remplacer.lien, description: remplacer.description || "" } : {}) }) });
       rep = await r.json();
     } catch (e) { if (!annule) { remplacer.retour(); dire("L'appli ne répond pas."); } return; }
     if (annule) return;
     if (!r.ok) { remplacer.retour(); dire(rep.erreur || "Claude n'a pas pu calculer."); return; }
     if (remplacer.creer) moment = rep.proposition.moment || moment;      // depuis le catalogue : l'IA dit le repas
+    recetteVue = rep.proposition.recette || null;
     verifier(rep.proposition, false, true);
   })();
 }
@@ -4180,6 +4215,7 @@ const ACTIONS = {
     else if (cle === "temps") F.temps = F.temps === Number(v) ? 0 : Number(v);
     else if (cle === "stock") F.stock = !F.stock;
     else if (cle === "ouvert") F.ouvert = !F.ouvert;
+    else if (cle === "groupe") F.groupe = v;
     else if (cle === "sens") F.sens = -F.sens;
     else if (cle === "ing") { if (v) F.ings.add(v); }
     else { [F.cats, F.regimes, F.atouts, F.proteines, F.origines, F.ings].forEach(e => e.clear()); F.avis = ""; F.prix = 0; F.temps = 0; F.stock = false; }
