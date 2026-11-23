@@ -1676,20 +1676,18 @@ input[type=date]::-webkit-datetime-edit{padding:0}
 .tri-sens .ic{transform:rotate(-90deg);color:var(--accent);transition:transform .2s}
 .tri-sens.bas .ic{transform:rotate(90deg)}
 .cat-pages{display:flex;align-items:center;justify-content:center;gap:14px;margin:12px 0 4px}
-.cat-pages button{display:grid;place-items:center;width:36px;height:36px;border:1px solid var(--filet);border-radius:50%;background:none;color:var(--encre);cursor:pointer}
+.cat-pages button{display:grid;place-items:center;width:36px;height:36px;min-width:0;min-height:0;padding:0;margin:0;line-height:0;border:1px solid var(--filet);border-radius:50%;background:var(--surface-fort);color:var(--encre);cursor:pointer}
 .cat-pages button:disabled{opacity:.3;cursor:default}
-.cat-pages span{min-width:96px;text-align:center;font-size:.86rem}
+.cat-pages > span{min-width:96px;text-align:center;font-size:.86rem}
 .cat-pages small{color:var(--discret);font-size:.76rem}
-.stock-malin{padding:12px 14px!important}
-.stock-malin > p{margin:2px 0 6px}
-.malin-liste{list-style:none;margin:0;padding:0}
-.malin-liste li{display:flex;align-items:center;gap:10px;min-height:48px}
-.malin-liste li + li{border-top:1px solid var(--filet-doux)}
-.malin-nom{display:grid;flex:1;min-width:0}
-.malin-nom b{font-weight:600;font-size:.9rem}
-.malin-nom small{color:var(--discret);font-size:.74rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.malin-n{flex:none;font-size:.76rem;color:var(--accent);font-variant-numeric:tabular-nums}
-.malin-ajout{flex:none;display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--filet);border-radius:50%;background:none;color:var(--encre);cursor:pointer}
+.stock-malin{padding:12px 14px 14px!important;margin-bottom:22px}
+.stock-malin h2{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:0 0 10px}
+.stock-malin h2 span{font-size:.78rem;font-weight:500;color:var(--accent);font-variant-numeric:tabular-nums}
+.malin-puces{display:flex;flex-wrap:wrap;gap:6px}
+.malin-puce{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid var(--filet);border-radius:var(--r-pilule);
+  background:transparent;color:var(--texte);font:inherit;font-size:.82rem;cursor:pointer}
+.malin-puce b{font-weight:600;font-size:.74rem;color:var(--accent);font-variant-numeric:tabular-nums}
+.malin-puce:active{border-color:rgba(200,240,75,.6);color:var(--encre)}
 .cp-garder{margin-top:8px}
 @media (max-width:899px){
   body.clavier .nav-bas{display:none}
@@ -1697,3 +1695,28 @@ input[type=date]::-webkit-datetime-edit{padding:0}
 }
 .stock-refaire{display:grid;gap:8px;margin:4px 0 14px}
 .stock-refaire .lien{justify-self:start;font-size:.84rem}
+#contenu .cat-pages button{padding:0;min-height:0}
+.cat-pages button .ic{width:18px;height:18px;margin:0}
+/* la barre « Chercher ou ajouter » entre deux rubriques, pas collée à celle d'avant (Taha, 23/11/2026) */
+.stock-taper{margin:22px 0 22px}
+.malin-puce[aria-pressed="true"]{border-color:rgba(200,240,75,.55);background:rgba(200,240,75,.08);color:var(--encre)}
+.malin-puce .ic{width:13px;height:13px;color:var(--accent)}
+/* Ma liste de courses : un tableau sobre, cases rondes (23/11/2026) */
+.liste-courses{padding:12px 14px 14px!important;margin-bottom:14px}
+.liste-courses h2{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 6px}
+.liste-courses h2 span{font-size:.78rem;font-weight:500;color:var(--discret)}
+.liste-courses ul{list-style:none;margin:0 0 10px;padding:0}
+.liste-courses li{display:flex;align-items:center;gap:6px;min-height:44px}
+.liste-courses li + li{border-top:1px solid var(--filet-doux)}
+.liste-courses label{display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer}
+.liste-courses input{position:absolute;opacity:0;pointer-events:none}
+.liste-courses label i{display:grid;place-items:center;flex:none;width:22px;height:22px;border:1.5px solid var(--filet);border-radius:50%;color:transparent}
+.liste-courses label i .ic{width:13px;height:13px}
+.liste-courses input:checked + i{background:var(--accent);border-color:var(--accent);color:var(--canvas)}
+.liste-courses input:checked ~ .lc-nom{color:var(--discret);text-decoration:line-through}
+.liste-courses input:focus-visible + i{outline:2px solid var(--accent);outline-offset:2px}
+.lc-nom{flex:1;min-width:0;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lc-q{flex:none;font-size:.8rem;color:var(--discret)}
+.lc-x{display:grid;place-items:center;flex:none;width:30px;height:30px;padding:0;border:0;background:none;color:var(--discret);cursor:pointer}
+.lc-x .ic{width:15px;height:15px}
+.liste-courses .bouton:disabled{opacity:.45}

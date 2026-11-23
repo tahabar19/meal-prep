@@ -233,6 +233,20 @@ class G_SansClaude(unittest.TestCase):
         self.assertFalse(fiche.get("cache"), fiche)
         self.assertEqual(M.api("POST", "/api/plat/garder", {"plat": "perso-inexistant"})[0], 400)
 
+    def test_liste_de_courses_puis_stock(self):
+        # « À acheter » → ma liste ; cocher et valider → au stock, hors de la liste (Taha, 23/11/2026).
+        stock = lambda: sum(l["quantite"] for l in M.etat()["stock"] if l["nom"] == "Quinoa")
+        avant = stock()
+        self.assertEqual(M.api("POST", "/api/liste_courses", {"nom": "Quinoa", "unite": "g", "quantite": 250})[0], 200)
+        self.assertEqual(M.api("POST", "/api/liste_courses", {"nom": "Thon", "unite": "pièce", "quantite": 2})[0], 200)
+        self.assertEqual({x["nom"] for x in M.etat()["liste_courses"]}, {"Quinoa", "Thon"})
+        self.assertEqual(M.api("POST", "/api/liste_courses/valider", {"noms": ["Quinoa"]})[0], 200)
+        self.assertEqual([x["nom"] for x in M.etat()["liste_courses"]], ["Thon"])
+        self.assertAlmostEqual(stock(), avant + 250, places=1)
+        self.assertEqual(M.api("POST", "/api/liste_courses", {"nom": "Thon", "unite": "pièce", "retirer": True})[0], 200)
+        self.assertEqual(M.etat()["liste_courses"], [])
+        self.assertEqual(M.api("POST", "/api/liste_courses", {"nom": "X", "unite": "g", "quantite": -3})[0], 400)
+
     def test_aucun_appel_claude_en_fond(self):
         avant = len(M.appels_claude)
         M.serveur.vitamines_en_fond()

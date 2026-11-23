@@ -468,6 +468,16 @@ try {
     await taper('');
     vrai(await attendre(`document.querySelectorAll('.stock-liste li').length >= 3`, 10000) >= 0, 'le stock ne montre pas les produits');
     const avant = await B.js(`document.querySelector('.stock-saisie').value`);
+    // « À acheter » : une pastille va sur ma liste ; cochée puis validée, elle entre au stock (Taha, 23/11/2026).
+    if (await B.js(`!!document.querySelector('.malin-puce')`)) {
+      const nomMalin = await B.js(`document.querySelector('.malin-puce').dataset.nom`);
+      await B.js(`document.querySelector('.malin-puce').click()`); await synchro();
+      vrai(await attendre(`[...document.querySelectorAll('.liste-courses .lc-nom')].some(x => x.textContent === ${JSON.stringify(nomMalin)})`, 10000) >= 0, 'pas sur ma liste');
+      await B.js(`document.querySelector('.liste-courses input[data-lc]').click()`); await att(100);
+      vrai(await B.js(`!document.getElementById('lcValider').disabled`), 'Valider reste grisé');
+      await B.js(`document.getElementById('lcValider').click()`); await synchro();
+      vrai(await attendre(`!document.querySelector('.liste-courses')`, 10000) >= 0, 'la liste ne se vide pas');
+    }
     await B.js(`document.querySelector('.stock-liste [data-stock-pas="1"]').click()`);
     vrai(await attendre(`document.querySelector('.stock-saisie') && document.querySelector('.stock-saisie').value !== ${JSON.stringify(avant)}`, 10000) >= 0, '+ ne change rien');
     await B.photo('stock-plein');
@@ -583,6 +593,9 @@ try {
     const n5 = await B.js(`document.querySelectorAll('.cat-liste a.rp-plat').length`);
     vrai(n5 === 5, `${n5} plats au départ, 5 attendus`);
     // Pages de 5 : › puis ‹ (Taha, 23/11/2026).
+    const decale = await B.js(`Math.max(...[...document.querySelectorAll('.cat-pages button')].map(b => { const r = b.getBoundingClientRect(), i = b.querySelector('.ic').getBoundingClientRect();
+      return Math.max(Math.abs(r.left + r.width / 2 - i.left - i.width / 2), Math.abs(r.top + r.height / 2 - i.top - i.height / 2)); }))`);
+    vrai(decale <= 1.5, `flèche décalée de ${decale} px dans son cercle`);
     const premier = await B.js(`document.querySelector('.cat-liste b').textContent`);
     await B.js(`document.querySelector('[data-action="pageCat"][data-pas="5"]').click()`); await att(300);
     const suivant = await B.js(`document.querySelector('.cat-liste b').textContent`);
