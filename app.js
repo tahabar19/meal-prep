@@ -2777,28 +2777,7 @@ function vueStockMaison() {
       <p class="petit discret">${st.length ? `${st.length} produit${st.length > 1 ? "s" : ""} à la maison. Ce que tu marques mangé en sort tout seul.` : "Ajoute ce que tu as chez toi : l'appli te propose des repas avec."}</p></div></div>
     ${ajout}
 
-    ${(() => {
-      // Ma liste de courses (Taha, 23/11/2026) : ce qu'on a choisi ; on coche ce qu'on a acheté, on valide, ça entre au stock.
-      const l = E.liste_courses || [];
-      if (!l.length) return "";
-      for (const n of [...LC_COCHES]) if (!l.some(x => x.nom === n)) LC_COCHES.delete(n);
-      return `<section class="bloc liste-courses" aria-labelledby="tListe"><h2 id="tListe">Ma liste de courses<span>${l.length}</span></h2>
-        <p class="malin-aide">Coche ce que tu as acheté, puis ajoute-le à ton stock.</p>
-        <ul>${l.map(x => `<li><label><input type="checkbox" data-lc="${esc(x.nom)}"${LC_COCHES.has(x.nom) ? " checked" : ""}><i aria-hidden="true">${icone("check")}</i>
-          <span class="lc-nom">${esc(x.nom)}</span><span class="lc-q chiffres">${quantite(x.quantite, x.unite)}</span></label>
-          <button type="button" class="lc-x" data-action="lcRetirer" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" aria-label="Retirer ${esc(x.nom)} de la liste">${icone("x")}</button></li>`).join("")}</ul>
-        <button type="button" class="bouton large" id="lcValider" data-action="lcValider"${LC_COCHES.size ? "" : " disabled"}>${lcTexte()}</button></section>`; })()}
-    ${(() => {
-      // Le nombre de produits, choisi par chacun (Taha, 23/11/2026 : « c'est le user qui choisit ») ; une ligne dit quoi faire.
-      const c = coursesMalines(MALIN_NB.n || 200);
-      if (!c.length) return "";
-      const choixNb = [[5, "5"], [10, "10"], [20, "20"], [0, "Tout"]].map(([v, t]) =>
-        `<button type="button" data-action="malinNb" data-n="${v}" aria-pressed="${MALIN_NB.n === v}">${t}</button>`).join("");
-      return `<section class="bloc stock-malin" aria-labelledby="tMalin"><h2 id="tMalin">Idées de courses<span class="malin-nb" role="group" aria-label="Combien de produits">${choixNb}</span></h2>
-        <p class="malin-aide">Ce qui t'ouvre le plus de plats avec ton stock (<b>+3</b> = 3 plats de plus). Touche pour l'ajouter à ta liste.</p>
-        <div class="malin-puces">${c.map(x => { const pris = (E.liste_courses || []).some(l => l.nom === x.nom);
-          return `<button type="button" class="malin-puce" data-action="malinListe" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" data-q="${x.q}" aria-pressed="${pris}"
-          aria-label="${esc(x.nom)}${x.plats.length ? `, ${x.plats.length} plat${x.plats.length > 1 ? "s" : ""} de plus` : ""} : ${pris ? "retirer de" : "mettre sur"} ta liste de courses">${pris ? icone("check") : ""}${esc(x.nom)}${x.plats.length ? `<b>+${x.plats.length}</b>` : ""}${pris ? "" : icone("plus")}</button>`; }).join("")}</div></section>`; })()}
+    ${tableauCourses()}
     ${barreStock}
     ${(() => {
       // Deux parties (Taha, 23/11/2026 : « beaucoup d'ingrédients, plus facile pour le user ») : ce que tu as, en
@@ -2823,18 +2802,43 @@ function vueStockMaison() {
     })()}`;
 }
 const STOCK_OUVERTS = new Set();
-const LC_COCHES = new Set();                 // cochés sur ma liste de courses, pas encore validés
+const LC_COCHES = new Set();
+// Ma liste de courses (Taha, 23/11/2026) : UN tableau. Vide, il propose de le remplir avec les N produits qui permettent de
+// cuisiner le plus de plats avec le stock (N au choix). Chaque produit dit en clair à quoi il sert ; on coche ce qu'on a
+// acheté, « Ajouter au stock ».
+const raisonCourse = x => x.plats.length ? `pour ${x.plats.length} nouveau${x.plats.length > 1 ? "x" : ""} plat${x.plats.length > 1 ? "s" : ""}`
+  : `pour compléter ${x.aide.length} plat${x.aide.length > 1 ? "s" : ""}`;
+function tableauCourses() {
+  if (!(E.stock || []).length && !(E.liste_courses || []).length) return "";
+  const l = E.liste_courses || [];
+  for (const n of [...LC_COCHES]) if (!l.some(x => x.nom === n)) LC_COCHES.delete(n);
+  const nb = `<span class="lc-nb"><button type="button" data-action="lcNb" data-pas="-1" aria-label="Un produit de moins">−</button>
+      <input id="lcNb" type="number" inputmode="numeric" min="1" max="50" value="${LC_NB.n}" aria-label="Nombre de produits à proposer">
+      <button type="button" data-action="lcNb" data-pas="1" aria-label="Un produit de plus">+</button></span>`;
+  const remplir = texte => `<div class="lc-remplir">${nb}<button type="button" class="bouton${l.length ? " sobre" : ""}" data-action="lcRemplir">${icone("sparkle")}${texte}</button></div>`;
+  return `<section class="bloc liste-courses" aria-labelledby="tListe">
+    <h2 id="tListe">Ma liste de courses${l.length ? `<span>${l.length}</span>` : ""}</h2>
+    ${l.length ? `<ul>${l.map(x => `<li><label><input type="checkbox" data-lc="${esc(x.nom)}"${LC_COCHES.has(x.nom) ? " checked" : ""}><i aria-hidden="true">${icone("check")}</i>
+        <span class="lc-nom"><b>${esc(x.nom)}</b>${x.raison ? `<small>${esc(x.raison)}</small>` : ""}</span><span class="lc-q chiffres">${quantite(x.quantite, x.unite)}</span></label>
+        <button type="button" class="lc-x" data-action="lcRetirer" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" aria-label="Retirer ${esc(x.nom)} de la liste">${icone("x")}</button></li>`).join("")}</ul>
+      <button type="button" class="bouton large" id="lcValider" data-action="lcValider"${LC_COCHES.size ? "" : " disabled"}>${lcTexte()}</button>
+      <p class="lc-aide">Coche ce que tu as acheté : ça passe dans ton stock.</p>
+      <details class="lc-plus"><summary>Ajouter d'autres idées${icone("caret-right")}</summary>${remplir("Ajouter")}</details>`
+    : `<p class="lc-aide">L'appli choisit ce qu'il te faut acheter pour cuisiner le plus de plats avec ce que tu as déjà.</p>
+      ${remplir("Remplir ma liste")}`}
+  </section>`;
+}
+const LC_NB = { n: (() => { try { const v = parseInt(localStorage.getItem("mp-lc-nb"), 10); return v >= 1 && v <= 50 ? v : 8; } catch (e) { return 8; } })() };
+const lcNbGarder = v => { LC_NB.n = Math.max(1, Math.min(50, Math.round(v) || 8)); try { localStorage.setItem("mp-lc-nb", String(LC_NB.n)); } catch (e) {} };                 // cochés sur ma liste de courses, pas encore validés
 const lcTexte = () => LC_COCHES.size ? `${icone("check")}Ajouter au stock (${LC_COCHES.size})` : "Ajouter au stock";
-// Combien d'idées de courses : gardé sur l'appareil (simple confort), 10 par défaut.
-const MALIN_NB = { n: (() => { try { const v = Number(localStorage.getItem("mp-malin-nb")); return [5, 10, 20, 0].includes(v) && localStorage.getItem("mp-malin-nb") !== null ? v : 10; } catch (e) { return 10; } })() };
 // La liste de courses qui ouvre le plus de plats avec ce qu'on a déjà (Taha, 23/11/2026) : à chaque tour, le produit
 // qui rend faisables le plus de plats (à égalité, celui qui rapproche le plus d'autres plats) ; toujours un top 10
 // (Taha, 23/11/2026), même quand les derniers ne font que rapprocher des plats.
-function coursesMalines(max = 10) {
+function coursesMalines(max = 10, deja = new Set()) {
   if (!(E.stock || []).length || !E.stock_manque) return [];
   const ok = id => { const r = recette(id); return r && estRepas(r) && !estRetire(id) && r.gout !== "non" && !["extrariz", "rien"].includes(id); };
   const reste = Object.entries(E.stock_manque).filter(([id]) => ok(id))
-    .map(([id, m]) => ({ id, m: new Map(m.map(([n, q, u]) => [n, [q, u]])) }));
+    .map(([id, m]) => ({ id, m: new Map(m.filter(([n]) => !deja.has(n)).map(([n, q, u]) => [n, [q, u]])) })).filter(r => r.m.size);
   const choix = [];
   while (choix.length < max) {
     const score = new Map();
@@ -4106,10 +4110,14 @@ const ACTIONS = {
     b.dataset.fixe === "1" ? "Fixé : il revient chaque jour." : "Ce plat n'est plus fixe."),
   reessayer: demarrer,
   // Des pages de 5, ‹ et › (Taha, 23/11/2026 : « voir 5 de plus, c'est lourd »).
-  malinNb: b => { MALIN_NB.n = Number(b.dataset.n); try { localStorage.setItem("mp-malin-nb", String(MALIN_NB.n)); } catch (e) {} rendre(); },
-  malinListe: b => b.getAttribute("aria-pressed") === "true"
-    ? agir("/api/liste_courses", { nom: b.dataset.nom, unite: b.dataset.unite, retirer: true }, "")
-    : agir("/api/liste_courses", { nom: b.dataset.nom, unite: b.dataset.unite, quantite: Number(b.dataset.q) }, `${b.dataset.nom} : ajouté à ta liste de courses, en haut.`),
+  lcNb: b => { lcNbGarder(LC_NB.n + Number(b.dataset.pas)); const i = $("lcNb"); if (i) i.value = LC_NB.n; },
+  lcRemplir: async () => {
+    const i = $("lcNb"); if (i) lcNbGarder(Number(i.value));
+    const c = coursesMalines(LC_NB.n, new Set((E.liste_courses || []).map(x => x.nom)));
+    if (!c.length) return dire("Rien de plus à proposer avec ton stock.");
+    await agir("/api/liste_courses/lot", { items: c.map(x => ({ nom: x.nom, unite: x.unite, quantite: x.q, raison: raisonCourse(x) })) },
+      `${c.length} produit${c.length > 1 ? "s" : ""} sur ta liste.`);
+  },
   lcRetirer: b => { LC_COCHES.delete(b.dataset.nom); return agir("/api/liste_courses", { nom: b.dataset.nom, unite: b.dataset.unite, retirer: true }, ""); },
   lcValider: async () => {
     const noms = [...LC_COCHES], n = noms.length;
@@ -4241,6 +4249,7 @@ document.addEventListener("submit", async ev => {
 });
 document.addEventListener("change", ev => {
   const i = ev.target;
+  if (i.id === "lcNb") { lcNbGarder(Number(i.value)); i.value = LC_NB.n; return; }
   if (i.dataset.lc != null) {
     i.checked ? LC_COCHES.add(i.dataset.lc) : LC_COCHES.delete(i.dataset.lc);
     const b = $("lcValider"); if (b) { b.disabled = !LC_COCHES.size; b.innerHTML = lcTexte(); }
