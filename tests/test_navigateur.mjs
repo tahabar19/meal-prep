@@ -488,12 +488,16 @@ try {
     vrai(await B.js(`!!document.querySelector('details.stock-tous .stock-puce[data-action=lcAjouter]')`), 'pas de « Tous les produits » dans Courses');
     // Ma liste de courses : « Remplir ma liste » (N au choix), cocher, « Ajouter au stock » (Taha, 23/11/2026).
     await B.js(`document.querySelector('.liste-courses') && document.querySelector('.liste-courses').scrollIntoView()`); await att(200); await B.photo('stock-liste-vide');
-    if (await B.js(`!!document.querySelector('[data-action=lcRemplir]')`)) {
-      await B.js(`(() => { const i = document.getElementById('lcNb'); i.value = 3; i.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-      await B.js(`document.querySelector('[data-action=lcRemplir]').click()`); await synchro();
+    // − / + règlent directement le nombre de produits proposés (Taha, 23/11/2026) : + en ajoute un, − en retire un.
+    if (await B.js(`!!document.querySelector('[data-action=lcNb][data-pas="1"]')`)) {
+      vrai(await B.js(`!document.querySelector('[data-action=lcRemplir]')`), 'le bouton « Ajouter à ma liste » est encore là');
+      for (let k = 0; k < 3; k++) { await B.js(`document.querySelector('[data-action=lcNb][data-pas="1"]').click()`); await synchro(); await attendre(`document.querySelectorAll('.liste-courses li').length === ${k + 1}`, 10000); }
       vrai(await attendre(`document.querySelectorAll('.liste-courses li').length > 0`, 10000) >= 0, 'la liste ne se remplit pas');
-      const nLc = await B.js(`document.querySelectorAll('.liste-courses li').length`);
-      vrai(nLc <= 3, `${nLc} produits pour 3 demandés`);
+      let nLc = await B.js(`document.querySelectorAll('.liste-courses li').length`);
+      vrai(nLc <= 3 && Number(await B.js(`document.getElementById('lcNb').value`)) === nLc, `${nLc} produits pour 3 touchers de +`);
+      await B.js(`document.querySelector('[data-action=lcNb][data-pas="-1"]').click()`); await synchro();
+      vrai(await attendre(`document.querySelectorAll('.liste-courses li').length === ${nLc - 1}`, 10000) >= 0, '− ne retire pas un produit');
+      nLc -= 1;
       await B.js(`document.querySelector('.liste-courses').scrollIntoView({ block: 'start' })`); await att(200); await B.photo('stock-liste');
       vrai(await B.js(`!!document.querySelector('.liste-courses li small')`), 'pas de raison en clair');
       await B.js(`document.querySelector('.liste-courses input[data-lc]').click()`); await att(100);
@@ -716,6 +720,18 @@ try {
     console.log(`        plats affichés en ${(ms / 1000).toFixed(1)} s à la réouverture`);
     vrai(ms < 8000, `réouverture lente : ${ms} ms`);
     await pret();
+  });
+
+  await test('Manquants : « Je l\'ai » met la quantité au stock', async () => {
+    await aller('#/semaine'); await att(800);
+    if (!(await B.js(`!!document.querySelector('.manque[data-manque]')`))) return;       // aucun plat avec des manquants aujourd'hui
+    await B.js(`document.querySelector('.manque[data-manque]').click()`); await att(300);
+    vrai(await B.js(`!!document.querySelector('.manque-feuille [data-manque-ai]')`), 'pas de bouton « Je l\'ai »');
+    await B.js(`document.querySelector('.manque-feuille [data-manque-ai]').click()`); await att(200);
+    await B.photo('manque-je-l-ai');
+    await B.js(`document.querySelector('.manque-feuille [data-manque-ok]').click()`);
+    vrai(await attendre(`!!document.querySelector('.manque-lignes li.fait')`, 15000) >= 0, 'la quantité ne va pas au stock');
+    await B.js(`document.querySelector('[data-manque-fermer]').click()`); await att(200);
   });
 
   await test('Partage : un lien reçu ouvre la création du plat', async () => {
