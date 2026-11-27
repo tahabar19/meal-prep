@@ -92,7 +92,7 @@ const I18N = { exact: new Map(), motifs: new Map(), pret: LANGUE === "fr" };
 document.documentElement.lang = LANGUE;
 document.documentElement.dir = LANGUE === "ar" ? "rtl" : "ltr";
 const i18nPropre = t => t.replace(/\s+/g, " ").trim();
-function i18nTexte(t) {
+function i18nTexte(t, profondeur = 0) {
   const v = I18N.exact.get(t);
   if (v != null) return v;
   const mots = (t.toLowerCase().match(/[a-zà-ÿœ']{3,}/g) || []);
@@ -103,7 +103,20 @@ function i18nTexte(t) {
     if (r) mieux = { x, r };
   }
   if (!mieux) return i18nMorceaux(t);
-  return mieux.x.v.replace(/\{(\d+)\}/g, (_, i) => { const g = mieux.r[Number(i) + 1] ?? ""; const tg = i18nPropre(g); return tg && I18N.exact.has(tg) ? g.replace(tg, I18N.exact.get(tg)) : g; });
+  // Un modèle trop large (« {0} soir », « kcal {0} ») avalerait une phrase entière et la laisserait en français
+  // (Taha, 27/11/2026 : « Lunch, cuisiné une fois pour midi et evening ») : on traduit alors morceau par morceau.
+  if (mieux.r.slice(1).some(g => g && g.length > 14 && /[a-zà-ÿœ]{3,}/i.test(g) && !I18N.exact.has(i18nPropre(g)))) {
+    const m = i18nMorceaux(t);
+    if (m != null) return m;
+  }
+  // Une valeur elle-même traduisible (« 15 aliments » dans « {0} sans vitamines ») se traduit à son tour (27/11/2026).
+  return mieux.x.v.replace(/\{(\d+)\}/g, (_, i) => {
+    const g = mieux.r[Number(i) + 1] ?? "", tg = i18nPropre(g);
+    if (!tg) return g;
+    if (I18N.exact.has(tg)) return g.replace(tg, I18N.exact.get(tg));
+    const sous = profondeur < 2 && tg.length < 80 && /[a-zà-ÿœ]{3,}/i.test(tg) ? i18nTexte(tg, profondeur + 1) : null;
+    return sous != null && sous !== tg ? g.replace(tg, sous) : g;
+  });
 }
 // Un libellé fait de plusieurs morceaux (« Midi, cuisiné une fois pour midi et soir », « Collation · fixe ») : chaque
 // morceau se traduit s'il est connu ; null si aucun ne l'est.
@@ -216,9 +229,12 @@ function confirmer({ titre, texte, oui, non = "Annuler" }) {
       <div class="actions"><button class="bouton second" value="non">${esc(non)}</button>
       <button class="bouton" value="oui">${esc(oui)}</button></div>`;
     d.querySelectorAll("button").forEach(b => b.addEventListener("click", () => d.close(b.value)));
-    d.addEventListener("close", () => resoudre(d.returnValue === "oui"), { once: true });
+    // La fermeture de la fenêtre d'avant (un aperçu qu'on vient de valider) arrive parfois APRÈS cette ouverture : elle
+    // ne doit pas répondre à la place de la personne (27/11/2026 : « Toute la famille » était pris pour « Seulement moi »).
+    const fin = () => { if (d.open) return; d.removeEventListener("close", fin); resoudre(d.returnValue === "oui"); };
+    d.addEventListener("close", fin);
     d.returnValue = "non";
-    d.showModal();
+    if (!d.open) d.showModal();
   });
 }
 
@@ -256,6 +272,9 @@ function familleChange() {
 // sur un téléphone, ça donne les doses de tous les membres dans un seul téléphone ») ----------
 // En haut du jour : « Tous » (les doses de chacun, plat par plat) puis un bouton par membre (ouvrir son profil).
 const autreProfil = () => typeof M !== "undefined" && !!M.moi && M.uid !== M.moi.uid;
+// Un autre membre qui a son propre téléphone : son poids, sa taille, son numéro restent à lui (27/11/2026). Ceux d'un
+// membre sans téléphone se voient et se règlent : la famille les tient à jour pour ses doses.
+const autreAvecTelephone = () => autreProfil() && !((membresDeLaFamille().find(m => m.id === M.uid) || {}).sans_telephone);
 const membresDeLaFamille = () => typeof membresFamille === "function" ? membresFamille() : [];
 const NOMS_FAMILLE = {};                                   // uid -> prénom, vu dans son profil
 const nomMembre = m => {
@@ -474,7 +493,7 @@ function rendreNavigation(actif) {
   if (actif === "budget") budget.setAttribute("aria-current", "page"); else budget.removeAttribute("aria-current");
   const nDemandes = demandesFamille().length;
   profil.innerHTML = `${icone("user-circle")}<span>Profil</span>${nDemandes ? '<i class="point-alerte" aria-hidden="true"></i>' : ""}`;
-  profil.setAttribute("aria-label", (E ? `Profil de ${E.profil.nom}` : "Profil") + (nDemandes ? ` (${nDemandes} demande${nDemandes > 1 ? "s" : ""} pour ta famille)` : ""));
+  profil.setAttribute("aria-label", (E ? `Profil de ${E.profil.nom}` : "Profil") + (nDemandes ? ` (${nDemandes > 1 ? `${nDemandes} demandes` : `${nDemandes} demande`} pour ta famille)` : ""));
   if (actif === "profil") profil.setAttribute("aria-current", "page"); else profil.removeAttribute("aria-current");
   $("navHaut").innerHTML = E ? onglets.map(o => lien(o, false)).join("") : "";
 }
@@ -564,7 +583,7 @@ function demanderComposition(recomposer) {
     <div class="options" style="margin-top:10px">${option("fruits_secs", "1", "Une poignée de fruits secs par jour",
       "30 g par jour, achetés une fois par mois. Décoche pour ne plus en avoir.", E.reglages.fruits_secs ?? pref.fruits_secs ?? true)}</div>
     ${recomposer ? "" : `<h3 style="margin:18px 0 8px">Combien de semaines ?</h3>
-      <div class="segments" role="radiogroup" aria-label="Nombre de semaines à composer">${[1, 2, 3, 4].map(v => `<label class="segment"><input type="radio" name="semaines" value="${v}"${(E.nb_semaines || 1) === v ? " checked" : ""}><span>${v} semaine${v > 1 ? "s" : ""}</span></label>`).join("")}</div>
+      <div class="segments" role="radiogroup" aria-label="Nombre de semaines à composer">${[1, 2, 3, 4].map(v => `<label class="segment"><input type="radio" name="semaines" value="${v}"${(E.nb_semaines || 1) === v ? " checked" : ""}><span>${v > 1 ? `${v} semaines` : `${v} semaine`}</span></label>`).join("")}</div>
       <p class="petit discret" style="margin-top:8px">Plusieurs semaines d'un coup : un seul panier ${esc(E.magasin.principale)} pour toutes, les produits frais chaque semaine. Elles commencent demain.</p>`}
     ${recomposer && E.mois ? `<div class="options" style="margin-top:10px">${option("mois", "1", "Recomposer aussi la semaine suivante", "Sinon seule la semaine en cours change. Le panier est recalculé dans les deux cas.", false)}</div>` : ""}
     <div class="actions"><button class="bouton second" type="button" value="non">Annuler</button>
@@ -1001,7 +1020,7 @@ function demanderChangement(k, n, moment) {
     if (!$("rpListe")) return;
     const liste = trouves(), texte = R.cherche.trim();
     tete();
-    $("rpCompte").textContent = texte ? (liste.length ? `${liste.length} plat${liste.length > 1 ? "s" : ""} trouvé${liste.length > 1 ? "s" : ""}` : "Aucun plat de ta base")
+    $("rpCompte").textContent = texte ? (liste.length ? `${liste.length > 1 ? `${liste.length} plats trouvés` : `${liste.length} plat trouvé`}` : "Aucun plat de ta base")
       : `${liste.length} ${cat === "petitdej" ? "petits-déjeuners" : cat === "plat" ? "plats" : "collations"}`;
     $("rpListe").innerHTML = liste.slice(0, R.nb).map(carte).join("")
       || `<li class="rp-vide">${texte ? "Rien à ce nom : crée-le avec l'IA juste au-dessus." : "Aucun plat."}</li>`;
@@ -1202,7 +1221,7 @@ async function apercuChangement(k, operation, titre, retour) {
     ${choisi ? `<div class="ap-choisi"><div class="ap-ligne"><span class="chiffres ap-macros" id="apMacros">${macrosChoisi(1)}</span>
         <span class="ap-pas"><button type="button" data-ap-fois="-0.5" aria-label="Moins" disabled>−</button><b class="chiffres" id="apFois">×1</b>
         <button type="button" data-ap-fois="0.5" aria-label="Plus">+</button></span></div>
-      <details class="ap-ing"><summary>${(choisi.ing || []).filter(i => i.u !== "qs").length} ingrédient${(choisi.ing || []).filter(i => i.u !== "qs").length > 1 ? "s" : ""}${icone("caret-right")}</summary><div id="apIng">${listeIngredients(choisi, tChoisi)}</div></details></div>` : ""}
+      <details class="ap-ing"><summary>${(n => n > 1 ? `${n} ingrédients` : `${n} ingrédient`)((choisi.ing || []).filter(i => i.u !== "qs").length)}${icone("caret-right")}</summary><div id="apIng">${listeIngredients(choisi, tChoisi)}</div></details></div>` : ""}
     ${operation.type === "reequilibrer" ? `<p class="petit discret" style="margin:-4px 0 14px">« ${esc(recette(operation.plat).nom)} », ${esc(a.jour.toLowerCase())}. L'appli règle les grammes de ce plat, et seulement les siens, pour viser ${nombre(a.objectif.kcal)} kcal et ${a.objectif.prot} g de protéines.</p>` : ""}
     ${operation.type === "reequilibrer" ? GRAMMES : ""}
     ${operation.type === "reequilibrer" && !a.atteint ? `<div class="alerte" role="status" style="margin:0 0 14px">${icone("warning-circle")}<span><strong>Ce plat ne suffit pas pour tenir l'objectif.</strong>
@@ -1425,7 +1444,12 @@ function demanderPlatPerso(ctx, saisie = { nom: "", ingredients: [], telQuel: tr
     const s = lire();
     if (!s.ingredients.length) { $("ePerso").textContent = "Ajoute au moins un ingrédient."; return $("ppIng").focus(); }
     if (s.nom.length < 3 && !s.telQuel) { $("ePerso").textContent = "Donne un nom à ton plat."; return $("ppNom").focus(); }
-    ev.submitter.disabled = true; if (!s.telQuel) ev.submitter.textContent = "L'IA complète la recette…";      // Claude met une dizaine de secondes
+    // le bouton qui a envoyé (ou celui du formulaire : la touche Entrée n'en donne pas toujours) (27/11/2026)
+    const bouton = ev.submitter || d.querySelector("form [type=submit]");
+    if (bouton) bouton.disabled = true;
+    // L'IA complète la recette (une dizaine de secondes) : la même carte d'attente que « L'IA calcule » (27/11/2026).
+    if (!s.telQuel) attenteIA(d, { titre: "L'IA complète", sujet: s.nom || s.ingredients.map(i => i.nom || i).join(", "),
+      etapes: ["Ingrédients", "Quantités", "Étapes"], annuler: () => { s.annule = true; demanderPlatPerso(ctx, s); } });
     apercuPlatPerso(ctx, s);
   });
   if (!d.open) d.showModal();
@@ -1439,9 +1463,10 @@ async function apercuPlatPerso(ctx, saisie) {
   try {
     const r = await fetch("/api/plat_perso", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...corps, apercu: true }) });
     const rep = await r.json();
+    if (saisie.annule) return;                       // annulé pendant que l'IA complétait
     if (!r.ok) return demanderPlatPerso(ctx, saisie, esc(rep.erreur || "L'appli a refusé."));
     p = rep.plat;
-  } catch (e) { return dire("L'appli ne répond pas."); }
+  } catch (e) { if (saisie.annule) return; return demanderPlatPerso(ctx, saisie, "L'appli ne répond pas."); }
   if (!p.recette) {
     return demanderPlatPerso(ctx, saisie, p.inconnus.map(x => `Je ne connais pas « ${esc(x.nom)} ».${x.proches.length
       ? ` Tu voulais dire ${x.proches.map(n => `<button type="button" class="lien" data-pour="${esc(x.nom)}" data-proche="${esc(n)}">${esc(n)}</button>`).join(", ")} ?` : ""}
@@ -1524,7 +1549,7 @@ async function demanderIngredient(o) {
     <div class="rp-tete"><div><p class="rp-sur">${o.creer ? "Nouvel ingrédient" : "Ingrédient"}</p><h2 id="dialogueTitre">${esc(o.creer ? (o.nom || "Nouvel ingrédient") : v.nom)}</h2></div>
       <button type="button" class="rp-fermer" data-fermer-in aria-label="Fermer">${icone("x")}</button></div>
     ${o.creer ? `<p class="fp-intro" id="inOrigine">${origine(v.etiquette)}</p>`
-      : `<p class="fp-intro">${v.nb_plats ? `Utilisé dans ${v.nb_plats} plat${v.nb_plats > 1 ? "s" : ""} : ${v.nb_plats > 1 ? "ils seront recalculés" : "il sera recalculé"} pour toi.` : "Utilisé dans aucun plat pour l'instant."}
+      : `<p class="fp-intro">${v.nb_plats ? `Utilisé dans ${v.nb_plats > 1 ? `${v.nb_plats} plats` : `${v.nb_plats} plat`} : ${v.nb_plats > 1 ? "ils seront recalculés" : "il sera recalculé"} pour toi.` : "Utilisé dans aucun plat pour l'instant."}
         ${v.corrige ? " Tu as déjà corrigé ces valeurs." : v.cree ? " Ingrédient créé par toi." : " Valeurs du site (ordres de grandeur des tables CIQUAL)."}</p>`}
     ${o.creer && (v.deja || []).length ? `<div class="dujour" style="margin-bottom:12px"><strong>Tu l'as peut-être déjà.</strong>
       ${v.deja.map(n => `<span style="display:block;margin-top:6px">${esc(n)} : <button type="button" class="lien" data-deja="${esc(n)}">prendre celui-ci</button>
@@ -1592,7 +1617,7 @@ async function demanderIngredient(o) {
     const nom = E.ingredient || corps.nom;
     if (o.apres) return o.apres(nom);
     d.close("oui"); rendre();
-    dire(o.creer ? `« ${nom} » créé.` : `Valeurs enregistrées${v.nb_plats ? ` : ${v.nb_plats} plat${v.nb_plats > 1 ? "s" : ""} recalculé${v.nb_plats > 1 ? "s" : ""}` : ""}.`);
+    dire(o.creer ? `« ${nom} » créé.` : `Valeurs enregistrées${v.nb_plats ? ` : ${v.nb_plats > 1 ? `${v.nb_plats} plats recalculés` : `${v.nb_plats} plat recalculé`}` : ""}.`);
   });
   if (!TACTILE.matches) (o.creer ? $("inNom") : $("in_kcal")).focus();
   d.scrollTop = 0;
@@ -1715,15 +1740,20 @@ async function demanderAjustement(id, quantites = null, jour = null) {
   const ressemblance = (x, y) => { const a1 = paires(x), b1 = paires(y); let c = 0; a1.forEach(p => { if (b1.has(p)) c++; }); return 2 * c / (a1.size + b1.size || 1); };
   const parIA = async brut => {
     if (E.claude === false) return creerIngredient(brut);              // sans compte Claude : ses valeurs à la main
-    const bouton = $("ajAjouter"); bouton.disabled = true; bouton.lastChild.textContent = "L'IA cherche…";
+    // La même carte d'attente que « L'IA calcule » (27/11/2026) ; Annuler revient à la liste des ingrédients.
+    let annule = false;
+    const att = attenteIA($("dialogue"), { titre: "L'IA cherche", sujet: brut, etapes: ["Étiquettes", "Valeurs", "Rayon"],
+      annuler: () => { annule = true; refaire(actuel); } });
     const candidats = libres().map(n => [n, ressemblance(brut, n)]).sort((x, y) => y[1] - x[1]).slice(0, 30).map(([n]) => n);
     let v;
     try {
       const r = await fetch("/api/ingredient/proposer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nom: brut, candidats }) });
       const rep = await r.json();
+      att.fin();
+      if (annule) return;
       if (!r.ok) { dire(rep.erreur || "L'IA n'a pas pu répondre."); return refaire(actuel); }
       v = rep.ingredient;
-    } catch (e) { dire("L'appli ne répond pas."); return refaire(actuel); }
+    } catch (e) { att.fin(); if (annule) return; dire("L'appli ne répond pas."); return refaire(actuel); }
     if (v.existant && connusTous.includes(v.existant))
       return ajouterIngredient(v.existant, `Ajouté : <b>${esc(v.existant)}</b> (tu as écrit « ${esc(brut)} »).`);
     const MAC = ["kcal", "prot", "gluc", "lip", "fib"];
@@ -1789,7 +1819,7 @@ async function demanderAjustement(id, quantites = null, jour = null) {
 
 /* ------------------------------------------------------------ un plat */
 function etoilesLues(r) {
-  return r.nb_notes ? `<span class="note-lue">${icone("star-fill")}${nombre(r.note, 1)}<span class="discret petit">(${r.nb_notes} note${r.nb_notes > 1 ? "s" : ""})</span></span>`
+  return r.nb_notes ? `<span class="note-lue">${icone("star-fill")}${nombre(r.note, 1)}<span class="discret petit">(${r.nb_notes > 1 ? `${r.nb_notes} notes` : `${r.nb_notes} note`})</span></span>`
                     : `<span class="discret petit">Pas encore noté</span>`;
 }
 // Sans compte Claude, les vitamines se renseignent à la main, pour 100 g (Taha, 19/11/2026 : c'est obligatoire).
@@ -2076,7 +2106,7 @@ function produitsManquants(cm, magasin, duree) {
   if (!hors.length && !faits.length) return "";
   const cherche = hors.some(l => l.cherche), avec = hors.some(l => l.alternatives.length);
   const option = (i, valeur, titre, sous, coche) => `<label class="option"><input type="radio" name="alt${i}" value="${esc(valeur)}"${coche ? " checked" : ""}><span><b>${titre}</b>${sous ? `<small>${sous}</small>` : ""}</span></label>`;
-  return `<section class="bloc large" aria-labelledby="tHors"><h2 id="tHors">Produits manquants${hors.length ? `<span class="puce">${hors.length} produit${hors.length > 1 ? "s" : ""}</span>` : ""}</h2>
+  return `<section class="bloc large" aria-labelledby="tHors"><h2 id="tHors">Produits manquants${hors.length ? `<span class="puce">${hors.length > 1 ? `${hors.length} produits` : `${hors.length} produit`}</span>` : ""}</h2>
     ${hors.length ? `<p class="doux petit sous-titre">L'appli ne les a pas mis au panier ${magasin}. ${avec ? `Pour chacun, choisis un produit de remplacement trouvé chez ${magasin} : il va dans ton panier, et les recettes de ${duree === "la semaine" ? "ta semaine" : duree.replace("les", "tes")} l'utilisent à la place, toutes seules. Sinon, achète-le ailleurs.` : cherche ? `Rien de proche chez ${magasin} : prends-les dans un autre magasin.` : `Prends-les ailleurs, ou demande à l'appli de chercher de quoi les remplacer chez ${magasin}.`}</p>
     <div class="manquants">${hors.map((l, i) => `<fieldset class="manquant" data-manquant="${esc(l.nom)}">
       <legend><b>${esc(l.nom)}</b> <span class="q">${quantite(l.acheter, l.unite)}</span></legend>
@@ -2199,7 +2229,7 @@ function vueCoursesDuMois() {
       <p class="doux petit sous-titre">Dans un magasin près de chez toi, jamais dans le panier en ligne.${fs.nom ? ` ${fs.par_jour} g par jour, soit ${nombre(fs.besoin)} g pour 30 jours.` : ""}</p>
       ${fs.acheter ? `<dl class="kpis">
           <div><dt>À acheter</dt><dd>${nombre(fs.acheter)} g</dd><p>Environ ${euros(fs.cout)}. ${esc(fs.conseil)}</p></div>
-          <div><dt>En stock</dt><dd>${fs.jours_en_stock} jour${fs.jours_en_stock > 1 ? "s" : ""}</dd><p>${nombre(fs.stock)} g à la maison.</p></div></dl>
+          <div><dt>En stock</dt><dd>${fs.jours_en_stock > 1 ? `${fs.jours_en_stock} jours` : `${fs.jours_en_stock} jour`}</dd><p>${nombre(fs.stock)} g à la maison.</p></div></dl>
         <p style="margin-top:16px"><button class="bouton second" data-action="fruitsSecs">J'ai acheté les fruits secs</button></p>`
         : (fs.nom ? avis("check", "Tu en as pour le mois", `${fs.jours_en_stock} jours de fruits secs en stock.`) : "")}
       ${fs.autres.length ? `<h3 class="sous">Pour tes recettes</h3>
@@ -2254,7 +2284,7 @@ function vueCourses() {
       bouton = `<button class="bouton grand" data-action="panier">Passer la commande</button><button class="bouton sobre" data-action="payer">J'ai fait les courses moi-même</button>`;
     }
   } else conseils.push(["", "Stock", "Rien à acheter : tout est déjà en stock."]);
-  if (c.boucher.length && !fini) conseils.push(["", "Boucher", `${c.boucher.length} produit${c.boucher.length > 1 ? "s" : ""} de viande à prendre chez ton boucher : jamais dans le panier.`]);
+  if (c.boucher.length && !fini) conseils.push(["", "Boucher", `${c.boucher.length > 1 ? `${c.boucher.length} produits` : `${c.boucher.length} produit`} de viande à prendre chez ton boucher : jamais dans le panier.`]);
   if (c.en_stock.length) conseils.push(["", "Stock", `${c.en_stock.length} produits sont déjà chez toi : l'appli ne les rachète pas.`]);
   barre(action);
   const rang = fini ? 4 : s.etat === "panier" ? 2 : enCours || E.valide ? 1 : 0;
@@ -2358,7 +2388,7 @@ function vueRecette({ arg, params }) {
         <p class="discret chiffres">${[`${nombre(r.kcal * facteur)} kcal`, `${nombre(r.prot * facteur)} g prot.`, r.temps ? `${r.temps} min` : "",
           (seance || auJour) && facteur !== 1 ? `${nombre(facteur * 100)} %` : ""].filter(Boolean).join(" · ")}</p>
         ${goute && estRepas(r) ? `<div class="etoiles fc-note" role="group" aria-label="Ta note, de 1 à 5 : elle décide si ce plat revient" title="Ta note : elle décide si ce plat revient">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-action="noter" data-plat="${r.id}" data-note="${i}"
-          class="${r.note && i <= Math.round(r.note) ? "pleine" : ""}" aria-label="${i} étoile${i > 1 ? "s" : ""} sur 5">${icone(r.note && i <= Math.round(r.note) ? "star-fill" : "star")}</button>`).join("")}</div>` : ""}
+          class="${r.note && i <= Math.round(r.note) ? "pleine" : ""}" aria-label="${i > 1 ? `${i} étoiles` : `${i} étoile`} sur 5">${icone(r.note && i <= Math.round(r.note) ? "star-fill" : "star")}</button>`).join("")}</div>` : ""}
         ${enSuivi() ? "" : `<p class="discret petit">${seance ? `${s.jours[n].jour}, ` : ""}${combien}${seance && seance.pour_demain ? " : ce soir et demain midi" : ""}.</p>`}</div></div>
     <section class="fc-bloc" aria-labelledby="tIng"><h2 id="tIng">Ingrédients</h2>
       ${listeRecette(enSuivi() ? facteur : portions)}
@@ -2444,7 +2474,7 @@ function vueAvancement({ params }) {
     ${Object.keys(NOMS).map(k => `<a href="#/avancement?p=${k}"${k === p ? ' aria-current="true"' : ""}>${NOMS[k]}</a>`).join("")}
   </nav>
   ${moisTropTot ? `<div class="vide"><h2>Le mois arrive après ta première semaine</h2>
-    <p>Il s'affiche quand 7 journées de ce mois sont finies : encore ${7 - (x.jours_finis || 0)} jour${7 - (x.jours_finis || 0) > 1 ? "s" : ""}. En attendant, regarde « Cette semaine ».</p>
+    <p>Il s'affiche quand 7 journées de ce mois sont finies : ${(n => n > 1 ? `encore ${n} jours` : `encore ${n} jour`)(7 - (x.jours_finis || 0))}. En attendant, regarde « Cette semaine ».</p>
     <a class="bouton second" href="#/avancement?p=semaine">Voir cette semaine</a></div>`
   : !suivi ? `<div class="vide"><h2>${enSuivi() && p !== "jour" ? `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}` : (enSuivi() ? { jour: "Rien de mangé aujourd'hui", semaine: "Rien de mangé cette semaine", mois: "Rien de mangé ce mois-ci" }
       : { jour: "Rien de cuisiné aujourd'hui", semaine: "Rien de cuisiné cette semaine", mois: "Rien de cuisiné ce mois-ci" })[p]}</h2>
@@ -2538,7 +2568,7 @@ function vueVitaminesMangees(params) {
   // Deux vues (Taha, 22/11/2026) : le jour, tout sur un écran ; « Sur la durée », ce qui te manque souvent.
   const onglets = `<div class="vit-titre"><h1 tabindex="-1">Vitamines</h1><nav class="jours vit-onglets" aria-label="Vue">
     ${[["jour", "Jour"], ["semaine", "Semaine"], ["mois", "Mois"]].map(([v, t]) => `<a href="#/vitamines${v === "jour" ? "" : `?vue=${v}`}"${v === vue ? ' aria-current="true"' : ""}>${t}</a>`).join("")}</nav></div>`;
-  const aCompleter = manquent.length ? `<details class="bloc a-completer"${completer ? " open" : ""}><summary><span>${icone("warning-circle")}${manquent.length} aliment${manquent.length > 1 ? "s" : ""} sans vitamines : à compléter</span>${icone("caret-right")}</summary>
+  const aCompleter = manquent.length ? `<details class="bloc a-completer"${completer ? " open" : ""}><summary><span>${icone("warning-circle")}${manquent.length > 1 ? `${manquent.length} aliments` : `${manquent.length} aliment`} sans vitamines : à compléter</span>${icone("caret-right")}</summary>
       <p class="petit discret">Tant qu'elles manquent, ces aliments comptent zéro vitamine. Branche ton compte Claude (Réglages) pour qu'il les estime, ou renseigne-les ici.</p>
       ${manquent.map((nom, i) => `<details class="completer"><summary>${esc(nom)}${icone("caret-right")}</summary>
         <form class="formulaire" data-completer="${esc(nom)}" data-i="${i}" novalidate>${champsVitamines(`cv${i}_`)}
@@ -2571,7 +2601,7 @@ function vueVitaminesDuree(n, a, V, decaler) {
   return `${periodes}
   <section class="bloc vit-jour" aria-labelledby="tDuree">
     <p class="vit-resume" id="tDuree">${souvent.length ? `Te manquent souvent : <b class="bas">${souvent.map(l => esc(court(l.c))).join(", ")}</b>` : "<b>Rien ne te manque souvent.</b>"}</p>
-    <p class="petit discret legende-prevu"><span>Moyenne par jour sur les ${n} derniers jours (${dates.length} jour${dates.length > 1 ? "s" : ""} avec des plats mangés)</span></p>
+    <p class="petit discret legende-prevu"><span>Moyenne par jour sur les ${n} derniers jours (${dates.length > 1 ? `${dates.length} jours` : `${dates.length} jour`} avec des plats mangés)</span></p>
     <ul class="barres compactes">${lignes.map(l => `<li class="${l.moy < 80 ? "bas" : ""}"${ROLE_VITAMINE[l.c] ? ` title="${esc(ROLE_VITAMINE[l.c])}"` : ""}><span>${esc(V.noms[l.c].nom)}</span>
       <span class="v"><b class="chiffres">${nombre(l.moy)} %</b>${l.bas ? ` · bas ${l.bas} j sur ${dates.length}` : ""}</span>
       <span class="piste" role="img" aria-label="${nombre(l.moy)} % du besoin en moyenne"><i style="width:${Math.min(100, l.moy)}%"></i></span></li>`).join("")}</ul>
@@ -2634,13 +2664,13 @@ function vueProfilFlemmard() {
     ${E.eau ? `<div class="fait"><b>${virgule(E.eau.litres)}<small> L</small></b><span>d'eau</span></div>` : ""}
   </div>
   <p class="petit discret" style="margin:-4px 0 16px">Phase ${ph.n}, ${esc(ph.nom).toLowerCase()}. Ces repères ne remplacent pas un avis médical.</p>
-  <section class="bloc" aria-labelledby="tQui"><h2 id="tQui" style="margin-bottom:8px">Mes informations</h2>
+  ${autreAvecTelephone() ? "" : `<section class="bloc" aria-labelledby="tQui"><h2 id="tQui" style="margin-bottom:8px">Mes informations</h2>
     <ul class="lignes">${i.date_naissance ? l("Date de naissance", `${esc(dateLongueCourte(i.date_naissance).replace(/^[a-zé]+ /i, ""))} (${i.age} ans)`) : i.age ? l("Âge", `${i.age} ans`) : ""}
       ${i.sexe ? l("Sexe", esc(i.sexe)) : ""}${i.pays ? l("Pays", `${drapeau(i.pays)} ${esc(paysDe(i.pays)[2])}`) : ""}${i.telephone ? l("Téléphone", esc(i.telephone)) : ""}
-      ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul></section>
+      ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul></section>`}
   <ul class="menu" style="margin-top:16px">
     ${lien("#/reglages", "sliders-horizontal", "Réglages", "")}
-    ${typeof sb !== "undefined" ? lien("#/famille", "users", "Ma famille", demandesFamille().length ? `${demandesFamille().length} demande${demandesFamille().length > 1 ? "s" : ""} pour entrer` : enFamille() ? esc(M.famille.famille.nom) : (M.familleEtat && M.familleEtat.statut === "attente") ? "Demande en attente" : "Stock et plats en commun") : ""}
+    ${typeof sb !== "undefined" ? lien("#/famille", "users", "Ma famille", demandesFamille().length ? `${demandesFamille().length > 1 ? `${demandesFamille().length} demandes` : `${demandesFamille().length} demande`} pour entrer` : enFamille() ? esc(M.famille.famille.nom) : (M.familleEtat && M.familleEtat.statut === "attente") ? "Demande en attente" : "Stock et plats en commun") : ""}
     ${estAdminConso() ? lien("#/conso", "chart-bar", "Suivi de conso", "Ce que chaque compte consomme en IA") : ""}
     ${E.utilisateur.admin ? lien("#/profils", "users", "Profils", "") : ""}
   </ul>
@@ -2692,11 +2722,11 @@ function vueConso() {
   const k = n => n >= 1e6 ? `${virgule(Math.round(n / 1e5) / 10)} M` : n >= 1e4 ? `${nombre(Math.round(n / 1e3))} k` : nombre(n);
   const bloc = (titre, x, sous = "") => `<section class="bloc conso-bloc"><h2>${esc(titre)}${sous ? `<small>${sous}</small>` : ""}</h2>
     <ul class="lignes">
-      <li><span>Claude<small>${x.claude} appel${x.claude > 1 ? "s" : ""}${x.perso || x.partagee ? ` · ${x.partagee} sur la clé de l'appli, ${x.perso} sur sa clé` : ""}${x.modeles.size ? ` · ${esc([...x.modeles].join(", "))}` : ""}</small></span>
+      <li><span>Claude<small>${x.claude > 1 ? `${x.claude} appels` : `${x.claude} appel`}${x.perso || x.partagee ? ` · ${x.partagee} sur la clé de l'appli, ${x.perso} sur sa clé` : ""}${x.modeles.size ? ` · ${esc([...x.modeles].join(", "))}` : ""}</small></span>
         <span class="q chiffres">${k(x.entree)} → ${k(x.sortie)}</span></li>
-      <li><span>Photos Gemini<small>${x.images} image${x.images > 1 ? "s" : ""}</small></span><span class="q chiffres">${x.images ? `${k(x.img_e)} → ${k(x.img_s)}` : "—"}</span></li>
+      <li><span>Photos Gemini<small>${x.images > 1 ? `${x.images} images` : `${x.images} image`}</small></span><span class="q chiffres">${x.images ? `${k(x.img_e)} → ${k(x.img_s)}` : "—"}</span></li>
       <li><span>Pages lues<small>étiquettes, photos libres (pas d'IA)</small></span><span class="q chiffres">${x.web}</span></li>
-    </ul>${x.sans ? `<p class="petit discret">${x.sans} appel${x.sans > 1 ? "s" : ""} Claude d'avant le 23/11 : tokens non comptés.</p>` : ""}</section>`;
+    </ul>${x.sans ? `<p class="petit discret">${x.sans > 1 ? `${x.sans} appels` : `${x.sans} appel`} Claude d'avant le 23/11 : tokens non comptés.</p>` : ""}</section>`;
   const comptes = [...par.entries()].sort((a, b) => (b[1].entree + b[1].sortie + b[1].img_s) - (a[1].entree + a[1].sortie + a[1].img_s) || b[1].claude - a[1].claude);
   apresRendu.push(() => document.querySelectorAll("[data-conso-p]").forEach(b => b.addEventListener("click", () => { CONSO_P = b.dataset.consoP; rendre(); })));
   apresRendu.push(() => $("consoMaj") && $("consoMaj").addEventListener("click", () => { CONSO.vieux = true; rendre(); }));
@@ -3122,7 +3152,7 @@ function vueBudget() {
     <dl class="kpis">
       ${kpi("Budget du mois", euros(b.budget), "Réglable dans les réglages.")}
       ${kpi("Stock au début du mois", euros(b.stock_debut), "Les courses qu'il te restait au 1er du mois.")}
-      ${kpi("Payé ce mois-ci", euros(b.paye), `${b.commandes} commande${b.commandes > 1 ? "s" : ""} payée${b.commandes > 1 ? "s" : ""}, viande comprise.`)}
+      ${kpi("Payé ce mois-ci", euros(b.paye), `${b.commandes > 1 ? `${b.commandes} commandes payées` : `${b.commandes} commande payée`}, viande comprise.`)}
       ${kpi(depasse ? "Dépassement" : "Reste à dépenser", euros(Math.abs(b.reste)), depasse ? "Tu as dépassé ton budget du mois." : "Ce que tu peux encore acheter ce mois-ci.")}
     </dl>
     <p class="calcul chiffres">${euros(b.budget)} de budget, moins ${euros(b.stock_debut)} de stock au début du mois, moins ${euros(b.paye)} déjà payés : ${depasse ? `${euros(-b.reste)} de trop` : `il reste ${euros(b.reste)}`}.</p>
@@ -3132,7 +3162,7 @@ function vueBudget() {
 
   <section class="bloc" aria-labelledby="tStockB"><h2 id="tStockB">Ton stock</h2>
     <dl class="kpis">
-      ${kpi("Valeur du stock aujourd'hui", euros(b.stock.valeur), `${b.stock.produits} produit${b.stock.produits > 1 ? "s" : ""}${b.stock.sans_prix ? `, dont ${b.stock.sans_prix} sans prix connu` : ""}.`)}
+      ${kpi("Valeur du stock aujourd'hui", euros(b.stock.valeur), `${b.stock.produits > 1 ? `${b.stock.produits} produits` : `${b.stock.produits} produit`}${b.stock.sans_prix ? `, dont ${b.stock.sans_prix} sans prix connu` : ""}.`)}
       ${kpi("Mangé ce mois-ci", euros(b.consomme), "La valeur des plats que tu as dit avoir cuisinés.")}
     </dl>
     <p class="petit discret" style="margin-top:14px">Ce qui restera en stock à la fin du mois sera compté dans le budget du mois suivant.</p>
@@ -3232,7 +3262,7 @@ function vueCatalogue({ params }) {
   ${F.ings.size ? `<p class="cat-ings">Avec ${[...F.ings].map(n => `<button type="button" data-action="sansIngCat" data-nom="${esc(n)}" aria-label="Retirer ${esc(n)}">${esc(n)}${icone("x")}</button>`).join("")}</p>` : ""}
   <div class="champ formulaire"><label for="filtre">Chercher une recette</label>
     <input id="filtre" name="filtre" type="search" autocomplete="off" placeholder="Poulet, curry…" value="${esc(filtreCatalogue)}"></div>
-  <p class="discret petit" role="status" style="margin:-6px 0 8px">${lignes.length} recette${lignes.length > 1 ? "s" : ""}${F.stock && !E.stock.length ? ". Ton stock est vide : ajoute ce que tu as dans Stock" : ""}.</p>
+  <p class="discret petit" role="status" style="margin:-6px 0 8px"><span>${lignes.length > 1 ? `${lignes.length} recettes` : `${lignes.length} recette`}</span>${F.stock && !E.stock.length ? ` · <span>Ton stock est vide : ajoute ce que tu as dans Stock</span>` : ""}</p>
   ${lignes.length ? `<ul class="rp-liste cat-liste">${lignes.slice(F.debut, F.debut + 5).map(r => `<li><a class="rp-plat" href="#/plat/${r.id}">${photo(r, 120, "carre")}
       <span class="rp-texte"><b>${esc(r.nom)}</b>${macrosLigne(r.kcal, r.prot).replace("</span></span>", `</span><span>${euros(r.cout)}</span>${r.gout === "tester" ? `<span class="rp-ecart plus">À tester</span>` : r.gout === "non" ? `<span>J'aime pas</span>` : ""}</span>`)}</span></a></li>`).join("")}</ul>`
     : `<p class="discret">Aucune recette ne correspond.</p>`}
@@ -3370,7 +3400,7 @@ function vueStockMaison({ params } = {}) {
   if (ING_CHOISIS.size) {
     // Une carte posée au-dessus des onglets (Taha, 23/11/2026 : « pas élégant ») : les produits choisis en pastilles
     // qu'on retire d'un toucher, et quand rien ne va ensemble, le produit à enlever pour retrouver des plats.
-    const ch = [...ING_CHOISIS], n = platsAvec(ING_CHOISIS).length, pl = k => `${k} plat${k > 1 ? "s" : ""}`;
+    const ch = [...ING_CHOISIS], n = platsAvec(ING_CHOISIS).length, pl = k => `${k > 1 ? `${k} plats` : `${k} plat`}`;
     const sans = n ? [] : ch.map(x => ({ x, k: platsAvec(ch.filter(y => y !== x)).length })).filter(o => o.k && ch.length > 1)
       .sort((a, b) => b.k - a.k).slice(0, 2);
     const ouv = ch.length === 1 && E.ouverts && ch[0] in E.ouverts ? E.ouverts[ch[0]] : undefined;
@@ -3388,7 +3418,7 @@ function vueStockMaison({ params } = {}) {
   }
   return `<div class="m-tete"><div><h1 tabindex="-1">Stock</h1>
       ${onglets}
-      <p class="petit discret">${st.length ? `${st.length} produit${st.length > 1 ? "s" : ""} à la maison. Ce que tu marques mangé en sort tout seul.` : "Ajoute ce que tu as chez toi : l'appli te propose des repas avec."}</p></div></div>
+      <p class="petit discret">${st.length ? `${st.length > 1 ? `${st.length} produits` : `${st.length} produit`} à la maison. Ce que tu marques mangé en sort tout seul.` : "Ajoute ce que tu as chez toi : l'appli te propose des repas avec."}</p></div></div>
     ${ajout}
     ${barreStock}
     ${(() => {
@@ -3408,7 +3438,7 @@ function vueStockMaison({ params } = {}) {
       const finir = (E.a_finir || []).filter(x => chez.some(l => l.nom === x.nom));
       const quand = x => x.reste < 0 ? "a peut-être expiré" : x.reste === 0 ? "expire aujourd'hui" : x.reste === 1 ? "expire demain" : `expire dans ${x.reste} jours`;
       return `${finir.length && !voulus.length ? `<section class="bloc a-finir" aria-labelledby="tFinir"><h2 id="tFinir">${icone("warning-circle")}À finir bientôt</h2>
-        <ul>${finir.map(x => `<li><span><b>${esc(x.nom)}</b><small>${x.ouvert != null ? (x.ouvert ? `ouvert il y a ${x.ouvert} jour${x.ouvert > 1 ? "s" : ""}` : "ouvert aujourd'hui") : `entré il y a ${x.depuis} jour${x.depuis > 1 ? "s" : ""}`}</small></span><span class="af-quand${x.reste <= 0 ? " urgent" : ""}">${quand(x)}</span></li>`).join("")}</ul>
+        <ul>${finir.map(x => `<li><span><b>${esc(x.nom)}</b><small>${x.ouvert != null ? (x.ouvert ? `ouvert il y a ${x.ouvert > 1 ? `${x.ouvert} jours` : `${x.ouvert} jour`}` : "ouvert aujourd'hui") : `entré il y a ${x.depuis > 1 ? `${x.depuis} jours` : `${x.depuis} jour`}`}</small></span><span class="af-quand${x.reste <= 0 ? " urgent" : ""}">${quand(x)}</span></li>`).join("")}</ul>
         <button type="button" class="bouton large second" data-action="platsAFinir">${icone("cooking-pot")}Des plats pour les finir</button></section>` : ""}
       ${chez.length ? `<p class="petit discret stock-astuce">Touche un produit pour voir les plats qui en ont.</p>
       <div class="stock-rayons">${parRayon(chez).map(([g, lignes]) => `<details class="stock-rayon stock-chez" data-rayon="chez|${esc(g)}"${voulus.length || STOCK_OUVERTS.has("chez|" + g) || lignes.some(l => ING_CHOISIS.has(l.nom)) ? " open" : ""}>
@@ -3426,8 +3456,8 @@ const LC_COCHES = new Set();
 // Ma liste de courses (Taha, 23/11/2026) : UN tableau. Vide, il propose de le remplir avec les N produits qui permettent de
 // cuisiner le plus de plats avec le stock (N au choix). Chaque produit dit en clair à quoi il sert ; on coche ce qu'on a
 // acheté, « Ajouter au stock ».
-const raisonCourse = x => x.plats.length ? `pour ${x.plats.length} nouveau${x.plats.length > 1 ? "x" : ""} plat${x.plats.length > 1 ? "s" : ""}`
-  : `pour compléter ${x.aide.length} plat${x.aide.length > 1 ? "s" : ""}`;
+const raisonCourse = x => x.plats.length ? `pour ${x.plats.length > 1 ? `${x.plats.length} nouveaux plats` : `${x.plats.length} nouveau plat`}`
+  : `pour compléter ${x.aide.length > 1 ? `${x.aide.length} plats` : `${x.aide.length} plat`}`;
 const ING_CHOISIS = new Set();             // produits du stock choisis pour voir les plats qui en ont
 let filtreCourses = "";
 function vueCourses() {
@@ -3438,7 +3468,7 @@ function vueCourses() {
       <button type="button" data-action="lcNb" data-pas="1" aria-label="Un produit de plus">+</button></span>`;
   const idees = `<section class="bloc lc-idees" aria-labelledby="tIdees"><h2 id="tIdees">${icone("shopping-cart-simple")}Les plus utiles</h2>
       ${aStock ? `<p class="lc-aide">+ ajoute à ta liste le produit qui te fait cuisiner le plus de plats avec ce que tu as ; − le retire.</p>
-      <div class="lc-remplir">${nb}<span class="lc-nb-aide">${lcProposes().length ? `produit${lcProposes().length > 1 ? "s" : ""} sur ta liste` : "touche + pour commencer"}</span></div>`
+      <div class="lc-remplir">${nb}<span class="lc-nb-aide">${lcProposes().length ? (lcProposes().length > 1 ? "produits sur ta liste" : "produit sur ta liste") : "touche + pour commencer"}</span></div>`
       : `<p class="lc-aide">Ajoute d'abord ce que tu as dans « Mon stock » : l'appli te dira quoi acheter pour cuisiner plus.</p>`}</section>`;
   // Ajouter à la main : les ingrédients de l'appli qui commencent par ce qu'on tape.
   const mots = motsStock(filtreCourses), tous = Object.keys(rayonsDesIngredients()).sort((a, b) => a.localeCompare(b, "fr"));
@@ -3548,7 +3578,7 @@ function stockVerifier(items, sorte) {
   const unites = [["g", "g"], ["ml", "ml"], ["pièce", "pièce(s)"]];
   d.innerHTML = `<form class="feuille formulaire" novalidate>
     <h2 id="dialogueTitre">Vérifie avant d'ajouter</h2>
-    <p class="petit discret" style="margin:-4px 0 10px">${items.length} produit${items.length > 1 ? "s" : ""} lu${items.length > 1 ? "s" : ""}. Décoche ce qui n'est pas à toi, corrige une quantité.</p>
+    <p class="petit discret" style="margin:-4px 0 10px">${items.length > 1 ? `${items.length} produits lus` : `${items.length} produit lu`}. Décoche ce qui n'est pas à toi, corrige une quantité.</p>
     <ul class="stock-verifs">${items.map((x, k) => `<li>
       <input type="checkbox" checked data-k="${k}" data-champ="garde" aria-label="Ajouter ${esc(x.nom)}">
       <span class="sv-nom"><input type="text" value="${esc(x.nom)}" data-k="${k}" data-champ="nom" aria-label="Produit">
@@ -3567,7 +3597,7 @@ function stockVerifier(items, sorte) {
     const gardes = items.filter(x => x.garde !== false && x.quantite > 0 && x.nom);
     if (!gardes.length) { $("eStock").textContent = "Rien à ajouter : coche au moins un produit."; return; }
     const ok = await appel("/api/stock/ajouter", { items: gardes, sorte });
-    if (ok === true) { d.close("oui"); rendre(); dire(`${gardes.length} produit${gardes.length > 1 ? "s" : ""} ajouté${gardes.length > 1 ? "s" : ""} au stock.`); }
+    if (ok === true) { d.close("oui"); rendre(); dire(`${gardes.length > 1 ? `${gardes.length} produits ajoutés` : `${gardes.length} produit ajouté`} au stock.`); }
     else $("eStock").textContent = (ok && ok.erreur) || "Pas ajouté, réessaie.";
   });
   if (!d.open) d.showModal();
@@ -3679,7 +3709,7 @@ function vueJourSuivi(params) {
     ${jaugesDuJour(j, o, mangeJour)}
     <p class="reste-jour">${reste}</p>
     ${(E.a_finir || []).length && dec === 0 ? `<a class="rappel" href="#/stock">${icone("warning-circle")}<span>À finir : ${esc(E.a_finir.slice(0, 3).map(x => x.nom).join(", "))}${E.a_finir.length > 3 ? "…" : ""}</span>${icone("caret-right")}</a>` : ""}
-    ${(E.vitamines_a_completer || []).length && dec === 0 ? `<a class="rappel" href="#/vitamines?completer=1">${icone("warning-circle")}<span>${E.vitamines_a_completer.length} aliment${E.vitamines_a_completer.length > 1 ? "s" : ""} sans vitamines : complète-les</span>${icone("caret-right")}</a>` : ""}
+    ${(E.vitamines_a_completer || []).length && dec === 0 ? `<a class="rappel" href="#/vitamines?completer=1">${icone("warning-circle")}<span>${E.vitamines_a_completer.length > 1 ? `${E.vitamines_a_completer.length} aliments` : `${E.vitamines_a_completer.length} aliment`} sans vitamines : complète-les</span>${icone("caret-right")}</a>` : ""}
     ${E.eau && dec === 0 ? (() => {
       // L'eau : un seul bouton, coché = l'objectif du jour est bu (Taha, 21/11/2026 : « juste un bouton check »).
       const fait = eauCochee(date);
@@ -3693,12 +3723,12 @@ function vueJourSuivi(params) {
         <p style="margin-top:8px"><button class="bouton second" data-action="suivante">Composer la suite</button></p></div>`}
         <section class="grille-plats" aria-label="Ajouter"><div class="exos">${tuileAjout}</div></section>`}
     ${(E.stock || []).length && E.manque_jours && E.manque_jours[date] ? (E.manque_jours[date].length
-      ? `<button type="button" class="manque-jour" data-manque-jour="${date}">${icone("shopping-cart-simple")}<span>${E.manque_jours[date].length} ingrédient${E.manque_jours[date].length > 1 ? "s" : ""} manquant${E.manque_jours[date].length > 1 ? "s" : ""}</span>${icone("caret-right")}</button>`
+      ? `<button type="button" class="manque-jour" data-manque-jour="${date}">${icone("shopping-cart-simple")}<span>${E.manque_jours[date].length > 1 ? `${E.manque_jours[date].length} ingrédients manquants` : `${E.manque_jours[date].length} ingrédient manquant`}</span>${icone("caret-right")}</button>`
       : `<p class="manque-jour complet">${icone("check")}Tu as tout en stock pour les repas de ce jour.</p>`) : ""}
     ${j.entrees.length ? `<h2 class="titre-section">En plus</h2><div class="liste-notes">${j.entrees.map(ligneRepasNote).join("")}</div>` : ""}
     </div>
     <div class="rubrique-fin">
-    ${idees && idees.plats.length ? `<details class="bloc idees idees-ligne"${autres ? " open" : ""}><summary><span><b>Pour finir la journée</b><small>${idees.plats.length} idée${idees.plats.length > 1 ? "s" : ""} ${idees.moment.startsWith("col") ? "en collation" : `pour le ${nomMoment(idees.moment)}`}, réglée${idees.plats.length > 1 ? "s" : ""} sur ton objectif</small></span>${icone("caret-right")}</summary>
+    ${idees && idees.plats.length ? `<details class="bloc idees idees-ligne"${autres ? " open" : ""}><summary><span><b>Pour finir la journée</b><small><span>${idees.plats.length > 1 ? `${idees.plats.length} idées` : `${idees.plats.length} idée`}</span> <span>${idees.moment.startsWith("col") ? "en collation" : `pour le ${nomMoment(idees.moment)}`}</span>, <span>${idees.plats.length > 1 ? "réglées sur ton objectif" : "réglée sur ton objectif"}</span></small></span>${icone("caret-right")}</summary>
       <ul class="rp-liste">${idees.plats.map((x, i) => `<li><button type="button" class="rp-plat" data-idee="${i}">${photo(recette(x.id), 120, "carre")}
         <span class="rp-texte"><b>${esc(x.nom)}</b>${macrosLigne(x.kcal, x.prot)}</span>
         ${o.kcal && Math.abs(x.kcal_jour - o.kcal) <= o.kcal * 0.05 && x.prot_jour >= o.prot * 0.95 ? `<span class="rp-tient" title="Ta journée tient l'objectif">${icone("check")}</span>` : ""}</button></li>`).join("")}</ul>
@@ -3762,7 +3792,8 @@ function vueHistorique() {
   <div class="titre"><h1 tabindex="-1">Historique</h1><p>Ce que tu as mangé jour après jour, comparé à ton objectif de ${nombre(o.kcal)} kcal et ${o.prot} g de protéines.</p></div>
   ${passes.length ? `<div class="historique-jours">${passes.map(j => `<details class="jour-histo">
       <summary><span><b>${esc(new Intl.DateTimeFormat(LOCALE, { weekday: "short", day: "numeric", month: "short" }).format(new Date(j.date + "T12:00")).replace(/^./, c => c.toUpperCase()))}</b>
-        <small>${[j.repas && j.repas.length ? `${j.repas.length} plat${j.repas.length > 1 ? "s" : ""} prévu${j.repas.length > 1 ? "s" : ""}` : "", j.entrees.length ? `${j.entrees.length} noté${j.entrees.length > 1 ? "s" : ""} en plus` : ""].filter(Boolean).join(" · ")}</small>
+        <small>${[j.repas && j.repas.length ? (j.repas.length > 1 ? `${j.repas.length} plats prévus` : "1 plat prévu") : "",
+          j.entrees.length ? (j.entrees.length > 1 ? `${j.entrees.length} notés en plus` : "1 noté en plus") : ""].filter(Boolean).join(" · ")}</small>
         ${E.eau ? `<small class="histo-eau${eauCochee(j.date) ? " coche" : ""}">${icone("goutte")}${virgule((E.eau.bu || {})[j.date] || 0)} L${eauCochee(j.date) ? ` ${icone("check")}` : " · pas coché"}</small>` : ""}</span>
         <span class="chiffres histo-chiffres"><span>${nombre(Math.round(j.kcal))} kcal <i class="mini-piste"><i style="width:${pct(j.kcal, o.kcal)}%"></i></i></span>
           <span>${nombre(Math.round(j.prot))} g <i class="mini-piste"><i style="width:${pct(j.prot, o.prot)}%"></i></i></span></span>${icone("caret-right")}</summary>
@@ -4347,12 +4378,12 @@ function vueSuivi({ params }) {
   apresRendu.push(() => Graph.courbes($("gSuivi"), { unite: S.unite, decimales: 1, hauteur: PETIT.matches ? 190 : 230, titre: S.titre, ...bornes,
     videTexte: "La courbe apparaît dès la deuxième mesure.", series: S.series.every(s => s.points.length < 2) ? [] : S.series }));
   const champ = (cle, libelle, unite) => `<div class="champ" style="margin:0"><label for="su_${cle}">${libelle}</label>
-    <div class="avec-unite"><input id="su_${cle}" name="${cle}" type="text" inputmode="decimal" autocomplete="off" value="${virgule(ce[cle])}" placeholder="${unite === "kg" ? "78,5" : "35"}"><span>${unite}</span></div></div>`;
+    <div class="avec-unite"><input id="su_${cle}" name="${cle}" type="text" inputmode="decimal" autocomplete="off" value="${virgule(ce[cle])}" placeholder="${unite === "kg" ? "ex. 78,5" : "ex. 35"}"><span>${unite}</span></div></div>`;
   const cellule = (a, b) => a == null && b == null ? "—" : `${a == null ? "—" : virgule(a)} → ${b == null ? "—" : virgule(b)}`;
   const bic = derniere("biceps_avant") || derniere("biceps_apres"), tou = derniere("tour_avant") || derniere("tour_apres"), tor = derniere("torse_avant") || derniere("torse_apres");
   const aujourd = date === isoDuJour();
   return `<div class="m-tete"><div><h1 tabindex="-1">Mon suivi</h1>
-      <p class="petit discret">${debut ? `Depuis le ${esc(dateLongueCourte(debut).replace(/^[a-zé]+ /i, ""))}${joursSuivi >= 0 ? `, jour ${joursSuivi + 1}` : ""} · ` : ""}${poids.length ? `Dernière pesée le ${esc(dateCourte(poids[0].date))}` : "Note ton poids chaque jour, à la même heure"}</p></div></div>
+      <p class="petit discret">${debut ? `<span>Depuis le ${esc(dateLongueCourte(debut).replace(/^[a-zé]+ /i, ""))}</span>${joursSuivi >= 0 ? `<span>, jour ${joursSuivi + 1}</span>` : ""} · ` : ""}<span>${poids.length ? `Dernière pesée le ${esc(dateCourte(poids[0].date))}` : "Note ton poids chaque jour, à la même heure"}</span></p></div></div>
     <div class="suivi-chiffres suivi-petit">
       <div class="fait"><b>${poids.length ? virgule(poids[0].poids) : "—"}<small> kg</small></b><span>poids</span></div>
       <div class="fait"><b>${signe(ecart(7))}<small>${ecart(7) == null ? "" : " kg"}</small></b><span>en 7 jours</span></div>
@@ -4501,14 +4532,21 @@ document.addEventListener("click", async ev => {
   }
   if (t.dataset.retirerPeriode !== undefined) { t.closest(".periode").remove(); majPoidsVises(); return; }
   if (t.id === "oProposer") {
-    t.disabled = true; t.innerHTML = `${icone("sparkle")}L'IA réfléchit…`; $("ePeriodes").textContent = "";
+    // La même carte d'attente que « L'IA calcule » (27/11/2026).
+    $("ePeriodes").textContent = "";
+    const d = $("dialogue");
+    let annule = false;
+    const att = attenteIA(d, { titre: "L'IA réfléchit", sujet: $("oDemande").value.trim(), etapes: ["Ton profil", "Périodes", "Objectifs"],
+      annuler: () => { annule = true; d.close("non"); } });
     try {
       const r = await fetch("/api/objectifs/proposer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ demande: $("oDemande").value }) });
       const rep = await r.json();
+      att.fin();
+      if (annule) return;
+      d.close("oui");
       if (!r.ok) $("ePeriodes").textContent = rep.erreur || "Claude n'a pas pu proposer.";
       else { $("periodes").innerHTML = rep.proposition.phases.map(lignePeriode).join(""); majPoidsVises(); $("oExplication").textContent = rep.proposition.explication || "Vérifie, puis enregistre."; }
-    } catch (e) { $("ePeriodes").textContent = "Pas de réponse."; }
-    t.disabled = false; t.innerHTML = `${icone("sparkle")}Proposer des périodes`;
+    } catch (e) { att.fin(); if (!annule) { d.close("non"); $("ePeriodes").textContent = "Pas de réponse."; } }
     return;
   }
   const phases = t.id === "oAutomatique" ? [] : [...document.querySelectorAll(".periode")].map(d => Object.fromEntries(
@@ -4550,7 +4588,7 @@ function vueReglagesFlemmard() {
       ${champ("rAdj", "Ajustement des calories", choix("rAdj", "ajustement", r.ajustement || 0, [-300, -150, 0, 150, 300].map(v => [v, `${v > 0 ? "+" : ""}${v} kcal`])), "Par paliers de 150 kcal, si ton poids s'écarte de ce que tu vises.")}
       ${champ("rDebut", "Début de mon suivi", saisie("rDebut", "date_debut", r.date_debut, "date", `max="${isoDuJour()}"`), "Le suivi compte ton poids et tes mesures à partir de ce jour.")}
       </div>`, `${nombre(kcal)} kcal · ${choisie.prot} g`)}
-  <section class="bloc" aria-labelledby="tInfos" data-resume="${esc([i.nom || E.profil.nom, i.taille_cm ? i.taille_cm + " cm" : "", i.poids_kg ? virgule(i.poids_kg) + " kg" : ""].filter(Boolean).join(" · "))}"><h2 id="tInfos">Mes informations</h2>
+  ${autreAvecTelephone() ? "" : `<section class="bloc" aria-labelledby="tInfos" data-resume="${esc([i.nom || E.profil.nom, i.taille_cm ? i.taille_cm + " cm" : "", i.poids_kg ? virgule(i.poids_kg) + " kg" : ""].filter(Boolean).join(" · "))}"><h2 id="tInfos">Mes informations</h2>
     <p class="doux petit sous-titre">${E.profil.calcule ? "Change une valeur : tes calories, tes protéines et tes vitamines sont recalculées." : "Ton programme vient de ton fichier de profil : ces informations ne changent pas tes besoins."}</p>
     <form class="formulaire" id="fMesInfos" novalidate>
       <div class="champs2">${champ("iPrenom", "Prénom", saisie("iPrenom", "prenom", i.nom || E.profil.nom, "text", 'maxlength="40" autocomplete="given-name"'))}
@@ -4565,7 +4603,7 @@ function vueReglagesFlemmard() {
       <p class="petit discret">Identifiant de connexion : <b>${esc(E.profil.id)}</b> (il ne change pas).</p>
       <small id="eMesInfos" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
       <button class="bouton second" type="submit">Enregistrer mes informations</button>
-    </form></section>
+    </form></section>`}
   ${!autre && typeof blocClaude === "function" ? blocClaude() : ""}
   ${(() => { apresRendu.push(async () => {
       const f = $("fCoord"); if (!f) return;
@@ -4601,7 +4639,7 @@ function plierReglages() {
     const h = s.querySelector(":scope > h2");
     if (!h || h.querySelector(".reg-tete")) return;
     let resume = s.dataset.resume || "";
-    if (h.id === "tPeriodes" && !resume) { const n = s.querySelectorAll(".periode").length; resume = n ? `${n} période${n > 1 ? "s" : ""}` : ""; }
+    if (h.id === "tPeriodes" && !resume) { const n = s.querySelectorAll(".periode").length; resume = n ? `${n > 1 ? `${n} périodes` : `${n} période`}` : ""; }
     if (h.id === "tClaude") resume = typeof M !== "undefined" && M.claude ? (M.claude.partage ? "IA partagée" : "Ta clé") : "À brancher";
     const ouvert = REG_OUVERTS.has(h.id);
     s.classList.add("pliable"); s.classList.toggle("ouvert", ouvert);
@@ -4696,7 +4734,7 @@ document.addEventListener("change", async ev => {
       if (rep !== true) return rendre();
     rendre();
       dire(!oui ? "Des plats variés, ton stock d'abord." : !(E.stock || []).length ? "Stock uniquement : ajoute d'abord ce que tu as dans Stock."
-        : E.stock_refaits ? `Stock uniquement : ${E.stock_refaits} repas refait${E.stock_refaits > 1 ? "s" : ""} avec ton stock.`
+        : E.stock_refaits ? `Stock uniquement : ${E.stock_refaits > 1 ? `${E.stock_refaits} repas refaits` : `${E.stock_refaits} repas refait`} avec ton stock.`
         : "Stock uniquement : rien à changer (déjà faisable, ou aucun plat entièrement faisable).");
     });
   }
@@ -4800,7 +4838,7 @@ function avis(nomIcone, titre, texte) {
 }
 function vueIntrouvable() {
   barre("");
-  return `<div class="titre"><h1 tabindex="-1">Page introuvable</h1></div>${vide("Ce plat n'existe pas", "Il a peut-être été retiré.", "#/semaine", "Retour à la semaine")}`;
+  return `<div class="titre"><h1 tabindex="-1">Page introuvable</h1></div>${vide("Cette page n'existe pas", "Ce qu'elle montrait a peut-être été retiré, ou l'adresse est incomplète.", "#/semaine", enSuivi() ? "Retour au jour" : "Retour à la semaine")}`;
 }
 function vuePanne() {
   rendreNavigation("");
@@ -5033,7 +5071,7 @@ const ACTIONS = {
       const choix = props.filter((x, k) => d.querySelector(`[data-k="${k}"]`).checked);
       if (!choix.length) return d.close("non");
       d.close("oui");
-      agir("/api/stock/appliquer", { choix }, `${choix.length} repas refait${choix.length > 1 ? "s" : ""} avec ton stock.`); });
+      agir("/api/stock/appliquer", { choix }, `${choix.length > 1 ? `${choix.length} repas refaits` : `${choix.length} repas refait`} avec ton stock.`); });
   },
   oubliMdp: () => {
     $("contenu").innerHTML = accueil(`<div class="auth-carte">
@@ -5115,13 +5153,13 @@ const ACTIONS = {
     const c = coursesMalines(LC_NB.n, new Set((E.liste_courses || []).map(x => x.nom)));
     if (!c.length) return dire("Rien de plus à proposer avec ton stock.");
     await agir("/api/liste_courses/lot", { items: c.map(x => ({ nom: x.nom, unite: x.unite, quantite: x.q, raison: raisonCourse(x) })) },
-      `${c.length} produit${c.length > 1 ? "s" : ""} sur ta liste.`);
+      `${c.length > 1 ? `${c.length} produits` : `${c.length} produit`} sur ta liste.`);
   },
   lcRetirer: b => { LC_COCHES.delete(b.dataset.nom); return agir("/api/liste_courses", { nom: b.dataset.nom, unite: b.dataset.unite, retirer: true }, ""); },
   lcValider: async () => {
     const noms = [...LC_COCHES], n = noms.length;
     if (!n) return;
-    if (await agir("/api/liste_courses/valider", { noms }, `${n} produit${n > 1 ? "s" : ""} au stock.`)) LC_COCHES.clear();
+    if (await agir("/api/liste_courses/valider", { noms }, `${n > 1 ? `${n} produits` : `${n} produit`} au stock.`)) LC_COCHES.clear();
   },
   pageCat: b => { filtresCat.debut = Math.max(0, filtresCat.debut + Number(b.dataset.pas)); rendre(); },
   garderPlat: async b => { if (await agir("/api/plat/garder", { plat: b.dataset.plat }, "Ajouté à tes plats.")) fermerCarte(); },

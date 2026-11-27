@@ -3,7 +3,7 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-27-230528";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-27-235035";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const reponse = (status, corps) => new Response(JSON.stringify(corps), { status, headers: { "Content-Type": "application/json" } });
@@ -242,7 +242,7 @@ async function aJour(uid) {
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible" || !M.prete) return;
   try {
-    await majFamilleEtat();
+    await majFamilleEtat(true);                      // au retour sur l'appli : toujours (une petite requête)
     const change = await aJour(M.uid);
     if (M.famille && (change || Date.now() - M.familleVue > 20000) && typeof demarrer === "function") demarrer();
   } catch (e) { console.warn("famille", e); }

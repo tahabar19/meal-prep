@@ -791,6 +791,16 @@ try {
         'pas de doses pour toute la famille');
       await B.photo('famille-tous');
       await B.js(`(VUE_TOUS = false, true)`);
+      // « Pour qui ? » → « Toute la famille » : le changement part aux autres (27/11/2026 : le choix était ignoré, la
+      // fermeture de l'aperçu répondait « Seulement moi » à sa place).
+      await B.js(`rendre(), true`); await att(500);
+      await B.js(`(document.querySelector('.grille-plats a.repas[data-moment="din"]') || document.querySelector('.grille-plats a.repas[data-moment="dej"]')).click()`); await att(1200);
+      vrai(await B.js(`(() => { const b = [...document.querySelectorAll('.carte-fond button')].find(x => /Retirer ce repas/.test(x.textContent)); if (!b) return false; b.click(); return true; })()`), 'pas de « Retirer ce repas »');
+      vrai(await attendre(`document.getElementById('dialogue').open && !!document.querySelector('#dialogue [type=submit]')`, 15000) >= 0, "pas d'aperçu");
+      await B.js(`document.querySelector('#dialogue [type=submit]').click()`);
+      vrai(await attendre(`[...document.querySelectorAll('#dialogue button')].some(x => /Toute la famille/.test(x.textContent))`, 15000) >= 0, 'pas de « Pour qui ? »');
+      await B.js(`[...document.querySelectorAll('#dialogue button')].find(x => /Toute la famille/.test(x.textContent)).click()`);
+      vrai(await attendre(`sb.from('operations_famille').select('id').then(r => (r.data || []).length > 0)`, 20000) >= 0, "« Toute la famille » n'est pas partagé");
       const ident = 'zz-m' + String(Date.now()).slice(-6);
       await B.js(`ajouterMembreSansTelephone({ prenom: 'Lina', nom_famille: 'Essai', date_naissance: '2008-05-14', sexe: 'femme', taille_cm: '158',
         poids_kg: '49', activite: 'leger', objectif: 'maintien', identifiant: '${ident}', pays: 'FR' }).then(() => true)`);

@@ -121,8 +121,12 @@ def litteraux_js(chemin) -> list:
     return scanner_js(chemin.read_text(encoding="utf-8"))
 
 
+# Des mots seuls, en minuscules, montrés tels quels (le filtre ci-dessous les prendrait pour des clés) (27/11/2026).
+MOTS_SEULS = {"poids", "fixe", "facultatif", "(facultatif)", "illisible", "kcal par jour"}
+
+
 def depuis_js(chemin) -> set:
-    textes = set()
+    textes = set(MOTS_SEULS) if chemin.name == "app.js" else set()
     for el in litteraux_js(chemin):
         if el[0] == "str":
             t = propre(el[1])
@@ -137,7 +141,7 @@ def depuis_js(chemin) -> set:
             brut = "".join(m + (f"\x00{k}\x00" if k < len(exprs) else "") for k, m in enumerate(morceaux))
             for seg in morceaux_texte(brut):
                 t = propre(seg)
-                if t and (not re.fullmatch(r"[a-z0-9_ -]+", t) or re.search(r" (pour|de|la|le|les|un|une|et|ton|ta|tes|du|des|avec|sans|en|au|sur)\b", " " + t)):
+                if t and (not re.fullmatch(r"[a-z0-9_ -]+", t) or re.search(r" (pour|par|de|la|le|les|un|une|et|ou|ton|ta|tes|du|des|avec|sans|en|au|sur|dans|chez)\b", " " + t)):
                     textes.add(t)
     return textes
 
