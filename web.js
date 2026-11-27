@@ -3,7 +3,7 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-27-223143";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-27-230528";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const reponse = (status, corps) => new Response(JSON.stringify(corps), { status, headers: { "Content-Type": "application/json" } });
@@ -37,7 +37,7 @@ function envoyer(message, transferts = []) {
 function nouveauMoteur() {
   M.worker = new Worker("moteur.js");
   M.worker.onmessage = (e) => {
-    // Une coupure pendant un appel à l'IA (reprise ou abandon) : notée au journal, pour en trouver la cause (28/11/2026).
+    // Une coupure pendant un appel à l'IA (reprise ou abandon) : notée au journal, pour en trouver la cause (27/11/2026).
     if (e.data.type === "journal") {
       if (M.uid) sb.from("journal").insert({ user_id: M.uid, ...e.data.journal, details: [...e.data.journal.details,
         `écran ${document.visibilityState}, ${navigator.onLine ? "en ligne" : "hors ligne"}`] }).then(() => {}, () => {});
@@ -104,7 +104,7 @@ function arreterMoteur() {
   nouveauMoteur();
 }
 
-// ---------- Les profils de la famille sur ce téléphone (Taha, 28/11/2026 : « on peut changer de profil facilement sur
+// ---------- Les profils de la famille sur ce téléphone (Taha, 27/11/2026 : « on peut changer de profil facilement sur
 // un téléphone, ça donne les doses de tous les membres dans un seul téléphone ») ----------
 // Le Worker garde chaque profil ouvert dans son dossier ; une requête dit pour qui elle est (M.ident = le profil
 // affiché) ; ce qui change est enregistré chez ce profil-là. Le suivi (poids, mesures, silhouette) reste privé.
@@ -156,7 +156,7 @@ async function afficherProfil(uid) {
   M.familleDerniere = M.profils[uid].derniere || 0;
   if (typeof demarrer === "function") await demarrer();
 }
-// Un membre sans téléphone (Taha, 28/11/2026) : son compte (fonction « compte »), son profil fait ici par le moteur
+// Un membre sans téléphone (Taha, 27/11/2026) : son compte (fonction « compte »), son profil fait ici par le moteur
 // (calories, protéines, ses deux premières semaines), puis le dernier menu de la famille. Le stock commun n'est jamais
 // réécrit pendant la création.
 async function ajouterMembreSansTelephone(champs) {
@@ -215,7 +215,7 @@ async function relancerMoteur() {
   if (typeof demarrer === "function") await demarrer();
 }
 // Au retour sur l'appli, et chaque minute : le menu et le stock de la famille ont peut-être changé, une demande a
-// peut-être été acceptée, ou quelqu'un demande à entrer (Taha, 28/11/2026 : le créateur ne voyait jamais les demandes).
+// peut-être été acceptée, ou quelqu'un demande à entrer (Taha, 27/11/2026 : le créateur ne voyait jamais les demandes).
 async function majFamilleEtat(force) {
   if (!M.prete || (!force && Date.now() - (M.familleEtatVu || 0) < 15000)) return;
   M.familleEtatVu = Date.now();
@@ -348,7 +348,7 @@ async function taches() {
 // Le stock commun est relu s'il a changé chez un autre membre ; les menus partagés par les autres sont appliqués
 // chez soi (mêmes plats, ses quantités) ; un menu composé par le créateur, ou un plat changé « pour toute la
 // famille », est partagé. Toujours dans la file du moteur, jamais en même temps qu'une requête.
-// Depuis le 28/11/2026, pour chaque profil ouvert sur ce téléphone (uid) : chacun a son « dernier menu reçu ».
+// Depuis le 27/11/2026, pour chaque profil ouvert sur ce téléphone (uid) : chacun a son « dernier menu reçu ».
 const PARTAGES = ["stock.csv", "mouvements.csv"];
 M.familleVue = 0;
 M.profils = {};
@@ -400,7 +400,7 @@ async function partagerMenu(params, uid = M.uid) {
 }
 const aujourdhuiIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
-// L'écran reste allumé pendant un calcul de plus d'une seconde (Taha, 28/11/2026) : un iPhone qui se verrouille coupe
+// L'écran reste allumé pendant un calcul de plus d'une seconde (Taha, 27/11/2026) : un iPhone qui se verrouille coupe
 // la connexion de l'appli. Le verrou tombe seul si l'appli passe en arrière-plan.
 const ECRAN = { n: 0, verrou: null };
 async function ecranAllume(oui) {
@@ -578,7 +578,7 @@ document.addEventListener("click", async (ev) => {
   if (typeof dire === "function") dire(M.claude ? "Tu utilises de nouveau l'IA partagée." : "Clé déconnectée.");
 });
 
-// ---------- Notifications sur ce téléphone, même appli fermée (Taha, 28/11/2026 : « le responsable ne reçoit jamais
+// ---------- Notifications sur ce téléphone, même appli fermée (Taha, 27/11/2026 : « le responsable ne reçoit jamais
 // la notif ») ----------
 // iPhone : seulement l'appli installée sur l'écran d'accueil (iOS 16.4 et plus). L'APK Android ne les a pas encore.
 const pushPossible = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;

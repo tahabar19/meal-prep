@@ -113,7 +113,7 @@ class _Sequentiel:
 
 
 def _fil_plus_tard(self):
-    A_FAIRE.append((UTILISATEUR, self.run))       # la tâche garde son profil (plusieurs profils de la famille, 28/11/2026)
+    A_FAIRE.append((UTILISATEUR, self.run))       # la tâche garde son profil (plusieurs profils de la famille, 27/11/2026)
 
 
 # ------------------------------------------------------------------ démarrage

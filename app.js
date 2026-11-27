@@ -225,7 +225,7 @@ function confirmer({ titre, texte, oui, non = "Annuler" }) {
 // Mode famille (Taha, 23/11/2026) : un plat changé, ajouté ou retiré vaut pour soi seul, ou pour toute la famille
 // (chacun à ses quantités). Rien à demander hors famille. → {} ou { famille: { date, moments } } à joindre à la requête.
 const enFamille = () => typeof M !== "undefined" && !!M.famille;
-// Quelqu'un demande à entrer dans la famille (Taha, 28/11/2026 : le créateur ne le voyait jamais) : une alerte en haut
+// Quelqu'un demande à entrer dans la famille (Taha, 27/11/2026 : le créateur ne le voyait jamais) : une alerte en haut
 // du jour avec Accepter / Refuser, un point sur Profil, et « N demandes » sur la ligne Ma famille.
 const demandesFamille = () => {
   const f = typeof M !== "undefined" && M.familleEtat;
@@ -252,7 +252,7 @@ function familleChange() {
   rendre();
 }
 
-// ---------- Les profils de la famille sur ce téléphone (Taha, 28/11/2026 : « on peut changer de profil facilement
+// ---------- Les profils de la famille sur ce téléphone (Taha, 27/11/2026 : « on peut changer de profil facilement
 // sur un téléphone, ça donne les doses de tous les membres dans un seul téléphone ») ----------
 // En haut du jour : « Tous » (les doses de chacun, plat par plat) puis un bouton par membre (ouvrir son profil).
 const autreProfil = () => typeof M !== "undefined" && !!M.moi && M.uid !== M.moi.uid;
@@ -451,7 +451,7 @@ function rendreNavigation(actif) {
     document.querySelector(".entete-in").appendChild(profil);
   }
   profil.hidden = !(E && enSuivi());
-  // Le profil d'un autre membre de la famille est ouvert (Taha, 28/11/2026) : on le voit, on revient à soi d'un geste.
+  // Le profil d'un autre membre de la famille est ouvert (Taha, 27/11/2026) : on le voit, on revient à soi d'un geste.
   let bandeau = $("bandeauProfil");
   if (!bandeau) {
     bandeau = document.createElement("div");
@@ -1081,7 +1081,7 @@ function creerPlatIA(cat = "plat", texte = "", lien = "", description = "") {
     <div class="rp-tete"><div><p class="rp-sur">Catalogue</p><h2 id="dialogueTitre">Créer un plat</h2></div>
       <button type="button" class="rp-fermer" data-fermer aria-label="Fermer">${icone("x")}</button></div>
     <p class="petit discret rp-intro">Écris ton plat, ou colle le lien d'une recette vue en ligne. L'IA trouve les aliments, les grammes et les étapes ; tu vérifies avant d'enregistrer.</p>
-    <div class="rp-recherche champ-ia">${icone("sparkle")}<input id="cpTexte" type="text" enterkeyhint="go" autocomplete="off"
+    <div class="rp-recherche champ-ia">${icone("sparkle")}<input id="cpTexte" type="text" enterkeyhint="go" autocomplete="off" maxlength="300"
         placeholder="Ex. : 2 œufs, pain pita 70 g" aria-label="Ton plat, ou ce que tu manges" value="${esc(texte)}"><span class="rp-badge-ia">IA</span></div>
     <p class="cp-ou" aria-hidden="true"><span>ou</span></p>
     <div class="rp-recherche cp-lien">${icone("link")}<input id="cpLien" type="url" inputmode="url" enterkeyhint="go" autocomplete="off"
@@ -1380,7 +1380,7 @@ function demanderPlatPerso(ctx, saisie = { nom: "", ingredients: [], telQuel: tr
     <div class="champ"><label for="ppNom">Nom du plat <small>(facultatif)</small></label>
       <input id="ppNom" name="nom" type="text" maxlength="80" autocomplete="off" placeholder="Poulet riz de ma mère" value="${esc(saisie.nom)}"></div>
     <div class="champ"><label for="ppIng">Ingrédients</label>
-      <div class="ajout"><input id="ppIng" type="text" list="ppConnus" autocomplete="off" placeholder="Café au lait Tassimo, 2 œufs, riz 80 g…">
+      <div class="ajout"><input id="ppIng" type="text" list="ppConnus" autocomplete="off" maxlength="300" placeholder="Café au lait Tassimo, 2 œufs, riz 80 g…">
         <button class="bouton second" type="button" id="ppAjouter">Ajouter</button></div>
       <datalist id="ppConnus">${connus.map(n => `<option value="${esc(n)}">`).join("")}</datalist>
       <small>Un par un ou séparés par des virgules. Sans quantité : une portion habituelle, réglable ensuite.</small></div>
@@ -1652,7 +1652,7 @@ async function demanderAjustement(id, quantites = null, jour = null) {
           <button type="button" data-n="${n}" data-sens="1" aria-label="Plus de ${esc(i.n)}">+</button><span class="unite" id="au${n}">${esc(i.u)}</span></span></li>`).join("")}</ul>
     ${note ? `<p class="aj-note" role="status">${note.texte} <button type="button" class="lien" data-note-retirer>Retirer</button>${note.voir ? ` · <button type="button" class="lien" data-note-voir>Voir ses valeurs</button>` : ""}</p>` : ""}
     <div class="champ ing-cherche" style="margin-top:14px"><label for="ajNouveau" id="ajNouveauTitre">Ajouter un ingrédient</label>
-      <div class="aj-ajout"><div class="rp-recherche${E.claude === false ? "" : " champ-ia"}">${icone(E.claude === false ? "magnifying-glass" : "sparkle")}<input id="ajNouveau" type="search" enterkeyhint="go" autocomplete="off"
+      <div class="aj-ajout"><div class="rp-recherche${E.claude === false ? "" : " champ-ia"}">${icone(E.claude === false ? "magnifying-glass" : "sparkle")}<input id="ajNouveau" type="search" maxlength="80" enterkeyhint="go" autocomplete="off"
         placeholder="Quinoa, skyr Lidl…" aria-describedby="ajAide"></div><button type="button" class="bouton second" id="ajAjouter"><span class="aj-ia-ic" hidden>${icone("sparkle")}</span>Ajouter</button></div>
       <ul class="ing-suggestions" id="ajSuggestions" aria-label="Ingrédients trouvés"></ul>
       <small id="ajAide">Tape un nom : ${connusTous.length} ingrédients connus${E.claude === false ? "" : ". Sinon, l'IA le retrouve ou le crée"}.</small></div>
@@ -2446,7 +2446,8 @@ function vueAvancement({ params }) {
   ${moisTropTot ? `<div class="vide"><h2>Le mois arrive après ta première semaine</h2>
     <p>Il s'affiche quand 7 journées de ce mois sont finies : encore ${7 - (x.jours_finis || 0)} jour${7 - (x.jours_finis || 0) > 1 ? "s" : ""}. En attendant, regarde « Cette semaine ».</p>
     <a class="bouton second" href="#/avancement?p=semaine">Voir cette semaine</a></div>`
-  : !suivi ? `<div class="vide"><h2>${enSuivi() && p !== "jour" ? `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}` : `Rien de cuisiné ${p === "jour" ? "aujourd'hui" : p === "semaine" ? "cette semaine" : "ce mois-ci"}`}</h2>
+  : !suivi ? `<div class="vide"><h2>${enSuivi() && p !== "jour" ? `Pas encore de journée finie ${p === "semaine" ? "cette semaine" : "ce mois-ci"}` : (enSuivi() ? { jour: "Rien de mangé aujourd'hui", semaine: "Rien de mangé cette semaine", mois: "Rien de mangé ce mois-ci" }
+      : { jour: "Rien de cuisiné aujourd'hui", semaine: "Rien de cuisiné cette semaine", mois: "Rien de cuisiné ce mois-ci" })[p]}</h2>
     ${enSuivi() ? `<p>${p === "jour" ? "L'avancement se remplit avec les repas que tu notes." : "La semaine et le mois comptent les journées terminées : la moyenne commence demain."}</p>
     <a class="bouton second" href="#/semaine">Noter ce que je mange</a></div>` : `<p>L'avancement se remplit quand tu touches « C'est cuisiné » ou « Journée faite » dans l'onglet Cuisine.</p>
     <a class="bouton second" href="#/cuisine">Aller à la cuisine</a></div>
@@ -2713,7 +2714,7 @@ async function famille(action, args = {}, message = "") {
   const avant = enFamille();
   M.familleEtat = data;
   if (message) dire(message);
-  // Une notification sur le téléphone de l'autre (Taha, 28/11/2026) : la demande au créateur, l'accord au nouveau membre.
+  // Une notification sur le téléphone de l'autre (Taha, 27/11/2026) : la demande au créateur, l'accord au nouveau membre.
   if (typeof notifier === "function") {
     if (action === "famille_rejoindre" && data && data.statut === "attente") notifier("demande");
     if (action === "famille_repondre" && args.p_accepter) notifier("accepte", { membre: args.p_user });
@@ -2724,7 +2725,7 @@ async function famille(action, args = {}, message = "") {
   rendre();
   return data;
 }
-// Les notifications sur ce téléphone (Taha, 28/11/2026) : un bouton pour les activer, rempli après le rendu.
+// Les notifications sur ce téléphone (Taha, 27/11/2026) : un bouton pour les activer, rempli après le rendu.
 function blocNotifications(texte) {
   apresRendu.push(async function maj() {
     const z = $("famNotif");
@@ -2742,7 +2743,9 @@ function blocNotifications(texte) {
   });
   return `<section class="bloc fam-bloc"><h2>Notifications</h2><p class="petit discret">${texte}</p><div id="famNotif" class="fam-notif"></div></section>`;
 }
-// Un membre sans téléphone (Taha, 28/11/2026) : son profil se crée ici, s'ouvre depuis le téléphone des autres.
+// Un membre sans téléphone (Taha, 27/11/2026) : son profil se crée ici, s'ouvre depuis le téléphone des autres.
+// Une date à N années d'aujourd'hui (bornes des dates de naissance : 15 à 95 ans).
+const isoPlusAns = n => { const d = new Date(); d.setFullYear(d.getFullYear() + n); return d.toISOString().slice(0, 10); };
 function formulaireMembre() {
   const d = $("dialogue"), i = E.profil.identite || {};
   const choix = (id, options, v) => `<select id="${id}">${options.map(([k, t]) => `<option value="${k}"${k === v ? " selected" : ""}>${t}</option>`).join("")}</select>`;
@@ -2751,10 +2754,10 @@ function formulaireMembre() {
     <p class="petit discret">Un enfant, un parent… Son profil s'ouvre depuis le téléphone des autres membres ; il reçoit les menus de la famille, à ses quantités.</p>
     <div class="champs2"><div class="champ"><label for="mbPrenom">Prénom</label><input id="mbPrenom" maxlength="40" autocomplete="off"></div>
       <div class="champ"><label for="mbNom">Nom</label><input id="mbNom" maxlength="60" autocomplete="off" value="${esc(i.nom_famille || "")}"></div></div>
-    <div class="champs2"><div class="champ"><label for="mbNaissance">Date de naissance</label><input id="mbNaissance" type="date"></div>
+    <div class="champs2"><div class="champ"><label for="mbNaissance">Date de naissance</label><input id="mbNaissance" type="date" min="${isoPlusAns(-95)}" max="${isoPlusAns(-15)}"></div>
       <div class="champ"><label for="mbSexe">Sexe</label>${choix("mbSexe", [["femme", "Femme"], ["homme", "Homme"]], "femme")}</div></div>
-    <div class="champs2"><div class="champ"><label for="mbTaille">Taille, en cm</label><input id="mbTaille" inputmode="numeric"></div>
-      <div class="champ"><label for="mbPoids">Poids, en kg</label><input id="mbPoids" inputmode="decimal"></div></div>
+    <div class="champs2"><div class="champ"><label for="mbTaille">Taille, en cm</label><input id="mbTaille" inputmode="numeric" maxlength="3"></div>
+      <div class="champ"><label for="mbPoids">Poids, en kg</label><input id="mbPoids" inputmode="decimal" maxlength="5"></div></div>
     <div class="champs2"><div class="champ"><label for="mbActivite">Activité</label>${choix("mbActivite", [["sedentaire", "Sédentaire"], ["leger", "Un peu actif"], ["modere", "Actif"], ["actif", "Très actif"], ["intense", "Sport intense"]], "leger")}</div>
       <div class="champ"><label for="mbObjectif">Objectif</label>${choix("mbObjectif", [["perte", "Perdre du poids"], ["maintien", "Garder son poids"], ["prise", "Prendre du muscle"]], "maintien")}</div></div>
     <div class="champ"><label for="mbIdent">Identifiant</label><input id="mbIdent" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false">
@@ -3017,7 +3020,7 @@ function formulaireProfil(avecCode) {
   const rubrique = t => avecCode ? `<p class="auth-rubrique">${t}</p>` : "";
   return `<form class="formulaire" id="fProfil" novalidate>
     ${rubrique("Ton compte")}
-    ${avecCode ? champ("pCode", "Code d'invitation", `<input id="pCode" name="code" type="text" autocomplete="off" spellcheck="false" autocapitalize="none" required>`, "Demande-le à la personne qui gère le site.") : ""}
+    ${avecCode ? champ("pCode", "Code d'invitation", `<input id="pCode" name="code" type="text" maxlength="40" autocomplete="off" spellcheck="false" autocapitalize="none" required>`, "Demande-le à la personne qui gère le site.") : ""}
     <div class="champs2">
     ${champ("pNom", "Prénom", `<input id="pNom" name="prenom" type="text" autocomplete="given-name" maxlength="40" required>`)}
     ${champ("pFamille", "Nom", `<input id="pFamille" name="nom_famille" type="text" autocomplete="family-name" maxlength="60" required>`)}
@@ -3027,7 +3030,7 @@ function formulaireProfil(avecCode) {
     ${champ("pMdp", "Mot de passe", avecCode ? champMdp("pMdp", "mot_de_passe", "new-password") : `<input id="pMdp" name="mot_de_passe" type="password" autocomplete="new-password" minlength="10" required>`)}
     ${rubrique("Toi")}
     <div class="champs2">
-    ${champ("date_naissance", "Date de naissance", `<input id="date_naissance" name="date_naissance" type="date" required>`)}
+    ${champ("date_naissance", "Date de naissance", `<input id="date_naissance" name="date_naissance" type="date" min="${isoPlusAns(-95)}" max="${isoPlusAns(-15)}" required>`)}
     ${champ("sexe", "Sexe", choix("sexe", [["femme", "Femme"], ["homme", "Homme"]]))}
     </div>
     ${(() => { const p = paysProbable(); return champ("pays", "Pays", `<select id="pays" name="pays" data-pays autocomplete="country">${optionsPays(p)}</select>`)
@@ -3268,7 +3271,7 @@ function marquerStock(racine) {
     if (a.closest(".stock-faisable, .histo-plats") || carte.classList.contains("cuisine-fait")) return;
     carte.classList.add("stock-cadre", !m.length ? "stock-ok" : m.length <= 2 ? "stock-peu" : "stock-loin");
     if (m.length) a.insertAdjacentHTML("beforeend", `<span class="manque" role="button" tabindex="0" data-manque="${esc(id)}"
-      aria-label="${m.length} ingrédient${m.length > 1 ? "s" : ""} manquant${m.length > 1 ? "s" : ""} : toucher pour voir">${m.length} manque${m.length > 1 ? "nt" : ""}<small>touche pour voir</small></span>`);
+      aria-label="${m.length > 1 ? `${m.length} ingrédients manquants` : "1 ingrédient manquant"} : toucher pour voir">${m.length > 1 ? `${m.length} manquent` : "1 manque"}<small>touche pour voir</small></span>`);
   });
 }
 let marquage = 0;
@@ -3658,7 +3661,7 @@ function vueJourSuivi(params) {
       ${dec < -1 ? `<a class="fleche" href="#/semaine?d=${dec + 1}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}
       <a href="#/semaine"${dec ? "" : ' aria-current="true"'}>Aujourd'hui</a>
       <a href="#/semaine?d=1"${demain ? ' aria-current="true"' : ""}>Demain</a></nav>`;
-  // En famille, « Tous » : les doses de chacun pour ce jour, plat par plat (Taha, 28/11/2026).
+  // En famille, « Tous » : les doses de chacun pour ce jour, plat par plat (Taha, 27/11/2026).
   if (VUE_TOUS && enFamille() && membresDeLaFamille().length > 1) return `<div class="rubrique-jour"><div class="m-tete">
       <div><h1 tabindex="-1">${dec === 0 ? "Aujourd'hui" : demain ? "Demain" : dec === -1 ? "Hier" : esc(nomJour)}</h1><p class="petit discret">${esc(dateLongueCourte(date))}</p></div></div>
     ${navJours}
@@ -3778,7 +3781,7 @@ async function photoReduite(fichier, max = 1600) {
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.85);
 }
-// L'IA travaille (Taha, 28/11/2026 : « c'est sur 2 lignes et c'est moche ») : une petite carte centrée, le titre sur
+// L'IA travaille (Taha, 27/11/2026 : « c'est sur 2 lignes et c'est moche ») : une petite carte centrée, le titre sur
 // une ligne, ce qu'on a écrit sur une ligne, trois étapes qui s'allument l'une après l'autre, et Annuler.
 function attenteIA(d, { titre = "L'IA calcule", sujet = "", etapes = ["Aliments", "Grammes", "Macros"], annuler } = {}) {
   d.innerHTML = `<div class="ia-att" role="status" aria-live="polite">
@@ -3860,7 +3863,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       <h2 id="dialogueTitre">${date === E.journal_repas.aujourdhui ? "Ajouter" : esc(dateLongueCourte(date).replace(/^./, c => c.toUpperCase()))}</h2>
       ${puces()}
       <div class="champ champ-ia" style="margin-top:14px"><label for="nrTexte">Un plat, ou ce que tu as mangé, comme tu veux ${BADGE_IA}</label>
-        <textarea id="nrTexte" rows="4" placeholder="Ex. : 2 œufs, 70 g de pain pita et mon café Tassimo. Ou : un kebab frites. Ou : shake, 30 g de protéines, 150 kcal">${esc(texte)}</textarea>
+        <textarea id="nrTexte" rows="4" maxlength="300" placeholder="Ex. : 2 œufs, 70 g de pain pita et mon café Tassimo. Ou : un kebab frites. Ou : shake, 30 g de protéines, 150 kcal">${esc(texte)}</textarea>
         <small>Claude, l'IA, trouve les aliments, les grammes et les macros. Tes plats se retrouvent dès que tu tapes leur nom.</small></div>
       <div id="nrPlats" class="nr-plats"></div>
       <div class="photo-ajout">
@@ -3965,7 +3968,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       <p class="petit discret nr-titre-macros">Les macros du plat</p>
       <div class="cp-chiffres nr-macros" id="nrTotal" aria-live="polite"></div>
       ${!aLaMain && E.claude !== false ? `<div class="champ champ-ia nr-repondre"><label for="nrCorrection">Répondre à Claude ${BADGE_IA}</label>
-        <textarea id="nrCorrection" rows="2" placeholder="Ex. : ajoute 20 g de whey · enlève la banane · vise 600 kcal et 40 g de protéines"></textarea>
+        <textarea id="nrCorrection" rows="2" maxlength="200" placeholder="Ex. : ajoute 20 g de whey · enlève la banane · vise 600 kcal et 40 g de protéines"></textarea>
         <button type="button" class="bouton second bouton-ia" id="nrCorriger">${icone("sparkle")}Corriger avec l'IA</button></div>` : ""}
       <ul class="lignes items-note" id="nrItems"></ul>
       <p style="margin:6px 0 0"><button type="button" class="lien" id="nrAjout">+ Ajouter un aliment</button></p>
@@ -4090,6 +4093,209 @@ function noterRepas({ date, entree = null, remplacer = null }) {
   })();
 }
 
+/* ------------------------------------------------------------ silhouette au miroir */
+// Taha, 27/11/2026 : une photo de face et une de profil devant le miroir ; les jours suivants, l'appli remet dans la
+// même pose (silhouette en pointillés, consignes à l'écran et à voix haute), prend les photos seule et compare :
+// épaules (largeur), poitrine, taille, hanches, cuisse, bras (tours). La caméra et la détection sont dans miroir.js
+// (chargé à la demande). Chiffres : silhouette.json du profil ; photos : stockage PRIVÉ « silhouettes/<id>/ ».
+// Jamais depuis le profil d'un autre membre de la famille.
+const SILH = { charge: false, enCours: false, donnees: null, occupe: false };
+const NIVEAUX_SILH = [["epaules", "Épaules", "largeur"], ["poitrine", "Poitrine", "tour"], ["taille", "Tour de taille", "tour"],
+                      ["hanches", "Hanches", "tour"], ["cuisse", "Cuisse", "tour"], ["bras", "Bras", "tour"]];
+const silhOk = () => typeof sb !== "undefined" && typeof M !== "undefined" && !!M.moi && !autreProfil();
+function chargerSilhouette() {
+  if (!silhOk() || SILH.charge || SILH.enCours) return;
+  SILH.enCours = true;
+  sb.from("fichiers").select("contenu").eq("user_id", M.moi.uid).eq("nom", "silhouette.json").maybeSingle().then(({ data }) => {
+    try { SILH.donnees = data && data.contenu ? JSON.parse(data.contenu) : null; } catch (e) { SILH.donnees = null; }
+    SILH.charge = true; SILH.enCours = false;
+    if (route().vue === "suivi") rendre();
+  }, () => { SILH.enCours = false; });
+}
+async function sauverSilhouette() {
+  const { error } = await sb.from("fichiers").upsert({ user_id: M.moi.uid, nom: "silhouette.json", contenu: JSON.stringify(SILH.donnees), maj: new Date().toISOString() });
+  if (error) throw new Error("Enregistrement impossible : " + error.message);
+}
+function chargerMiroir() {
+  if (typeof Miroir !== "undefined") return Promise.resolve();
+  if (!chargerMiroir.p) chargerMiroir.p = new Promise((ok, ko) => {
+    const s = document.createElement("script");
+    s.src = "miroir.js"; s.onload = ok;
+    s.onerror = () => { chargerMiroir.p = null; ko(new Error("Silhouette indisponible : vérifie ta connexion.")); };
+    document.head.appendChild(s);
+  });
+  return chargerMiroir.p;
+}
+// iPhone : la voix et l'inclinaison du téléphone ne s'ouvrent que dans le toucher lui-même.
+function debloquerMiroir() {
+  if (typeof Miroir !== "undefined") return Miroir.deverrouiller();
+  try { if ("speechSynthesis" in window) speechSynthesis.speak(new SpeechSynthesisUtterance("")); } catch (e) {}
+  try { if (typeof DeviceOrientationEvent !== "undefined" && DeviceOrientationEvent.requestPermission) DeviceOrientationEvent.requestPermission().catch(() => {}); } catch (e) {}
+}
+const enCm = v => v == null || !Number.isFinite(v) ? "—" : `${virgule(Math.round(v * 2) / 2)} cm`;
+const ecartCm = d => d == null || !Number.isFinite(d) ? "" : Math.abs(d) < 0.5 ? "stable" : `${d > 0 ? "+" : "−"}${virgule(Math.round(Math.abs(d) * 2) / 2)} cm`;
+async function envoyerPhotoSilh(blob, nom) {
+  if (!blob) return null;
+  const chemin = `${M.moi.uid}/${nom}.jpg`;
+  const { error } = await sb.storage.from("silhouettes").upload(chemin, blob, { upsert: true, contentType: "image/jpeg" });
+  if (error) { console.warn("photo de silhouette", error.message); return null; }
+  return chemin;
+}
+async function urlPhotoSilh(chemin) {
+  if (!chemin) return "";
+  const { data } = await sb.storage.from("silhouettes").createSignedUrl(chemin, 3600);
+  return (data && data.signedUrl) || "";
+}
+// Ce qu'une vue garde : sans la photo (envoyée à part), le contour et les repères pour guider la fois suivante.
+const vueGardee = (v, photo) => ({ points: v.points, contour: v.contour, reperes: v.reperes, image: v.image, mesures: v.mesures, photo });
+
+function blocSilhouette() {
+  if (!silhOk()) return "";
+  chargerSilhouette();
+  apresRendu.push(() => chargerMiroir().catch(() => {}));          // prêt pour le toucher (iPhone)
+  const d = SILH.donnees, ref = d && d.reference;
+  if (!SILH.charge) return `<section class="bloc silh suivi-petit"><h2>${icone("person")}Ma silhouette</h2><p class="petit discret">…</p></section>`;
+  if (!ref) return `<section class="bloc silh suivi-petit" aria-labelledby="tSilh"><h2 id="tSilh">${icone("person")}Ma silhouette au miroir</h2>
+    <p class="petit discret">Une photo de face et une de profil devant un miroir, une fois. Les jours suivants, l'appli te remet dans la même pose et
+      compare : épaules, poitrine, taille, hanches, cuisse, bras.</p>
+    <button type="button" class="bouton second" data-silh="debut">${icone("camera")}Commencer</button></section>`;
+  const releves = d.releves || [], dernier = releves[releves.length - 1] || null;
+  const v = (dernier || ref).valeurs || {};
+  return `<section class="bloc silh suivi-petit" aria-labelledby="tSilh">
+    <div class="silh-tete"><h2 id="tSilh">${icone("person")}Ma silhouette</h2><button type="button" class="lien" data-silh="histo">Historique</button></div>
+    <ul class="silh-mesures">${NIVEAUX_SILH.map(([k, nom]) => `<li><span>${nom}</span><b class="chiffres">${enCm(v[k])}</b>
+      ${dernier ? `<small class="chiffres${Math.abs((v[k] ?? 0) - (ref.valeurs[k] ?? 0)) >= 0.5 ? " bouge" : ""}">${ecartCm(v[k] != null && ref.valeurs[k] != null ? v[k] - ref.valeurs[k] : null)}</small>` : ""}</li>`).join("")}</ul>
+    <p class="petit discret">${dernier ? `Le ${esc(dateCourte(dernier.date))}, comparé à ta référence du ${esc(dateCourte(ref.date))}` : `Ta référence du ${esc(dateCourte(ref.date))}`}</p>
+    <button type="button" class="bouton" data-silh="jour">${icone("camera")}Prendre ma silhouette du jour</button></section>`;
+}
+
+// La première fois : les mesures au mètre ruban (elles recalent les tours), puis face et profil.
+function silhouetteDebut() {
+  const d = $("dialogue"), i = E.profil.identite || {}, ruban = (SILH.donnees && SILH.donnees.reference && SILH.donnees.reference.ruban) || {};
+  const champ = (id, nom, aide, v = "") => `<div class="champ"><label for="${id}">${nom}</label><input id="${id}" inputmode="decimal" value="${esc(v)}" autocomplete="off"><small>${aide}</small></div>`;
+  d.innerHTML = `<form class="feuille formulaire silh-form" novalidate>
+    <h2 id="dialogueTitre">Tes mesures au mètre ruban</h2>
+    <p class="petit discret">Une seule fois : elles règlent les calculs de l'appli. Mètre bien à plat, sans serrer. Laisse vide ce que tu n'as pas.</p>
+    ${champ("slTaille", "Ta hauteur, en cm", "Elle donne l'échelle des photos.", i.taille_cm || "")}
+    <div class="silh-ruban">${champ("slPoitrine", "Poitrine", "Au plus large", ruban.poitrine || "")}${champ("slTour", "Tour de taille", "Au nombril", ruban.taille || "")}
+      ${champ("slHanches", "Hanches", "Au plus large", ruban.hanches || "")}${champ("slCuisse", "Cuisse", "Au milieu", ruban.cuisse || "")}
+      ${champ("slBras", "Bras", "Au milieu, détendu", ruban.bras || "")}</div>
+    <p class="petit discret silh-conseils">Ensuite, devant un miroir où tu te vois en entier : tenue près du corps, pieds à la largeur des
+      hanches, un bras un peu écarté, l'autre tient le téléphone (caméra vers le miroir). Une photo de face, puis de profil.</p>
+    <small id="eSl" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
+    <div class="actions pied"><button class="bouton second" type="button" value="non">Annuler</button><button class="bouton" type="submit">${icone("camera")}Continuer</button></div></form>`;
+  d.querySelector("[value=non]").addEventListener("click", () => d.close("non"));
+  d.querySelector("form").addEventListener("submit", ev => {
+    ev.preventDefault();
+    debloquerMiroir();                                           // dans le toucher : voix et inclinaison (iPhone)
+    const n = id => { const x = Number(String($(id).value).replace(",", ".")); return x > 0 ? x : null; };
+    const taille = n("slTaille");
+    if (!taille || taille < 120 || taille > 230) { $("eSl").textContent = "Ta hauteur en cm (entre 120 et 230)."; return; }
+    const ruban = { poitrine: n("slPoitrine"), taille: n("slTour"), hanches: n("slHanches"), cuisse: n("slCuisse"), bras: n("slBras") };
+    d.close("oui");
+    prendreSilhouette({ premiere: true, taille, ruban });
+  });
+  if (!d.open) d.showModal();
+}
+// Face puis profil ; la première fois, ils deviennent la référence, ensuite un relevé comparé à elle.
+async function prendreSilhouette({ premiere = false, taille, ruban = {} } = {}) {
+  if (SILH.occupe) return;
+  SILH.occupe = true;
+  try {
+    await chargerMiroir();
+    const ref = premiere ? null : SILH.donnees.reference;
+    const tailleCm = premiere ? taille : ref.taille_cm;
+    const face = await Miroir.capturer({ vue: "face", reference: ref && ref.face, tailleCm, titre: "De face", etape: "1 sur 2" });
+    if (!face) return;
+    const profil = await Miroir.capturer({ vue: "profil", reference: ref && ref.profil, tailleCm, titre: "De profil", etape: "2 sur 2 · tourne-toi d'un quart" });
+    if (!profil) return;
+    dire("Calcul de ta silhouette…");
+    const date = isoDuJour(), heure = new Date().toTimeString().slice(0, 5).replace(":", "h");
+    const [pf, pp] = await Promise.all([envoyerPhotoSilh(face.photo, `${date}-${heure}-face`), envoyerPhotoSilh(profil.photo, `${date}-${heure}-profil`)]);
+    if (premiere) {
+      const k = Miroir.calibrer(ruban, face.mesures, profil.mesures);
+      const valeurs = { epaules: face.mesures.largeurs.epaules, ...Miroir.tours(face.mesures, profil.mesures, k) };
+      // le mètre ruban règle k ; la référence reste l'estimation recalée (= le mètre ruban, sauf recalage borné) :
+      // ainsi les jours suivants se comparent à elle sans décalage
+      // une nouvelle référence repart de zéro : les relevés d'avant ne se comparent plus
+      SILH.donnees = { version: 1, reference: { date, heure, taille_cm: tailleCm, ruban, k, valeurs,
+        face: vueGardee(face, pf), profil: vueGardee(profil, pp) }, releves: [] };
+      await sauverSilhouette();
+      montrerReleve(null, { face, profil });
+    } else {
+      const valeurs = { epaules: face.mesures.largeurs.epaules, ...Miroir.tours(face.mesures, profil.mesures, ref.k || {}) };
+      const releve = { date, heure, valeurs, qualite: Math.min(face.qualite, profil.qualite),
+        face: { mesures: face.mesures, reperes: face.reperes, photo: pf }, profil: { mesures: profil.mesures, reperes: profil.reperes, photo: pp } };
+      const liste = (SILH.donnees.releves || []).filter(x => x.date !== date);       // un relevé par jour : le dernier
+      liste.push(releve);
+      SILH.donnees.releves = liste.slice(-400);
+      await sauverSilhouette();
+      montrerReleve(releve, { face, profil });
+    }
+    rendre();
+  } catch (e) {
+    if (typeof Miroir !== "undefined") Miroir.fermer();
+    dire(e.message || "Silhouette impossible.");
+  } finally { SILH.occupe = false; }
+}
+// Les chiffres d'un relevé (ou de la référence), avec les photos.
+async function montrerReleve(releve, vues) {
+  const d = $("dialogue"), ref = SILH.donnees.reference, avant = releve ? (SILH.donnees.releves || []).filter(x => x !== releve && x.date < releve.date).pop() : null;
+  const v = releve ? releve.valeurs : ref.valeurs;
+  const urls = vues ? [vues.face.photo, vues.profil.photo].map(b => b ? URL.createObjectURL(b) : "")
+    : await Promise.all([urlPhotoSilh((releve || ref).face.photo), urlPhotoSilh((releve || ref).profil.photo)]);
+  d.innerHTML = `<div class="feuille silh-resultat">
+    <h2 id="dialogueTitre">${releve ? `Ta silhouette du ${esc(dateCourte(releve.date))}` : "Ta référence est prête"}</h2>
+    <div class="silh-photos">${urls.map((u, i) => u ? `<img src="${u}" alt="${i ? "De profil" : "De face"}">` : "").join("")}</div>
+    <ul class="silh-mesures">${NIVEAUX_SILH.map(([k, nom, sorte]) => `<li><span>${nom}<small class="discret"> · ${sorte}</small></span><b class="chiffres">${enCm(v[k])}</b>
+      ${releve ? `<small class="chiffres">${ecartCm(v[k] != null && ref.valeurs[k] != null ? v[k] - ref.valeurs[k] : null)}${avant && avant.valeurs[k] != null && v[k] != null
+        ? ` <span class="discret">(${ecartCm(v[k] - avant.valeurs[k])} depuis le ${esc(dateCourte(avant.date))})</span>` : ""}</small>` : ""}</li>`).join("")}</ul>
+    <p class="petit discret">${releve ? `Comparé à ta référence du ${esc(dateCourte(ref.date))}` : "Les prochaines fois, l'appli te remet dans cette pose et compare"}<br>
+      Précision : environ 1 cm. Même tenue, même heure et même lumière pour comparer.</p>
+    ${releve && releve.qualite < 1 ? `<p class="petit discret">Prise faite sans la bonne pose : chiffres moins sûrs.</p>` : ""}
+    <div class="actions pied"><button class="bouton" type="button" value="ok">Fermer</button></div></div>`;
+  d.querySelector("[value=ok]").addEventListener("click", () => d.close("oui"));
+  if (!d.open) d.showModal();
+}
+function historiqueSilhouette() {
+  const d = $("dialogue"), D = SILH.donnees, ref = D.reference, liste = (D.releves || []).slice().reverse();
+  const resume = r => NIVEAUX_SILH.filter(([k]) => r.valeurs[k] != null && ref.valeurs[k] != null && Math.abs(r.valeurs[k] - ref.valeurs[k]) >= 0.5)
+    .slice(0, 3).map(([k, nom]) => `${nom} ${ecartCm(r.valeurs[k] - ref.valeurs[k])}`).join(" · ") || "rien ne bouge";
+  d.innerHTML = `<div class="feuille silh-histo">
+    <h2 id="dialogueTitre">Silhouette : historique</h2>
+    <ul class="lignes">${liste.map(r => `<li><button type="button" class="silh-ligne" data-silh="releve" data-date="${r.date}"><b>${esc(dateCourte(r.date))}</b>
+        <small class="discret">${esc(resume(r))}</small></button>
+        <button type="button" class="effacer" data-silh="oublier" data-date="${r.date}" aria-label="Supprimer le relevé du ${esc(dateCourte(r.date))}">${icone("x")}</button></li>`).join("")}
+      <li><button type="button" class="silh-ligne" data-silh="reference"><b>Référence · ${esc(dateCourte(ref.date))}</b><small class="discret">au mètre ruban et en photos</small></button></li></ul>
+    <p style="margin:14px 0 0"><button type="button" class="lien" data-silh="refaire">Refaire ma référence</button></p>
+    <div class="actions pied"><button class="bouton second" type="button" value="ok">Fermer</button></div></div>`;
+  d.querySelector("[value=ok]").addEventListener("click", () => d.close("oui"));
+  if (!d.open) d.showModal();
+}
+document.addEventListener("click", async ev => {
+  const b = ev.target.closest && ev.target.closest("[data-silh]");
+  if (!b || !silhOk()) return;
+  const quoi = b.dataset.silh;
+  if (quoi === "debut" || quoi === "refaire") {
+    if (quoi === "refaire" && !await confirmer({ titre: "Refaire ta référence ?", oui: "Refaire", non: "Garder",
+      texte: "Tu reprends tes mesures au mètre ruban et tes deux photos. Les relevés d'avant ne seront plus comparés." })) return;
+    return silhouetteDebut();
+  }
+  if (quoi === "jour") { debloquerMiroir(); return prendreSilhouette(); }
+  if (quoi === "histo") return historiqueSilhouette();
+  if (quoi === "reference") return montrerReleve(null);
+  if (quoi === "releve") return montrerReleve((SILH.donnees.releves || []).find(x => x.date === b.dataset.date));
+  if (quoi === "oublier") {
+    if (!await confirmer({ titre: "Supprimer ce relevé ?", oui: "Supprimer", non: "Garder", texte: "Ses chiffres et ses photos sont effacés." })) return;
+    const r = (SILH.donnees.releves || []).find(x => x.date === b.dataset.date);
+    SILH.donnees.releves = SILH.donnees.releves.filter(x => x !== r);
+    const chemins = r ? [r.face.photo, r.profil.photo].filter(Boolean) : [];
+    if (chemins.length) await sb.storage.from("silhouettes").remove(chemins);
+    await sauverSilhouette().catch(e => dire(e.message));
+    rendre(); historiqueSilhouette();
+  }
+});
+
 /* ------------------------------------------------------------ mon suivi */
 // Les mesures « _avant » se prennent quand on veut ; « _apres », juste après une séance, en option (Taha, 19/11/2026).
 const MESURES = [["poids", "Poids", "kg"], ["biceps_avant", "Biceps", "cm"], ["tour_avant", "Hanches", "cm"], ["torse_avant", "Torse", "cm"],
@@ -4101,7 +4307,7 @@ function vueSuivi({ params }) {
   // Poids chaque jour, biceps et tour de hanches avant et après la séance. Sur iPhone : les chiffres d'abord,
   // une carte pour noter, une courbe à la fois, l'historique en bas (Taha, 19/11/2026).
   barre("");
-  // Le suivi reste privé, même en famille (Taha, 28/11/2026) : pas sur le profil d'un autre membre.
+  // Le suivi reste privé, même en famille (Taha, 27/11/2026) : pas sur le profil d'un autre membre.
   if (autreProfil()) return `<div class="titre"><h1 tabindex="-1">Suivi</h1></div>
     <div class="vide"><h2>Le suivi de ${esc(E.profil.nom)} reste privé</h2><p>Poids, mesures et silhouette ne se voient que sur son propre profil.</p>
     <button type="button" class="bouton second" data-moi>Revenir à moi</button></div>`;
@@ -4168,6 +4374,7 @@ function vueSuivi({ params }) {
         <button class="bouton large" type="submit">${icone("check")}Enregistrer</button>
       </form>
     </section>
+    ${blocSilhouette()}
     <section class="bloc suivi-courbe suivi-petit" aria-labelledby="tCourbe">
       <h2 id="tCourbe" class="sr">Courbe</h2>
       <nav class="jours" aria-label="Courbe">${[["poids", "Poids"], ["biceps", "Biceps"], ["tour", "Hanches"], ["torse", "Torse"]].map(([c, nom]) =>
@@ -4274,7 +4481,7 @@ function blocObjectifs(reglages = "", resume = "") {
     <p style="margin:8px 0 14px"><button type="button" class="lien" id="ajoutPeriode">+ Ajouter une période</button></p>
     <details class="claude-objectifs"><summary><span>Demander à Claude ${BADGE_IA}</span>${icone("caret-right")}</summary>
       <div class="champ champ-ia" style="margin-top:10px"><label for="oDemande">Ce que tu veux</label>
-        <textarea id="oDemande" rows="2" placeholder="Ex. : perdre 4 kg d'ici mars, puis prendre du muscle jusqu'à l'été"></textarea></div>
+        <textarea id="oDemande" rows="2" maxlength="600" placeholder="Ex. : perdre 4 kg d'ici mars, puis prendre du muscle jusqu'à l'été"></textarea></div>
       <button type="button" class="bouton second bouton-ia" id="oProposer">${icone("sparkle")}Proposer des périodes</button>
       <p class="petit discret" id="oExplication" style="margin-top:8px">Il faut avoir branché ton compte Claude (plus bas). Tu vérifies sa proposition avant d'enregistrer.</p>
     </details>
@@ -4348,7 +4555,7 @@ function vueReglagesFlemmard() {
     <form class="formulaire" id="fMesInfos" novalidate>
       <div class="champs2">${champ("iPrenom", "Prénom", saisie("iPrenom", "prenom", i.nom || E.profil.nom, "text", 'maxlength="40" autocomplete="given-name"'))}
         ${champ("iNom", "Nom", saisie("iNom", "nom_famille", i.nom_famille, "text", 'maxlength="60" autocomplete="family-name"'))}</div>
-      <div class="champs2">${champ("iNaissance", "Date de naissance", saisie("iNaissance", "date_naissance", i.date_naissance, "date"))}
+      <div class="champs2">${champ("iNaissance", "Date de naissance", saisie("iNaissance", "date_naissance", i.date_naissance, "date", `min="${isoPlusAns(-95)}" max="${isoPlusAns(-15)}"`))}
         ${champ("iSexe", "Sexe", choix("iSexe", "sexe", i.sexe || "homme", [["femme", "Femme"], ["homme", "Homme"]]))}</div>
       ${champ("iPays", "Pays", `<select id="iPays" name="pays" autocomplete="country">${optionsPays(i.pays || paysProbable())}</select>`)}
       <div class="champs2">${champ("iTaille", "Taille, en cm", saisie("iTaille", "taille_cm", i.taille_cm, "text", 'inputmode="numeric"'))}
@@ -4798,7 +5005,7 @@ const ACTIONS = {
     const d = $("dialogue");
     d.innerHTML = `<form class="feuille formulaire" novalidate><h2 id="dialogueTitre">Ce que tu as chez toi</h2>
       <div class="champ${E.claude === false ? "" : " champ-ia"}"><label for="stTexte">Tes produits ${E.claude === false ? "" : BADGE_IA}</label>
-        <textarea id="stTexte" rows="4" placeholder="6 œufs, riz basmati 1 kg, lait 1 l, 2 boîtes de thon, poulet 500 g"></textarea>
+        <textarea id="stTexte" rows="4" maxlength="800" placeholder="6 œufs, riz basmati 1 kg, lait 1 l, 2 boîtes de thon, poulet 500 g"></textarea>
         <small>Avec les quantités si tu les connais, séparés par des virgules.</small></div>
       <div class="actions pied"><button class="bouton second" type="button" value="non">Annuler</button><button class="bouton" type="submit">Continuer</button></div></form>`;
     d.querySelector("[value=non]").addEventListener("click", () => d.close("non"));
