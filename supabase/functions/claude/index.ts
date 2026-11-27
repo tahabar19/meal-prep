@@ -289,7 +289,7 @@ Deno.serve(async (req) => {
     if (!user) return json({ erreur: "Reconnecte-toi." }, 401);
     const corps = await req.json();
 
-    // ---------- Reprise après une coupure (Taha, 28/11/2026 : « Pas de réseau » à chaque fois) ----------
+    // ---------- Reprise après une coupure (Taha, 27/11/2026 : « Pas de réseau » à chaque fois) ----------
     // Le téléphone renvoie la MÊME demande (même numéro) quand la connexion a coupé pendant le calcul (appli mise de
     // côté, écran verrouillé, réseau qui saute). La réponse gardée repart sans refaire ni repayer l'appel ; si le
     // premier calcul tourne encore, on attend sa fin. Le calcul va toujours jusqu'au bout, même téléphone parti.
@@ -419,7 +419,7 @@ async function traiter(admin: any, user: any, corps: any): Promise<Response> {
       // Opus était le modèle par défaut jusqu'au 20/11/2026 : les comptes branchés avec lui passent à Sonnet.
       const modele = (k.modele && k.modele !== "claude-opus-5-5" ? k.modele : null) || MODELE;
       const demande: any = {                                  // la consigne vient d'ici, jamais de la page
-        // 8 000 au plus (28/11/2026) : à 4 000, une grosse recette était coupée net (« répondu à côté »).
+        // 8 000 au plus (27/11/2026) : à 4 000, une grosse recette était coupée net (« répondu à côté »).
         model: modele, max_tokens: Math.min(8000, Math.max(256, Number(corps.max_tokens) || 4000)),
         system: consigne(tache), messages: [{ role: "user", content: blocs }],
       };

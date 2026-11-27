@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
 
     if (action === "moi") return json({ identifiant: moi.identifiant, email: moi.email, telephone: moi.telephone, emails: EMAILS });
 
-    // ---------- Un membre sans téléphone (enfant…), créé par un membre de la famille (Taha, 28/11/2026) ----------
+    // ---------- Un membre sans téléphone (enfant…), créé par un membre de la famille (Taha, 27/11/2026) ----------
     // Un compte dont personne ne connaît le mot de passe : il s'ouvre depuis le téléphone des autres membres.
     if (action === "membre_famille") {
       const { data: lien } = await admin.from("membres_famille").select("famille_id").eq("user_id", user.id).eq("statut", "membre").maybeSingle();

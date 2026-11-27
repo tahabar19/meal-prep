@@ -2079,7 +2079,7 @@ body::before{opacity:.085}
 @keyframes tourne{to{transform:rotate(360deg)}}
 .ap-ing summary{min-height:0;margin:0;padding:8px 0 0;background:none;border:0;font-weight:500;color:var(--discret)}
 
-/* --- L'IA travaille (Taha, 28/11/2026 : « sur 2 lignes et c'est moche ») : une carte centrée, compacte, le titre sur
+/* --- L'IA travaille (Taha, 27/11/2026 : « sur 2 lignes et c'est moche ») : une carte centrée, compacte, le titre sur
    une ligne, ce qu'on a écrit sur une ligne, trois étapes qui s'allument */
 #dialogue:has(> .ia-att){width:min(330px,calc(100% - 32px));max-width:none;margin:auto;padding:26px 22px 16px;border-radius:22px;
   background:radial-gradient(120% 70% at 50% 0,rgba(167,139,250,.11),transparent 70%),var(--surface)}
@@ -2102,7 +2102,7 @@ body::before{opacity:.085}
 .ia-lent{margin:12px 0 0;font-size:.75rem;color:var(--discret)}
 #dialogue .ia-annuler{margin-top:14px;font-size:.82rem;color:var(--discret);text-decoration:none}
 
-/* --- Demande pour entrer dans la famille (28/11/2026) : alerte du jour, point sur Profil */
+/* --- Demande pour entrer dans la famille (27/11/2026) : alerte du jour, point sur Profil */
 .fam-alerte{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:10px 10px 10px 12px;border:1px solid rgba(200,240,75,.22);
   border-radius:14px;background:var(--surface);font-size:.85rem;color:var(--texte)}
 .fam-alerte > .ic{flex:none;width:18px;height:18px;color:var(--accent)}
@@ -2114,7 +2114,7 @@ body::before{opacity:.085}
 .point-alerte{position:absolute;top:5px;inset-inline-end:6px;width:8px;height:8px;border-radius:50%;background:var(--accent);
   box-shadow:0 0 0 2px var(--canvas)}
 
-/* --- Les profils de la famille sur un téléphone (Taha, 28/11/2026) : puces en haut du jour, bandeau « Profil de… »,
+/* --- Les profils de la famille sur un téléphone (Taha, 27/11/2026) : puces en haut du jour, bandeau « Profil de… »,
    vue « Tous » (les doses de chacun) */
 .fam-profils{display:flex;gap:6px;margin:2px -16px 14px;padding:0 16px 2px;overflow-x:auto;scrollbar-width:none}
 .fam-profils::-webkit-scrollbar{display:none}
@@ -2173,3 +2173,56 @@ body::before{opacity:.085}
 .fam-notif{display:flex;align-items:center;gap:12px;margin-top:8px;font-size:.85rem}
 .fam-notif-ok{display:inline-flex;align-items:center;gap:6px;color:var(--texte)}
 .fam-notif-ok .ic{width:16px;height:16px;color:var(--accent)}
+
+/* --- Silhouette au miroir (Taha, 27/11/2026) : la caméra en plein écran, la silhouette de référence en pointillés,
+   une consigne à la fois (écrite et dite), l'anneau qui se remplit quand la pose est la bonne */
+body.miroir-ouvert{overflow:hidden}
+.miroir{position:fixed;inset:0;z-index:100;background:#000;color:#fff;touch-action:none}
+.miroir video,.miroir-dessin{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.miroir-haut{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 14px 14px;background:linear-gradient(rgba(0,0,0,.6),transparent)}
+.miroir-fermer{display:grid;place-items:center;flex:none;width:40px;height:40px;border:0;border-radius:50%;background:rgba(0,0,0,.45);color:#fff;cursor:pointer}
+.miroir-fermer .ic{width:20px;height:20px}
+.miroir-titre{flex:1;min-width:0;display:flex;flex-direction:column}
+.miroir-titre b{font-size:1rem;font-weight:600}
+.miroir-titre small{font-size:.75rem;opacity:.75}
+.miroir-voix{flex:none;min-height:32px;padding:0 12px;border:1px solid rgba(255,255,255,.35);border-radius:var(--r-pilule);
+  background:rgba(0,0,0,.35);color:#fff;font:inherit;font-size:.78rem;cursor:pointer}
+.miroir-voix[aria-pressed="false"]{opacity:.55;text-decoration:line-through}
+.miroir-bas{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:22px 18px calc(18px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,rgba(0,0,0,.72) 38%)}
+.miroir-anneau{position:relative;width:56px;height:56px}
+.miroir-anneau svg{width:100%;height:100%;transform:rotate(-90deg)}
+.miroir-anneau circle{fill:none;stroke:rgba(255,255,255,.2);stroke-width:4}
+.miroir-anneau circle.jauge{stroke:#fff;stroke-linecap:round;stroke-dasharray:119.4;stroke-dashoffset:119.4;transition:stroke-dashoffset .25s,stroke .25s}
+.miroir-anneau.ok circle.jauge{stroke:var(--accent)}
+.miroir-anneau span{position:absolute;inset:0;display:grid;place-items:center;font-size:.82rem;font-weight:600}
+.miroir-consigne{margin:0;max-width:24ch;min-height:2.6em;text-align:center;font-size:1.2rem;font-weight:600;line-height:1.3;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.miroir-prendre{min-height:38px;padding:0 16px;border:1px solid rgba(255,255,255,.5);border-radius:var(--r-pilule);background:rgba(0,0,0,.4);
+  color:#fff;font:inherit;font-size:.85rem;cursor:pointer}
+.miroir-prendre[hidden]{display:none}
+.miroir-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+.miroir.flash .miroir-flash{animation:miroir-flash .45s ease-out}
+@keyframes miroir-flash{from{opacity:.85}to{opacity:0}}
+.silh h2{display:flex;align-items:center;gap:8px}
+.silh h2 .ic{width:20px;height:20px;color:var(--accent)}
+.silh-tete{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.silh-tete .lien{font-size:.82rem}
+.silh-mesures{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 8px;padding:0;list-style:none}
+.silh-mesures li{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:8px 10px;border-radius:12px;background:var(--surface-fort)}
+.silh-mesures li > span{flex:1 1 100%;font-size:.75rem;color:var(--discret)}
+.silh-mesures li > b{color:var(--encre);font-size:1rem;font-weight:600}
+.silh-mesures li > small{font-size:.72rem;color:var(--discret)}
+.silh-mesures li > small.bouge{color:var(--encre);font-weight:600}
+.silh .bouton{width:100%}
+.silh-photos{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 4px}
+.silh-photos img{width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:12px;background:var(--surface-fort)}
+.silh-histo .lignes li{display:flex;align-items:center;gap:8px}
+.silh-ligne{display:flex;flex:1;min-width:0;flex-direction:column;align-items:flex-start;gap:2px;padding:6px 0;border:0;background:none;
+  color:var(--texte);font:inherit;text-align:start;cursor:pointer}
+.silh-ligne b{color:var(--encre);font-weight:600;font-size:.9rem}
+.silh-ligne small{font-size:.75rem}
+.silh-conseils{margin-top:4px}
+.silh-ruban{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
+.silh-ruban .champ{margin:0}
+.silh-ruban .champ small{margin-top:2px;font-size:.72rem}

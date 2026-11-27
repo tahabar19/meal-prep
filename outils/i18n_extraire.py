@@ -169,7 +169,7 @@ def depuis_py(chemin) -> set:
 
 def main():
     textes = set()
-    for f in ("app.js", "graphiques.js"):
+    for f in ("app.js", "graphiques.js", "miroir.js"):
         textes |= depuis_js(REPAS / "site" / f)
     for f in ("serveur.py", "journal_repas.py", "plat_perso.py", "profil.py", "stock.py", "planification.py"):
         textes |= depuis_py(REPAS / f)

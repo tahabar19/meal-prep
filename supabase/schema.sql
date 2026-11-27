@@ -231,7 +231,7 @@ revoke all on function public.famille_creer(text, text, text), public.famille_re
 grant execute on function public.famille_creer(text, text, text), public.famille_rejoindre(text), public.famille_repondre(uuid, boolean),
   public.famille_quitter(), public.famille_etat(), public.ma_famille() to authenticated;
 
--- ---------- Reprise d'un appel à l'IA après une coupure (Taha, 28/11/2026 : « Pas de réseau » à chaque fois) ----------
+-- ---------- Reprise d'un appel à l'IA après une coupure (Taha, 27/11/2026 : « Pas de réseau » à chaque fois) ----------
 -- Le téléphone renvoie la même demande (même numéro) quand la connexion a coupé pendant le calcul : la fonction
 -- « claude » rend la réponse gardée ici au lieu de refaire (et repayer) l'appel. Lignes effacées au bout de 2 heures.
 create table if not exists public.reponses_ia (
@@ -248,7 +248,7 @@ alter table public.reponses_ia enable row level security;      -- aucune règle 
 -- La durée de chaque appel (secondes d'attente côté téléphone), pour la page « Suivi de conso ».
 alter table public.usage_claude add column if not exists duree_ms integer;
 
--- ---------- Famille ouverte (Taha, 28/11/2026 : « on peut changer de profil facilement sur un téléphone, ça donne
+-- ---------- Famille ouverte (Taha, 27/11/2026 : « on peut changer de profil facilement sur un téléphone, ça donne
 -- les doses de tous les membres dans un seul téléphone » ; choix : tout le monde ouvre le profil de tout le monde) ----------
 -- Chaque membre lit et modifie les fichiers des autres membres de sa famille (journée, doses, repas mangés, plats).
 -- Le suivi (poids, mesures, silhouette du miroir) reste privé : suivi.json et silhouette*.
@@ -304,7 +304,7 @@ begin
         where mf.famille_id = f.id and (mf.statut = 'membre' or f.createur = auth.uid())) end);
 end $$;
 
--- ---------- Notifications sur le téléphone (Taha, 28/11/2026 : « le responsable ne reçoit jamais la notif ») ----------
+-- ---------- Notifications sur le téléphone (Taha, 27/11/2026 : « le responsable ne reçoit jamais la notif ») ----------
 -- Abonnements Web Push de chaque appareil, et ce qui a été envoyé (pour borner les envois). Fonctions seulement.
 create table if not exists public.abonnements_push (
   endpoint text primary key,
@@ -325,3 +325,19 @@ create table if not exists public.notifications (
   quand timestamptz not null default now()
 );
 alter table public.notifications enable row level security;
+
+-- ---------- Silhouette au miroir (Taha, 27/11/2026) : photos de face et de profil, PRIVÉES (choix de Taha : gardées en
+-- ligne, visibles par soi seul). Dossier = identifiant de la personne ; personne d'autre, pas même la famille.
+insert into storage.buckets (id, name, public) values ('silhouettes', 'silhouettes', false) on conflict (id) do update set public = false;
+drop policy if exists "silhouettes lues par soi" on storage.objects;
+create policy "silhouettes lues par soi" on storage.objects for select to authenticated
+  using (bucket_id = 'silhouettes' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "silhouettes ecrites par soi" on storage.objects;
+create policy "silhouettes ecrites par soi" on storage.objects for insert to authenticated
+  with check (bucket_id = 'silhouettes' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "silhouettes changees par soi" on storage.objects;
+create policy "silhouettes changees par soi" on storage.objects for update to authenticated
+  using (bucket_id = 'silhouettes' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "silhouettes retirees par soi" on storage.objects;
+create policy "silhouettes retirees par soi" on storage.objects for delete to authenticated
+  using (bucket_id = 'silhouettes' and (storage.foldername(name))[1] = auth.uid()::text);

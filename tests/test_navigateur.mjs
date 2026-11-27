@@ -757,6 +757,58 @@ try {
     await B.js(`document.getElementById('dialogue').close()`); await att(200);
   });
 
+  await test('Famille : le profil de chacun, les doses de tous, un membre sans téléphone', async () => {
+    // (Taha, 27/11/2026) Tout le monde ouvre le profil de tout le monde sur un téléphone ; « Tous » montre les doses de
+    // chacun ; un membre sans téléphone se crée et se retire. Famille d'essai : zz-essai (créateur) et zz-essai2.
+    const URL_SB = /url:\s*"([^"]+)/.exec(readFileSync(join(ICI, '../app/config.js'), 'utf8'))[1];
+    const ANON = readFileSync(join(homedir(), '.config/meal-prep/anon-key'), 'utf8').trim();
+    const MDP2 = readFileSync(join(homedir(), '.config/meal-prep/essai2-mdp'), 'utf8').trim();
+    const appelSb = async (chemin, corps, jeton) => (await fetch(URL_SB + chemin, { method: 'POST', body: JSON.stringify(corps),
+      headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (jeton || ANON) } })).json();
+    const jetonDe = async (qui, mdp) => (await appelSb('/functions/v1/compte', { action: 'connecter', qui, mot_de_passe: mdp })).access_token;
+    const j1 = await jetonDe('zz-essai', MDP), j2 = await jetonDe('zz-essai2', MDP2);
+    const rpc = (nom, args, j) => appelSb('/rest/v1/rpc/' + nom, args, j);
+    await rpc('famille_quitter', {}, j2); await rpc('famille_quitter', {}, j1);      // un essai d'avant resté en route
+    let lina = '';
+    try {
+      const f = await rpc('famille_creer', { p_nom: 'Famille essai', p_stock: '', p_mouvements: '' }, j1);
+      await rpc('famille_rejoindre', { p_code: f.famille.code }, j2);
+      const demande = (await rpc('famille_etat', {}, j1)).membres.find(m => m.statut === 'attente');
+      await rpc('famille_repondre', { p_user: demande.id, p_accepter: true }, j1);
+      await B.js(`relancerMoteur().then(() => true)`);
+      await aller('#/semaine');
+      vrai(await attendre(`document.querySelectorAll('.fam-profils button').length === 3`, 40000) >= 0, 'pas de puces de profils');
+      await B.js(`document.querySelector('.fam-profils [data-fam-profil]:not([aria-current])').click()`);
+      vrai(await attendre(`M.ident === 'zz-essai2' && E.profil.id === 'zz-essai2' && !document.getElementById('bandeauProfil').hidden`, 40000) >= 0,
+        "le profil de zz-essai2 ne s'ouvre pas");
+      await aller('#/suivi');
+      vrai(await B.js(`document.querySelector('main').textContent.includes('reste privé')`), "le suivi d'un autre membre n'est pas privé");
+      await B.js(`document.querySelector('[data-moi]').click()`);
+      vrai(await attendre(`M.uid === M.moi.uid && E.profil.id === 'zz-essai'`, 30000) >= 0, 'pas de retour à soi');
+      await aller('#/semaine');
+      await B.js(`document.querySelector('[data-fam-tous]').click()`);
+      vrai(await attendre(`document.querySelectorAll('.dose-membre').length === 2 && document.querySelectorAll('.dose-plat').length > 0`, 60000) >= 0,
+        'pas de doses pour toute la famille');
+      await B.photo('famille-tous');
+      await B.js(`(VUE_TOUS = false, true)`);
+      const ident = 'zz-m' + String(Date.now()).slice(-6);
+      await B.js(`ajouterMembreSansTelephone({ prenom: 'Lina', nom_famille: 'Essai', date_naissance: '2008-05-14', sexe: 'femme', taille_cm: '158',
+        poids_kg: '49', activite: 'leger', objectif: 'maintien', identifiant: '${ident}', pays: 'FR' }).then(() => true)`);
+      lina = await B.js(`(M.familleEtat.membres.find(m => m.identifiant === '${ident}') || {}).id || ''`);
+      vrai(!!lina, "le membre sans téléphone n'est pas dans la famille");
+      await B.js(`afficherProfil('${lina}').then(() => true)`);
+      vrai(await B.js(`E.profil.nom === 'Lina' && !!E.semaine`), "son profil ne s'ouvre pas, ou n'a pas de menu");
+      await B.js(`afficherProfil(M.moi.uid).then(() => retirerMembreSansTelephone('${lina}')).then(() => true)`);
+      vrai(await B.js(`!M.familleEtat.membres.some(m => m.id === '${lina}')`), "le membre sans téléphone n'est pas retiré");
+      lina = '';
+    } finally {
+      if (lina) await appelSb('/functions/v1/compte', { action: 'membre_retirer', membre: lina }, j1);
+      await rpc('famille_quitter', {}, j2); await rpc('famille_quitter', {}, j1);
+      await B.js(`(VUE_TOUS = false, relancerMoteur().then(() => true))`).catch(() => {});
+      await attendre(`M.prete && !M.famille && !!document.querySelector('.nav-bas')`, 60000);
+    }
+  });
+
   await test('Déconnexion', async () => {
     await aller('#/profil');
     await B.js(`document.querySelector('[data-action=deconnexion]').click()`); await att(400);

@@ -32,7 +32,7 @@ self.pont_sync = (action, corpsJson) => {
   return versFonction(action, corps);
 };
 
-// Une coupure ne perd plus le calcul (Taha, 28/11/2026 : « Pas de réseau » à chaque fois). Sur iPhone, la connexion
+// Une coupure ne perd plus le calcul (Taha, 27/11/2026 : « Pas de réseau » à chaque fois). Sur iPhone, la connexion
 // tombe dès que l'appli passe en arrière-plan ou que l'écran se verrouille pendant que l'IA calcule. La même demande
 // repart (même numéro, jusqu'à 4 essais) : la fonction rend la réponse qu'elle a gardée, sans refaire l'appel.
 const pause = (ms) => { const fin = Date.now() + ms; while (Date.now() < fin) {} };     // un Worker ne peut pas dormir autrement
@@ -122,7 +122,7 @@ async function init(m) {
   setTimeout(avecPillow, 3000);
 }
 
-// Plusieurs profils de la même famille dans ce Worker (Taha, 28/11/2026 : « on peut changer de profil facilement sur
+// Plusieurs profils de la même famille dans ce Worker (Taha, 27/11/2026 : « on peut changer de profil facilement sur
 // un téléphone, ça donne les doses de tous les membres ») : chacun dans /mp/profils/<identifiant>/, et chaque requête
 // dit pour qui elle est. Le stock commun est le même dans chaque profil chargé.
 const PARTAGES = ["stock.csv", "mouvements.csv"];

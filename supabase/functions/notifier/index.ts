@@ -1,4 +1,4 @@
-// Mon Meal Prep — les notifications sur le téléphone, même appli fermée (Web Push). Taha, 28/11/2026 : « le
+// Mon Meal Prep — les notifications sur le téléphone, même appli fermée (Web Push). Taha, 27/11/2026 : « le
 // responsable ne reçoit jamais la notif ». Le texte est fait ICI, d'après la base, jamais par la page.
 // Actions :
 //   "cle"         la clé publique VAPID (pour s'abonner)
