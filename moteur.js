@@ -29,15 +29,40 @@ self.pont_sync = (action, corpsJson) => {
     for (let i = 0; i < o.length; i += 0x8000) s += String.fromCharCode.apply(null, o.subarray(i, i + 0x8000));
     return JSON.stringify({ base64: btoa(s) });
   }
-  const x = new XMLHttpRequest();
-  x.open("POST", cfg.url + "/functions/v1/claude", false);
-  x.setRequestHeader("Content-Type", "application/json");
-  x.setRequestHeader("apikey", cfg.anon);
-  x.setRequestHeader("Authorization", "Bearer " + cfg.jeton);
-  try { x.send(JSON.stringify({ action, ...corps })); }
-  catch (e) { return JSON.stringify({ erreur: "Pas de réseau." }); }
-  return x.responseText || JSON.stringify({ erreur: `Réponse vide (${x.status})` });
+  return versFonction(action, corps);
 };
+
+// Une coupure ne perd plus le calcul (Taha, 28/11/2026 : « Pas de réseau » à chaque fois). Sur iPhone, la connexion
+// tombe dès que l'appli passe en arrière-plan ou que l'écran se verrouille pendant que l'IA calcule. La même demande
+// repart (même numéro, jusqu'à 4 essais) : la fonction rend la réponse qu'elle a gardée, sans refaire l'appel.
+const pause = (ms) => { const fin = Date.now() + ms; while (Date.now() < fin) {} };     // un Worker ne peut pas dormir autrement
+const numero = () => (self.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 14));
+const noter = (titre, details) => self.postMessage({ type: "journal", journal: { type: "erreur", titre, details } });
+function versFonction(action, corps) {
+  const demande = numero(), t0 = Date.now(), coupures = [];
+  for (let essai = 1; essai <= 4; essai++) {
+    const x = new XMLHttpRequest();
+    x.open("POST", cfg.url + "/functions/v1/claude", false);
+    try { x.timeout = 150000; } catch (e) {}           // sinon Safari abandonne parfois au bout de 60 s
+    x.setRequestHeader("Content-Type", "application/json");
+    x.setRequestHeader("apikey", cfg.anon);
+    x.setRequestHeader("Authorization", "Bearer " + cfg.jeton);
+    const debut = Date.now();
+    let panne = "";
+    try { x.send(JSON.stringify({ action, demande, ...corps })); }
+    catch (e) { panne = `${(e && e.name) || "coupure"} après ${Math.round((Date.now() - debut) / 1000)} s`; }
+    if (!panne && (x.status === 0 || (x.status >= 500 && !/"erreur"/.test(x.responseText || "")))) panne = `réponse ${x.status}`;
+    if (!panne && x.status === 409 && /"encore"/.test(x.responseText || "")) panne = "calcul encore en cours";
+    if (!panne) {
+      if (coupures.length) noter("Appel à l'IA repris après une coupure", [`${action} : ${coupures.join(" ; ")}`, `réponse au bout de ${Math.round((Date.now() - t0) / 1000)} s`]);
+      return x.responseText || JSON.stringify({ erreur: `Réponse vide (${x.status})` });
+    }
+    coupures.push(panne);
+    if (essai < 4) pause(essai * 1500);
+  }
+  noter("Appel à l'IA coupé", [`${action} : ${coupures.join(" ; ")}`, `abandon au bout de ${Math.round((Date.now() - t0) / 1000)} s`]);
+  return JSON.stringify({ erreur: "La connexion a coupé pendant le calcul. Garde l'appli ouverte et réessaie." });
+}
 
 const ecrire = (chemin, donnees, date) => {
   py.FS.mkdirTree(chemin.slice(0, chemin.lastIndexOf("/")));

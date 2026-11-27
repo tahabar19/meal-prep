@@ -3,7 +3,7 @@
 // Comptes : Supabase Auth (identifiant → identifiant@meal-prep.invalid). Fichiers du profil : table « fichiers ».
 // Photos de ses plats : stockage « photos/<id de la personne>/ ». Claude : fonction « claude », avec SA clé.
 const sb = supabase.createClient(MP.url, MP.anon, { auth: { persistSession: true, autoRefreshToken: true } });
-const VERSION = "2026-11-27-201305";                 // change à chaque construction (moteur et catalogue)
+const VERSION = "2026-11-27-220854";                 // change à chaque construction (moteur et catalogue)
 const M = { worker: null, pret: null, prete: false, n: 0, attente: new Map(), uid: null, ident: null, claude: null, file: Promise.resolve(),
             versionRecettes: null };
 const reponse = (status, corps) => new Response(JSON.stringify(corps), { status, headers: { "Content-Type": "application/json" } });
@@ -37,6 +37,12 @@ function envoyer(message, transferts = []) {
 function nouveauMoteur() {
   M.worker = new Worker("moteur.js");
   M.worker.onmessage = (e) => {
+    // Une coupure pendant un appel à l'IA (reprise ou abandon) : notée au journal, pour en trouver la cause (28/11/2026).
+    if (e.data.type === "journal") {
+      if (M.uid) sb.from("journal").insert({ user_id: M.uid, ...e.data.journal, details: [...e.data.journal.details,
+        `écran ${document.visibilityState}, ${navigator.onLine ? "en ligne" : "hors ligne"}`] }).then(() => {}, () => {});
+      return;
+    }
     const a = M.attente.get(e.data.id);
     if (!a) return;
     M.attente.delete(e.data.id);
@@ -103,17 +109,29 @@ async function relancerMoteur() {
   await moteurPret();
   if (typeof demarrer === "function") await demarrer();
 }
-// Au retour sur l'appli : le menu et le stock de la famille ont peut-être changé ; une demande a peut-être été acceptée.
+// Au retour sur l'appli, et chaque minute : le menu et le stock de la famille ont peut-être changé, une demande a
+// peut-être été acceptée, ou quelqu'un demande à entrer (Taha, 28/11/2026 : le créateur ne voyait jamais les demandes).
+async function majFamilleEtat(force) {
+  if (!M.prete || (!force && Date.now() - (M.familleEtatVu || 0) < 15000)) return;
+  M.familleEtatVu = Date.now();
+  const { data } = await sb.rpc("famille_etat");
+  if (!data) return;
+  const avant = M.familleEtat, statut = (f) => (f && f.famille ? f.statut : "");
+  // entré dans la famille, ou famille dissoute : le moteur repart avec le bon stock et le bon rôle
+  if ((statut(avant) === "membre") !== (statut(data) === "membre")) { M.familleEtat = data; return relancerMoteur(); }
+  M.familleEtat = data;
+  if (M.famille && data.statut === "membre") M.famille = data;
+  const cle = (f) => JSON.stringify([statut(f), ((f && f.membres) || []).map((m) => [m.id, m.statut])]);
+  if (cle(avant) !== cle(data) && typeof familleChange === "function") familleChange();
+}
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState !== "visible" || !M.prete) return;
   try {
-    if (M.familleEtat && M.familleEtat.statut === "attente") {
-      const { data } = await sb.rpc("famille_etat");
-      if (data && data.statut === "membre") return relancerMoteur();
-      M.familleEtat = data;
-    } else if (M.famille && Date.now() - M.familleVue > 20000 && typeof demarrer === "function") demarrer();
+    await majFamilleEtat();
+    if (M.famille && Date.now() - M.familleVue > 20000 && typeof demarrer === "function") demarrer();
   } catch (e) { console.warn("famille", e); }
 });
+setInterval(() => { if (document.visibilityState === "visible") majFamilleEtat().catch(() => {}); }, 60000);
 
 async function moteurPret() {
   if (M.pret) return M.pret;
@@ -255,7 +273,27 @@ async function partagerMenu(params) {
 }
 const aujourdhuiIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
+// L'écran reste allumé pendant un calcul de plus d'une seconde (Taha, 28/11/2026) : un iPhone qui se verrouille coupe
+// la connexion de l'appli. Le verrou tombe seul si l'appli passe en arrière-plan.
+const ECRAN = { n: 0, verrou: null };
+async function ecranAllume(oui) {
+  if (!("wakeLock" in navigator)) return;
+  try {
+    if (oui) {
+      if (ECRAN.n++ || document.visibilityState !== "visible") return;
+      const v = await navigator.wakeLock.request("screen");
+      if (ECRAN.n) ECRAN.verrou = v; else v.release().catch(() => {});
+    } else if (ECRAN.n > 0 && --ECRAN.n === 0 && ECRAN.verrou) { const v = ECRAN.verrou; ECRAN.verrou = null; await v.release(); }
+  } catch {}
+}
+
 async function versMoteur(methode, chemin, corps) {
+  let allume = false;
+  const minuteur = setTimeout(() => { allume = true; ecranAllume(true); }, 1000);
+  try { return await versMoteurSansVeille(methode, chemin, corps); }
+  finally { clearTimeout(minuteur); if (allume) ecranAllume(false); }
+}
+async function versMoteurSansVeille(methode, chemin, corps) {
   let partage = null;
   try { partage = methode === "POST" && corps ? (JSON.parse(corps).famille || null) : null; } catch {}
   const r = await (M.file = M.file.catch(() => {}).then(async () => {

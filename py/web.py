@@ -258,7 +258,7 @@ def _claude_avec_photo(demande: str, photo: bytes | None, timeout: int = 150) ->
     if photo:
         type_ = "image/png" if photo[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
         blocs.insert(0, {"type": "image", "media_type": type_, "data": base64.b64encode(photo).decode()})
-    return _claude(blocs, 4000, "repas")             # une erreur (pas de clé, hors sujet…) remonte jusqu'à la page
+    return _claude(blocs, 6000, "repas")             # une erreur (pas de clé, hors sujet…) remonte jusqu'à la page
 
 
 # ------------------------------------------------------------------ créer son profil (en ligne)
