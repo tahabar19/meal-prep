@@ -116,8 +116,44 @@ async function init(m) {
   for (const f of m.fichiers) ecrire(`${dossier}/${f.nom}`, f.contenu);
   for (const p of m.photos) ecrire(`${dossier}/${p.nom}`, vide, p.maj);     // les photos de ses plats sont dans Supabase
   web.demarrer(m.identifiant, py.toPy(m.reglages || {}));
+  profils[m.identifiant] = m.reglages || {};
+  courant = m.identifiant;
   marque("profil", t0);
   setTimeout(avecPillow, 3000);
+}
+
+// Plusieurs profils de la même famille dans ce Worker (Taha, 28/11/2026 : « on peut changer de profil facilement sur
+// un téléphone, ça donne les doses de tous les membres ») : chacun dans /mp/profils/<identifiant>/, et chaque requête
+// dit pour qui elle est. Le stock commun est le même dans chaque profil chargé.
+const PARTAGES = ["stock.csv", "mouvements.csv"];
+const profils = {};                    // identifiant -> réglages du moteur pour lui (rôle dans la famille…)
+let courant = "";
+function basculer(ident) {
+  if (!ident || ident === courant || !(ident in profils)) return;
+  dossier = `/mp/profils/${ident}`;
+  web.demarrer(ident, py.toPy(profils[ident]));
+  courant = ident;
+}
+function vider(chemin) {
+  const FS = py.FS;
+  if (!FS.analyzePath(chemin).exists) return;
+  for (const n of FS.readdir(chemin)) {
+    if (n === "." || n === "..") continue;
+    const p = `${chemin}/${n}`;
+    if (FS.isDir(FS.stat(p).mode)) { vider(p); FS.rmdir(p); } else FS.unlink(p);
+  }
+}
+function charger(m) {                  // les fichiers d'un autre profil (relus en entier), sans le choisir
+  const d = `/mp/profils/${m.identifiant}`, vide = new Uint8Array(0);
+  vider(d);
+  py.FS.mkdirTree(d);
+  for (const f of m.fichiers) ecrire(`${d}/${f.nom}`, f.contenu);
+  for (const p of m.photos || []) ecrire(`${d}/${p.nom}`, vide, p.maj);
+  profils[m.identifiant] = m.reglages || {};
+}
+function partager(ch) {                // le stock commun changé ici : recopié dans les autres profils chargés
+  for (const c of ch) if (c.texte !== undefined && PARTAGES.includes(c.nom))
+    for (const ident of Object.keys(profils)) if (ident !== courant) ecrire(`/mp/profils/${ident}/${c.nom}`, c.texte);
 }
 
 function changements(avant) {
@@ -138,13 +174,18 @@ async function suite() {
     if (m.type === "prechauffer") await prechauffer(m.version);
     else if (m.type === "valider") { await prechauffer(m.version); postMessage({ id: m.id, message: web.valider_profil(JSON.stringify(m.champs)) }); }
     else if (m.type === "init") { await init(m); postMessage({ id: m.id, ok: true, temps }); }
+    else if (m.type === "charger") { charger(m); postMessage({ id: m.id, ok: true }); }
     else if (m.type === "jeton") cfg.jeton = m.jeton;
-    else if (m.type === "reglages") web.regler(JSON.stringify(m.reglages));      // compte Claude branché ou non
+    else if (m.type === "reglages") {            // compte Claude branché ou non : vaut pour chaque profil chargé
+      for (const k of Object.keys(profils)) Object.assign(profils[k], m.reglages);
+      web.regler(JSON.stringify(m.reglages));
+    }
     else if (m.type === "fichiers") {            // le stock commun de la famille, changé par un autre membre
-      for (const f of m.fichiers) ecrire(`${dossier}/${f.nom}`, f.contenu);
+      for (const ident of Object.keys(profils)) for (const f of m.fichiers) ecrire(`/mp/profils/${ident}/${f.nom}`, f.contenu);
       postMessage({ id: m.id, ok: true });
     }
     else if (m.type === "requete") {
+      basculer(m.profil);
       if (AVEC_PHOTOS.some((c) => m.chemin.startsWith(c))) await avecPillow();
       const avant = web.instantane_json();
       const t0 = performance.now();
@@ -152,13 +193,16 @@ async function suite() {
       r.ms = Math.round(performance.now() - t0);
       r.compose = web.compose_recente();
       const [ch, t] = changements(avant);
-      postMessage({ id: m.id, r, ch }, t);
+      partager(ch);
+      postMessage({ id: m.id, r, ch, profil: courant }, t);
     } else if (m.type === "apres") {
       await avecPillow();
+      basculer(web.tache_profil());              // une tâche laissée par un autre profil (la photo de son plat)
       const avant = web.instantane_json();
       const reste = web.apres();
       const [ch, t] = changements(avant);
-      postMessage({ id: m.id, reste, ch }, t);
+      partager(ch);
+      postMessage({ id: m.id, reste, ch, profil: courant }, t);
     }
   } catch (e) {
     postMessage({ id: m.id, erreur: String(e && e.message || e) });

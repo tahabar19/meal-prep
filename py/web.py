@@ -113,7 +113,7 @@ class _Sequentiel:
 
 
 def _fil_plus_tard(self):
-    A_FAIRE.append(self.run)
+    A_FAIRE.append((UTILISATEUR, self.run))       # la tâche garde son profil (plusieurs profils de la famille, 28/11/2026)
 
 
 # ------------------------------------------------------------------ démarrage
@@ -321,10 +321,15 @@ def traiter(methode: str, chemin: str, corps: str = "") -> str:
                        "type": type_})
 
 
+def tache_profil() -> str:
+    """Le profil de la prochaine tâche en fond ("" s'il n'y en a pas) : le Worker le choisit avant de la faire."""
+    return A_FAIRE[0][0] if A_FAIRE else ""
+
+
 def apres() -> bool:
     """Fait une tâche laissée « en fond » (photo d'un plat). Vrai s'il en reste."""
     if A_FAIRE:
-        tache = A_FAIRE.pop(0)
+        _, tache = A_FAIRE.pop(0)
         try:
             tache()
         except Exception as e:
