@@ -3106,6 +3106,9 @@ function lienDesMontants(c) {
 }
 function vueBudget() {
   barre("");
+  // En ligne, la page n'est ouverte qu'aux comptes qui en ont l'icône (Taha, 27/11/2026 : cachée du menu, mais l'adresse
+  // #/budget l'ouvrait encore pour tout le monde).
+  if (enSuivi() && typeof M !== "undefined" && M.moi && !BUDGET_POUR.includes(String(M.moi.ident || "").toLowerCase())) return vueIntrouvable();
   const b = E.budget, c = E.couts, s = E.semaine;
   const mois = new Intl.DateTimeFormat(LOCALE, { month: "long" }).format(new Date(b.mois + "-01"));
   const kpi = (libelle, valeur, aide) => `<div><dt>${libelle}</dt><dd>${valeur}</dd>${aide ? `<p>${aide}</p>` : ""}</div>`;
@@ -5103,8 +5106,15 @@ const ACTIONS = {
     if (cle !== "ouvert") F.debut = 0;
     rendre();
   },
-  gout: b => agir("/api/gout", { plat: b.dataset.plat, gout: b.getAttribute("aria-pressed") === "true" ? "" : b.dataset.gout },
-    b.getAttribute("aria-pressed") === "true" ? "Avis retiré." : b.dataset.gout === "tester" ? "Noté : tu veux bien le tester." : "Noté : tu n'aimes pas."),
+  async gout(b) {
+    const plat = b.dataset.plat, retirer = b.getAttribute("aria-pressed") === "true", gout = retirer ? "" : b.dataset.gout;
+    const ok = await agir("/api/gout", { plat, gout },
+      retirer ? "Avis retiré." : gout === "tester" ? "Noté : tu veux bien le tester." : "Noté : tu n'aimes pas.");
+    // La carte du plat reste ouverte : ses boutons suivent tout de suite (27/11/2026 : un 2e toucher ne retirait pas l'avis).
+    if (ok !== false) document.querySelectorAll(`[data-action="gout"][data-plat="${CSS.escape(plat)}"]`)
+      .forEach(x => x.setAttribute("aria-pressed", String(!retirer && x.dataset.gout === gout)));
+    return ok;
+  },
   async journalSuite() {
     try {
       const r = await fetch(`/api/journal?debut=${E.journal.length + journalPlus.length}`);
