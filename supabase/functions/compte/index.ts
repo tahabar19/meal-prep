@@ -212,6 +212,41 @@ Deno.serve(async (req) => {
     }
 
     if (action === "moi") return json({ identifiant: moi.identifiant, email: moi.email, telephone: moi.telephone, emails: EMAILS });
+
+    // ---------- Un membre sans téléphone (enfant…), créé par un membre de la famille (Taha, 28/11/2026) ----------
+    // Un compte dont personne ne connaît le mot de passe : il s'ouvre depuis le téléphone des autres membres.
+    if (action === "membre_famille") {
+      const { data: lien } = await admin.from("membres_famille").select("famille_id").eq("user_id", user.id).eq("statut", "membre").maybeSingle();
+      if (!lien) return json({ erreur: "Crée ou rejoins d'abord une famille." }, 400);
+      const { count } = await admin.from("membres_famille").select("user_id", { count: "exact", head: true }).eq("famille_id", lien.famille_id);
+      if ((count ?? 0) >= 12) return json({ erreur: "12 membres au plus dans une famille." }, 400);
+      const ident = String(corps.identifiant || "").trim().toLowerCase();
+      if (!/^[a-z0-9_-]{3,20}$/.test(ident) || ["admin", "defaut", "root", "support"].includes(ident))
+        return json({ erreur: "Identifiant : 3 à 20 lettres minuscules, chiffres ou tirets." }, 400);
+      const { data: pris } = await admin.from("profils").select("id").eq("identifiant", ident).maybeSingle();
+      if (pris) return json({ erreur: "Cet identifiant est déjà pris : choisis-en un autre." }, 400);
+      const secret = Array.from(crypto.getRandomValues(new Uint8Array(24)), (x) => x.toString(16).padStart(2, "0")).join("");
+      const { data, error } = await admin.auth.admin.createUser({ email: `${ident}@meal-prep.invalid`, password: secret + "Aa1",
+        email_confirm: true, user_metadata: { identifiant: ident, sans_telephone: true, cree_par: user.id } });
+      if (error || !data?.user) return json({ erreur: "Création impossible, réessaie." }, 400);
+      const { error: e2 } = await admin.from("profils").insert({ id: data.user.id, identifiant: ident, sans_telephone: true });
+      const { error: e3 } = e2 ? { error: e2 } : await admin.from("membres_famille").insert({ famille_id: lien.famille_id, user_id: data.user.id, statut: "membre" });
+      if (e2 || e3) { await admin.auth.admin.deleteUser(data.user.id); return json({ erreur: "Création impossible, réessaie." }, 400); }
+      return json({ ok: true, id: data.user.id, identifiant: ident });
+    }
+    // Retirer un membre sans téléphone : son profil disparaît (par la personne qui a créé la famille, ou qui l'a créé).
+    if (action === "membre_retirer") {
+      const cible = String(corps.membre || "");
+      const { data: p } = await admin.from("profils").select("id, identifiant, sans_telephone").eq("id", cible).maybeSingle();
+      const { data: lien } = await admin.from("membres_famille").select("famille_id").eq("user_id", cible).maybeSingle();
+      const { data: fam } = lien ? await admin.from("familles").select("createur").eq("id", lien.famille_id).maybeSingle() : { data: null };
+      const { data: u2 } = p ? await admin.auth.admin.getUserById(cible) : { data: null };
+      const createurDuProfil = (u2 as any)?.user?.user_metadata?.cree_par === user.id;
+      if (!p || !p.sans_telephone || !fam || (fam.createur !== user.id && !createurDuProfil))
+        return json({ erreur: "Seul un profil sans téléphone se retire, par qui l'a créé ou par le créateur de la famille." }, 403);
+      const { error } = await admin.auth.admin.deleteUser(cible);
+      return error ? json({ erreur: "Suppression impossible, réessaie." }, 400) : json({ ok: true });
+    }
     return json({ erreur: "Action inconnue." }, 400);
   } catch (e) {
     console.error(e);

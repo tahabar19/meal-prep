@@ -1,6 +1,6 @@
 // Mon Meal Prep — service worker : l'interface et les photos du catalogue restent en cache (réseau d'abord pour
 // l'interface, pour avoir toujours la dernière version ; cache d'abord pour les photos, qui ne changent pas).
-const VERSION = "meal-prep-web-2026-11-27-220854";
+const VERSION = "meal-prep-web-2026-11-27-223143";
 const FICHIERS = ["./", "index.html", "app.css", "app.js", "web.js", "moteur.js", "config.js", "icones.js", "graphiques.js",
                   "vendor/supabase.js", "manifest.webmanifest", "icone.svg", "apple-touch-icon.png"];
 
@@ -22,4 +22,25 @@ self.addEventListener("fetch", (e) => {
     fetch(e.request, { cache: "no-cache" }).then((r) => { const c = r.clone(); caches.open(VERSION).then((x) => x.put(e.request, c)); return r; })
       .catch(() => caches.match(e.request).then((r) => r || caches.match("./")))
   );
+});
+
+// Notifications (Taha, 28/11/2026) : affichées même appli fermée ; les toucher ouvre l'appli au bon endroit.
+self.addEventListener("push", (e) => {
+  let m = {};
+  try { m = e.data ? e.data.json() : {}; } catch { m = { corps: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(m.titre || "Mon Meal Prep", {
+    body: m.corps || "", tag: m.tag || "mon-meal-prep", icon: "apple-touch-icon.png", badge: "icone.svg",
+    data: { url: m.url || "#/semaine" },
+  }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const cible = new URL("./" + ((e.notification.data && e.notification.data.url) || ""), self.registration.scope).href;
+  const ici = (e.notification.data && e.notification.data.url) || "#/semaine";
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((fenetres) => {
+    const f = fenetres.find((c) => c.url.startsWith(self.registration.scope));
+    if (!f) return self.clients.openWindow(cible);
+    f.postMessage({ type: "aller", url: ici });             // l'appli ouverte va au bon écran, sans recharger
+    return f.focus();
+  }));
 });

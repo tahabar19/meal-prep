@@ -251,6 +251,97 @@ function familleChange() {
   if ((d && d.open) || document.body.classList.contains("clavier") || !E) return;
   rendre();
 }
+
+// ---------- Les profils de la famille sur ce téléphone (Taha, 28/11/2026 : « on peut changer de profil facilement
+// sur un téléphone, ça donne les doses de tous les membres dans un seul téléphone ») ----------
+// En haut du jour : « Tous » (les doses de chacun, plat par plat) puis un bouton par membre (ouvrir son profil).
+const autreProfil = () => typeof M !== "undefined" && !!M.moi && M.uid !== M.moi.uid;
+const membresDeLaFamille = () => typeof membresFamille === "function" ? membresFamille() : [];
+const NOMS_FAMILLE = {};                                   // uid -> prénom, vu dans son profil
+const nomMembre = m => {
+  const nom = NOMS_FAMILLE[m.id] || (m.identifiant.charAt(0).toUpperCase() + m.identifiant.slice(1));
+  const pareil = membresDeLaFamille().some(x => x.id !== m.id && NOMS_FAMILLE[x.id] === nom);
+  return pareil && !m.moi ? `${nom} (${m.identifiant})` : nom;
+};
+let VUE_TOUS = false;
+function choixProfils() {
+  const membres = membresDeLaFamille();
+  if (membres.length < 2) return "";
+  if (E && E.profil) NOMS_FAMILLE[M.uid] = E.profil.nom;
+  return `<nav class="fam-profils" aria-label="Profils de la famille">
+    <button type="button" data-fam-tous${VUE_TOUS ? ' aria-current="true"' : ""}>${icone("users")}<span>Tous</span></button>
+    ${membres.map(m => `<button type="button" data-fam-profil="${m.id}"${!VUE_TOUS && m.id === M.uid ? ' aria-current="true"' : ""}>
+      <i class="av" aria-hidden="true">${esc(nomMembre(m).charAt(0))}</i><span>${esc(nomMembre(m))}</span></button>`).join("")}</nav>`;
+}
+document.addEventListener("click", async ev => {
+  const t = ev.target.closest && ev.target.closest("[data-fam-profil], [data-fam-tous], [data-moi]");
+  if (!t || typeof afficherProfil !== "function") return;
+  if (t.hasAttribute("data-fam-tous")) { VUE_TOUS = true; if (route().vue !== "semaine") location.hash = "#/semaine"; return rendre(); }
+  const uid = t.dataset.famProfil || (M.moi && M.moi.uid);
+  VUE_TOUS = false;
+  if (!uid || uid === M.uid) return rendre();
+  t.classList.add("charge"); t.disabled = true;
+  try {
+    await afficherProfil(uid);
+    if (t.dataset.famProfil && route().vue !== "semaine") location.hash = "#/semaine";
+    dire(uid === M.moi.uid ? "Ton profil." : `Profil de ${E.profil.nom}.`);
+  } catch (e) { dire(e.message || "Profil impossible à ouvrir."); rendre(); }
+});
+
+// Les doses de toute la famille pour un jour : chaque plat, la part de chacun (en grammes), le total à cuisiner et le
+// détail des ingrédients. Calculées par le moteur de chaque membre, à ses quantités.
+const DOSES = {};                                          // date -> { etat, liste } ; refait quand l'état change
+function chargerDoses(date) {
+  if (DOSES[date] && DOSES[date].etat === E) return;
+  const etat = E;
+  DOSES[date] = { etat, liste: null };
+  dosesFamille(date).then(liste => {
+    if (DOSES[date] && DOSES[date].etat === etat) DOSES[date].liste = liste;
+    if (VUE_TOUS && route().vue === "semaine") rendre();
+  }).catch(e => { DOSES[date] = null; dire(e.message || "Doses impossibles à calculer."); });
+}
+function vueDoses(date) {
+  const D = DOSES[date];
+  if (!D || D.etat !== E || !D.liste) { chargerDoses(date); return `<div class="os doses-attente" aria-label="Calcul des doses"><i class="t"></i><i class="l"></i><i class="l"></i></div>`; }
+  const liste = D.liste;
+  liste.forEach(x => { if (x.nom && x.uid) NOMS_FAMILLE[x.uid] = x.nom; });
+  const qui = x => nomMembre({ id: x.uid, identifiant: x.identifiant, moi: x.moi });
+  const g = v => v >= 1000 ? `${virgule(Math.round(v / 100) / 10)} kg` : `${nombre(Math.round(v))} g`;
+  const quantite = (q, u) => u === "g" ? g(q) : u === "ml" ? `${nombre(Math.round(q))} ml` : `${virgule(Math.round(q * 10) / 10)} ${u}`;
+  const tete = `<div class="doses-qui">${liste.map(x => `<button type="button" class="dose-membre" data-fam-profil="${x.uid}">
+      <b>${esc(qui(x))}</b>${x.erreur ? `<small class="discret">illisible</small>`
+        : `<small class="chiffres">${nombre(x.total ? x.total.kcal : 0)}${x.objectif ? ` / ${nombre(x.objectif.kcal)}` : ""} kcal · ${nombre(x.total ? x.total.prot : 0)} g prot.</small>`}</button>`).join("")}</div>`;
+  const MOMENTS_DOSES = [["pdj", "Matin"], ["dej", "Midi"], ["din", "Soir"], ["col", "Collations"]];
+  const blocs = MOMENTS_DOSES.map(([m, titre]) => {
+    const plats = new Map();
+    for (const x of liste) for (const r of x.repas || []) if (r.moment === m) {
+      if (!plats.has(r.id)) plats.set(r.id, { r, parts: [] });
+      plats.get(r.id).parts.push({ x, r });
+    }
+    if (!plats.size) return "";
+    return `<section class="doses-moment"><h2>${titre}</h2>${[...plats.values()].map(({ r, parts }) => {
+      const total = parts.reduce((t, p) => t + (p.r.g || 0), 0);
+      const ings = new Map();
+      for (const p of parts) for (const i of p.r.ing) {
+        const cle = i.n + "|" + i.u;
+        if (!ings.has(cle)) ings.set(cle, { n: i.n, u: i.u, parts: [] });
+        ings.get(cle).parts.push(i.q);
+      }
+      const connu = recette(r.id);
+      const photoR = connu && connu.photo ? connu : { id: r.id, nom: r.nom, photo: r.photo, photo_uid: r.photo_uid || (r.id.startsWith("perso-") ? parts[0].x.uid : undefined) };
+      return `<article class="dose-plat">${photo(photoR, 160, "carre")}
+        <div class="dose-corps"><b class="dose-nom">${esc(r.nom)}</b>
+          <ul class="dose-parts">${parts.map(p => `<li${p.r.mange ? ' class="mange"' : ""}><span>${esc(qui(p.x))}</span>
+            <b class="chiffres">${p.r.g ? g(p.r.g) : `× ${virgule(p.r.taille)}`}</b>${p.r.mange ? icone("check") : ""}</li>`).join("")}</ul>
+          ${parts.length > 1 && total ? `<p class="dose-total">À cuisiner <b class="chiffres">${g(total)}</b></p>` : ""}
+          ${ings.size ? `<details class="dose-ing"><summary>Ingrédients${icone("caret-right")}</summary><ul>${[...ings.values()].map(i => {
+            const t = i.parts.reduce((a, b) => a + b, 0);
+            return `<li><span>${esc(i.n)}</span><b class="chiffres">${quantite(t, i.u)}</b>${i.parts.length > 1 ? `<small class="chiffres">${i.parts.map(q => quantite(q, i.u)).join(" + ")}</small>` : ""}</li>`;
+          }).join("")}</ul></details>` : ""}</div></article>`;
+    }).join("")}</section>`;
+  }).join("");
+  return `${tete}${blocs || `<p class="discret" style="margin-top:14px">Pas de menu ce jour-là.</p>`}`;
+}
 const dateFamille = (k, n) => { const s = k === (E.mois ? E.mois.rang : 0) ? E.semaine : planDe(k);
   return s && s.debut ? new Date(new Date(s.debut + "T12:00").getTime() + n * 864e5).toISOString().slice(0, 10) : ""; };
 async function pourQui(date, moments) {
@@ -341,7 +432,7 @@ function comptesNav() {
 }
 const BUDGET_POUR = ["taha"];
 const ADMIN_CONSO = ["taha"];     // la page « Suivi de conso » (Taha, 23/11/2026) ; le serveur vérifie aussi
-const estAdminConso = () => typeof sb !== "undefined" && ADMIN_CONSO.includes(String((typeof M !== "undefined" && M.ident) || "").toLowerCase());
+const estAdminConso = () => typeof sb !== "undefined" && ADMIN_CONSO.includes(String((typeof M !== "undefined" && (M.moi || M).ident) || "").toLowerCase());
 function rendreNavigation(actif) {
   const comptes = comptesNav();
   const lien = (o, bas) => {
@@ -360,6 +451,16 @@ function rendreNavigation(actif) {
     document.querySelector(".entete-in").appendChild(profil);
   }
   profil.hidden = !(E && enSuivi());
+  // Le profil d'un autre membre de la famille est ouvert (Taha, 28/11/2026) : on le voit, on revient à soi d'un geste.
+  let bandeau = $("bandeauProfil");
+  if (!bandeau) {
+    bandeau = document.createElement("div");
+    bandeau.id = "bandeauProfil"; bandeau.className = "bandeau-profil";
+    document.querySelector(".entete").after(bandeau);
+  }
+  bandeau.hidden = !(E && autreProfil());
+  bandeau.innerHTML = E && autreProfil() ? `<div class="cadre">${icone("user-circle")}<span>Profil de <b>${esc(E.profil.nom)}</b></span>
+    <button type="button" class="lien" data-moi>Revenir à moi</button></div>` : "";
   // Budget : une icône en haut, à côté du profil, pour Taha seulement pour l'instant (Taha, 22/11/2026).
   let budget = $("enteteBudget");
   if (!budget) {
@@ -368,7 +469,7 @@ function rendreNavigation(actif) {
     budget.setAttribute("aria-label", "Budget"); budget.title = "Budget";
     document.querySelector(".entete-in").insertBefore(budget, profil);
   }
-  budget.hidden = !(E && enSuivi() && BUDGET_POUR.includes(String((typeof M !== "undefined" && M.ident) || E.utilisateur.id || "").toLowerCase()));
+  budget.hidden = !(E && enSuivi() && BUDGET_POUR.includes(String((typeof M !== "undefined" && (M.moi || M).ident) || E.utilisateur.id || "").toLowerCase()));
   budget.innerHTML = icone("wallet");
   if (actif === "budget") budget.setAttribute("aria-current", "page"); else budget.removeAttribute("aria-current");
   const nDemandes = demandesFamille().length;
@@ -2612,20 +2713,85 @@ async function famille(action, args = {}, message = "") {
   const avant = enFamille();
   M.familleEtat = data;
   if (message) dire(message);
+  // Une notification sur le téléphone de l'autre (Taha, 28/11/2026) : la demande au créateur, l'accord au nouveau membre.
+  if (typeof notifier === "function") {
+    if (action === "famille_rejoindre" && data && data.statut === "attente") notifier("demande");
+    if (action === "famille_repondre" && args.p_accepter) notifier("accepte", { membre: args.p_user });
+  }
   // Entrer dans une famille ou en sortir change le stock et la composition : le moteur repart avec.
   if (avant !== (data && data.statut === "membre")) { await relancerMoteur(); return data; }
   M.famille = data && data.statut === "membre" ? data : null;
   rendre();
   return data;
 }
+// Les notifications sur ce téléphone (Taha, 28/11/2026) : un bouton pour les activer, rempli après le rendu.
+function blocNotifications(texte) {
+  apresRendu.push(async function maj() {
+    const z = $("famNotif");
+    if (!z || typeof notificationsActives !== "function") return;
+    const actif = await notificationsActives();
+    z.innerHTML = actif ? `<span class="fam-notif-ok">${icone("check")}Actives sur ce téléphone</span><button type="button" class="lien" id="famNotifCouper">Couper</button>`
+      : `<button type="button" class="bouton second" id="famNotifOn">${icone("bell")}Activer sur ce téléphone</button>`;
+    const b = $("famNotifOn"), c = $("famNotifCouper");
+    if (b) b.addEventListener("click", async () => {
+      b.disabled = true;
+      try { await activerNotifications(); dire("Notifications activées sur ce téléphone."); } catch (e) { dire(e.message || "Notifications impossibles."); }
+      maj();
+    });
+    if (c) c.addEventListener("click", async () => { await couperNotifications(); dire("Notifications coupées."); maj(); });
+  });
+  return `<section class="bloc fam-bloc"><h2>Notifications</h2><p class="petit discret">${texte}</p><div id="famNotif" class="fam-notif"></div></section>`;
+}
+// Un membre sans téléphone (Taha, 28/11/2026) : son profil se crée ici, s'ouvre depuis le téléphone des autres.
+function formulaireMembre() {
+  const d = $("dialogue"), i = E.profil.identite || {};
+  const choix = (id, options, v) => `<select id="${id}">${options.map(([k, t]) => `<option value="${k}"${k === v ? " selected" : ""}>${t}</option>`).join("")}</select>`;
+  d.innerHTML = `<form class="feuille formulaire" novalidate id="fMembre">
+    <h2 id="dialogueTitre">Un membre sans téléphone</h2>
+    <p class="petit discret">Un enfant, un parent… Son profil s'ouvre depuis le téléphone des autres membres ; il reçoit les menus de la famille, à ses quantités.</p>
+    <div class="champs2"><div class="champ"><label for="mbPrenom">Prénom</label><input id="mbPrenom" maxlength="40" autocomplete="off"></div>
+      <div class="champ"><label for="mbNom">Nom</label><input id="mbNom" maxlength="60" autocomplete="off" value="${esc(i.nom_famille || "")}"></div></div>
+    <div class="champs2"><div class="champ"><label for="mbNaissance">Date de naissance</label><input id="mbNaissance" type="date"></div>
+      <div class="champ"><label for="mbSexe">Sexe</label>${choix("mbSexe", [["femme", "Femme"], ["homme", "Homme"]], "femme")}</div></div>
+    <div class="champs2"><div class="champ"><label for="mbTaille">Taille, en cm</label><input id="mbTaille" inputmode="numeric"></div>
+      <div class="champ"><label for="mbPoids">Poids, en kg</label><input id="mbPoids" inputmode="decimal"></div></div>
+    <div class="champs2"><div class="champ"><label for="mbActivite">Activité</label>${choix("mbActivite", [["sedentaire", "Sédentaire"], ["leger", "Un peu actif"], ["modere", "Actif"], ["actif", "Très actif"], ["intense", "Sport intense"]], "leger")}</div>
+      <div class="champ"><label for="mbObjectif">Objectif</label>${choix("mbObjectif", [["perte", "Perdre du poids"], ["maintien", "Garder son poids"], ["prise", "Prendre du muscle"]], "maintien")}</div></div>
+    <div class="champ"><label for="mbIdent">Identifiant</label><input id="mbIdent" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false">
+      <small>Sert seulement à le reconnaître : il ne se connecte pas.</small></div>
+    <small id="eMb" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
+    <div class="actions pied"><button class="bouton second" type="button" value="non">Annuler</button><button class="bouton" type="submit">Créer son profil</button></div></form>`;
+  let identTouche = false;
+  $("mbIdent").addEventListener("input", () => { identTouche = true; });
+  $("mbPrenom").addEventListener("input", () => {
+    if (!identTouche) $("mbIdent").value = sansAcc($("mbPrenom").value).replace(/[^a-z0-9]+/g, "").slice(0, 14) + "-" + (M.moi.ident || "").slice(0, 5);
+  });
+  d.querySelector("[value=non]").addEventListener("click", () => d.close("non"));
+  d.querySelector("form").addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const v = id => $(id).value.trim(), erreur = m => { $("eMb").textContent = m; };
+    if (!v("mbPrenom") || !v("mbNom")) return erreur("Prénom et nom, s'il te plaît.");
+    if (!v("mbNaissance")) return erreur("Sa date de naissance, pour ses besoins en calories.");
+    if (!(Number(v("mbTaille")) > 50) || !(Number(v("mbPoids").replace(",", ".")) > 15)) return erreur("Sa taille (cm) et son poids (kg).");
+    const b = d.querySelector("[type=submit]");
+    b.disabled = true; b.textContent = "Création…"; erreur("");
+    try {
+      await ajouterMembreSansTelephone({ prenom: v("mbPrenom"), nom_famille: v("mbNom"), date_naissance: v("mbNaissance"), sexe: v("mbSexe"),
+        taille_cm: v("mbTaille"), poids_kg: v("mbPoids").replace(",", "."), activite: v("mbActivite"), objectif: v("mbObjectif"),
+        identifiant: v("mbIdent").toLowerCase(), pays: i.pays || paysProbable() });
+      d.close("oui"); rendre(); dire(`Profil de ${v("mbPrenom")} créé : il est dans la famille.`);
+    } catch (e) { erreur(e.message || "Création impossible."); b.disabled = false; b.textContent = "Créer son profil"; }
+  });
+  if (!d.open) d.showModal();
+}
 function vueFamille() {
   barre("");
   if (typeof sb === "undefined") return vueIntrouvable();
   const f = M.familleEtat, tete = `<a class="retour" href="#/profil">${icone("caret-left")}Profil</a>
-    <div class="m-tete"><div><h1 tabindex="-1">Ma famille</h1><p class="petit discret">Un stock commun, et les mêmes plats pour tous, chacun à ses quantités.</p></div></div>`;
+    <div class="m-tete"><div><h1 tabindex="-1">Ma famille</h1><p class="petit discret">Un stock commun, les mêmes plats pour tous, chacun à ses quantités. Chacun peut ouvrir le profil des autres.</p></div></div>`;
   apresRendu.push(() => {
     const on = (id, fn) => { const b = $(id); if (b) b.addEventListener("click", fn); };
-    on("famCreer", () => sb.from("fichiers").select("nom, contenu").in("nom", ["stock.csv", "mouvements.csv"]).then(({ data }) => {
+    on("famCreer", () => sb.from("fichiers").select("nom, contenu").eq("user_id", (M.moi || M).uid).in("nom", ["stock.csv", "mouvements.csv"]).then(({ data }) => {
       const c = n => ((data || []).find(x => x.nom === n) || {}).contenu || "";
       famille("famille_creer", { p_nom: $("famNom").value.trim(), p_stock: c("stock.csv"), p_mouvements: c("mouvements.csv") }, "Famille créée.");
     }));
@@ -2634,6 +2800,14 @@ function vueFamille() {
     document.querySelectorAll("[data-fam-repondre]").forEach(b => b.addEventListener("click", () =>
       famille("famille_repondre", { p_user: b.dataset.famRepondre, p_accepter: b.dataset.oui === "1" }, b.dataset.oui === "1" ? "Accepté dans la famille." : "Demande refusée.")));
     on("famCopier", () => navigator.clipboard && navigator.clipboard.writeText(f.famille.code).then(() => dire("Code copié.")));
+    on("famAjouter", formulaireMembre);
+    document.querySelectorAll("[data-fam-retirer]").forEach(b => b.addEventListener("click", async () => {
+      const m = (f.membres || []).find(x => x.id === b.dataset.famRetirer);
+      if (!m || !await confirmer({ titre: `Retirer ${nomMembre(m)} ?`, oui: "Retirer", non: "Garder",
+        texte: "Son profil, ses menus et ses repas sont effacés pour de bon." })) return;
+      try { await retirerMembreSansTelephone(m.id); dire(`${nomMembre(m)} est retiré de la famille.`); rendre(); }
+      catch (e) { dire(e.message || "Impossible de le retirer."); }
+    }));
     on("famQuitter", async () => {
       const chef = f.famille && f.famille.createur && f.statut === "membre";
       if (await confirmer({ titre: f.statut === "attente" ? "Annuler la demande ?" : chef ? "Dissoudre la famille ?" : "Quitter la famille ?",
@@ -2650,20 +2824,29 @@ function vueFamille() {
       <div class="fam-ligne"><input id="famCode" type="text" maxlength="12" placeholder="FAM-XXXX" aria-label="Code de la famille" autocapitalize="characters" autocomplete="off" spellcheck="false">
       <button type="button" class="bouton second" id="famRejoindre">Rejoindre</button></div></section>`;
   if (f.statut === "attente") return tete + `<section class="bloc fam-bloc"><h2>Demande envoyée</h2>
-    <p class="petit discret">Ta demande pour rejoindre « ${esc(f.famille.nom)} » attend l'accord de ${esc(f.famille.createur_ident || "son créateur")}. Rouvre l'appli une fois acceptée.</p>
-    <button type="button" class="bouton sobre" id="famQuitter">${icone("x")}Annuler la demande</button></section>`;
+    <p class="petit discret">Ta demande pour rejoindre « ${esc(f.famille.nom)} » attend l'accord de ${esc(f.famille.createur_ident || "son créateur")}.</p>
+    <button type="button" class="bouton sobre" id="famQuitter">${icone("x")}Annuler la demande</button></section>
+    ${blocNotifications("Pour savoir dès que ta demande est acceptée, même appli fermée.")}`;
   const membres = (f.membres || []).filter(m => m.statut === "membre"), attente = (f.membres || []).filter(m => m.statut === "attente");
+  const ligneMembre = m => `<li class="fam-membre"><i class="av" aria-hidden="true">${esc(nomMembre(m).charAt(0))}</i>
+      <span class="fam-nom"><b>${esc(nomMembre(m))}${m.moi ? " (toi)" : ""}</b><small>${m.createur ? "compose les menus" : "reçoit les menus"}${m.sans_telephone ? " · sans téléphone" : ""}</small></span>
+      ${m.id === M.uid ? `<span class="q">affiché</span>` : `<button type="button" class="bouton sobre" data-fam-profil="${m.id}">Ouvrir</button>`}
+      ${m.sans_telephone ? `<button type="button" class="effacer" data-fam-retirer="${m.id}" aria-label="Retirer ${esc(nomMembre(m))}">${icone("x")}</button>` : ""}</li>`;
   return tete + `
     <section class="bloc fam-bloc"><h2>${esc(f.famille.nom)}</h2>
       <div class="fam-code"><span>Code pour rejoindre</span><b class="chiffres">${esc(f.famille.code || "")}</b><button type="button" class="bouton sobre" id="famCopier">${icone("copy")}Copier</button></div>
-      <ul class="lignes">${membres.map(m => `<li><span>${esc(m.identifiant)}${m.moi ? " (toi)" : ""}</span><span class="q">${m.createur ? "compose les menus" : "reçoit les menus"}</span></li>`).join("")}</ul></section>
+      <ul class="lignes fam-membres">${membres.map(ligneMembre).join("")}</ul>
+      <p style="margin:10px 0 0"><button type="button" class="lien" id="famAjouter">+ Ajouter un membre sans téléphone</button></p></section>
     ${attente.length ? `<section class="bloc fam-bloc"><h2>Demandes</h2><ul class="lignes">${attente.map(m => `<li><span>${esc(m.identifiant)}</span>
       <span class="fam-choix"><button type="button" class="bouton sobre" data-fam-repondre="${m.id}" data-oui="0">Refuser</button>
       <button type="button" class="bouton" data-fam-repondre="${m.id}" data-oui="1">Accepter</button></span></li>`).join("")}</ul></section>` : ""}
+    ${blocNotifications(f.famille.createur ? "Quand quelqu'un demande à entrer, ou change un plat pour toute la famille." : "Quand quelqu'un change un plat pour toute la famille.")}
     <section class="bloc fam-bloc"><h2>Comment ça marche</h2><ul class="fam-regles petit discret">
       <li>Le stock est le même pour tous : ce que chacun mange en sort.</li>
       <li>${f.famille.createur ? "Tu composes les menus" : `${esc(f.famille.createur_ident || "Le créateur")} compose les menus`} ; chacun reçoit les mêmes plats, à ses calories.</li>
-      <li>Quand tu changes, ajoutes ou retires un plat, l'appli te demande si c'est pour toi seul ou pour toute la famille.</li></ul></section>
+      <li>Sur l'écran du jour, « Tous » montre la dose de chacun, plat par plat ; un prénom ouvre son profil.</li>
+      <li>Quand tu changes, ajoutes ou retires un plat, l'appli te demande si c'est pour toi seul ou pour toute la famille.</li>
+      <li>Le suivi (poids, mesures, silhouette) reste privé.</li></ul></section>
     <p><button type="button" class="bouton sobre" id="famQuitter">${icone("sign-out")}${f.famille.createur ? "Dissoudre la famille" : "Quitter la famille"}</button></p>`;
 }
 function vueProfils() {
@@ -3470,16 +3653,24 @@ function vueJourSuivi(params) {
     const x = idees.plats[Number(b.dataset.idee)];
     apercuChangement(idees.semaine, { ...x.operation, regler_plat: true }, `Ajouter « ${x.nom} » ?`);
   })));
+  const navJours = `<nav class="jours jours-suivi" aria-label="Jour">${dec > dmin ? `<a class="fleche" href="#/semaine?d=${Math.min(dec, 0) - 1}" aria-label="Jour d'avant">${icone("caret-left")}</a>` : ""}
+      ${dec < 0 ? `<a href="#/semaine?d=${dec}" aria-current="true">${dec === -1 ? "Hier" : esc(bulle)}</a>` : ""}
+      ${dec < -1 ? `<a class="fleche" href="#/semaine?d=${dec + 1}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}
+      <a href="#/semaine"${dec ? "" : ' aria-current="true"'}>Aujourd'hui</a>
+      <a href="#/semaine?d=1"${demain ? ' aria-current="true"' : ""}>Demain</a></nav>`;
+  // En famille, « Tous » : les doses de chacun pour ce jour, plat par plat (Taha, 28/11/2026).
+  if (VUE_TOUS && enFamille() && membresDeLaFamille().length > 1) return `<div class="rubrique-jour"><div class="m-tete">
+      <div><h1 tabindex="-1">${dec === 0 ? "Aujourd'hui" : demain ? "Demain" : dec === -1 ? "Hier" : esc(nomJour)}</h1><p class="petit discret">${esc(dateLongueCourte(date))}</p></div></div>
+    ${navJours}
+    ${choixProfils()}
+    <div class="doses">${vueDoses(date)}</div></div>`;
   return `<div class="rubrique-jour"><div class="m-tete">
       <div><h1 tabindex="-1">${dec === 0 ? "Aujourd'hui" : demain ? "Demain" : dec === -1 ? "Hier" : esc(nomJour)}</h1><p class="petit discret">${esc(dateLongueCourte(date))}</p></div>
       <div class="ligne-boutons"><a class="bouton sobre rond" href="#/historique" aria-label="Historique des repas">${icone("notebook")}</a>
 </div>
     </div>
-    <nav class="jours jours-suivi" aria-label="Jour">${dec > dmin ? `<a class="fleche" href="#/semaine?d=${Math.min(dec, 0) - 1}" aria-label="Jour d'avant">${icone("caret-left")}</a>` : ""}
-      ${dec < 0 ? `<a href="#/semaine?d=${dec}" aria-current="true">${dec === -1 ? "Hier" : esc(bulle)}</a>` : ""}
-      ${dec < -1 ? `<a class="fleche" href="#/semaine?d=${dec + 1}" aria-label="Jour suivant">${icone("caret-right")}</a>` : ""}
-      <a href="#/semaine"${dec ? "" : ' aria-current="true"'}>Aujourd'hui</a>
-      <a href="#/semaine?d=1"${demain ? ' aria-current="true"' : ""}>Demain</a></nav>
+    ${navJours}
+    ${choixProfils()}
     ${dec === 1 ? `<p class="petit discret" style="margin:-2px 0 12px">Provisoire : les quantités de demain se règlent demain matin, d'après ce que tu auras vraiment mangé aujourd'hui.</p>` : ""}
     ${dec === 0 ? alerteFamille() : ""}
     ${jaugesDuJour(j, o, mangeJour)}
@@ -3910,6 +4101,10 @@ function vueSuivi({ params }) {
   // Poids chaque jour, biceps et tour de hanches avant et après la séance. Sur iPhone : les chiffres d'abord,
   // une carte pour noter, une courbe à la fois, l'historique en bas (Taha, 19/11/2026).
   barre("");
+  // Le suivi reste privé, même en famille (Taha, 28/11/2026) : pas sur le profil d'un autre membre.
+  if (autreProfil()) return `<div class="titre"><h1 tabindex="-1">Suivi</h1></div>
+    <div class="vide"><h2>Le suivi de ${esc(E.profil.nom)} reste privé</h2><p>Poids, mesures et silhouette ne se voient que sur son propre profil.</p>
+    <button type="button" class="bouton second" data-moi>Revenir à moi</button></div>`;
   const m = E.suivi || [], date = /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") || "") ? params.get("date") : isoDuJour();
   const courbe = ["poids", "biceps", "tour", "torse"].includes(params.get("c")) ? params.get("c") : "poids";
   const ce = m.find(x => x.date === date) || {};
@@ -4131,8 +4326,9 @@ function vueReglagesFlemmard() {
   const saisie = (id, nom, v, type = "text", plus = "") => `<input id="${id}" name="${nom}" type="${type}" value="${esc(v ?? "")}" autocomplete="off" ${plus}>`;
   const choix = (id, nom, v, options) => `<select id="${id}" name="${nom}">${options.map(([k, t]) => `<option value="${k}"${String(k) === String(v) ? " selected" : ""}>${t}</option>`).join("")}</select>`;
   const obj = { "Perte de poids": "perte", "Maintien": "maintien", "Prise de muscle": "prise" }[E.profil.programme] || "maintien";
+  const autre = autreProfil();
   return `<a class="retour" href="#/profil">${icone("caret-left")}Profil</a>
-  <div class="titre"><h1 tabindex="-1">Réglages</h1></div>
+  <div class="titre"><h1 tabindex="-1">Réglages${autre ? ` de ${esc(E.profil.nom)}` : ""}</h1></div>
   <div class="reglages">
   <section class="bloc" aria-labelledby="tRepas" data-resume="${esc(resumeAlimentation(r, fodmap))}"><h2 id="tRepas">Mon alimentation</h2>
     <div class="options">
@@ -4163,14 +4359,14 @@ function vueReglagesFlemmard() {
       <small id="eMesInfos" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
       <button class="bouton second" type="submit">Enregistrer mes informations</button>
     </form></section>
-  ${typeof blocClaude === "function" ? blocClaude() : ""}
+  ${!autre && typeof blocClaude === "function" ? blocClaude() : ""}
   ${(() => { apresRendu.push(async () => {
       const f = $("fCoord"); if (!f) return;
       try { const r = await fetch("/api/compte/moi"); if (!r.ok) throw 0; const m = await r.json();
         if (m.erreur) throw 0; $("cEmail").value = m.email || ""; telRemplir($("cTel"), m.telephone); }
       catch (e) { f.hidden = true; }                   // sur le PC : pas de compte en ligne
     }); return ""; })()}
-  <section class="bloc" aria-labelledby="tLangue" data-resume="${esc((LANGUES.find(x => x[0] === LANGUE) || LANGUES[0])[1])}"><h2 id="tLangue">Langue</h2>
+  ${autre ? "" : `<section class="bloc" aria-labelledby="tLangue" data-resume="${esc((LANGUES.find(x => x[0] === LANGUE) || LANGUES[0])[1])}"><h2 id="tLangue">Langue</h2>
     <p class="doux petit sous-titre">L'appli s'affiche dans cette langue. Au départ, celle de ton téléphone.</p>
     ${choixLangue()}</section>
   <section class="bloc" aria-labelledby="tCompte" data-resume="Email, mot de passe"><h2 id="tCompte">Mon compte</h2>
@@ -4187,7 +4383,7 @@ function vueReglagesFlemmard() {
         <small id="eMdpN" class="erreur" role="alert" style="display:block;color:var(--critique)"></small></div>
       <button class="bouton second" type="submit">Changer le mot de passe</button></form>
   </section>
-  <p class="reg-fin"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>
+  <p class="reg-fin"><button class="bouton sobre" data-action="deconnexion">${icone("sign-out")}Se déconnecter</button></p>`}
   </div>${(apresRendu.push(plierReglages), "")}`;
 }
 // Réglages en lignes repliables, comme les réglages du téléphone (Taha, 22/11/2026 : « pas belle, des trucs très

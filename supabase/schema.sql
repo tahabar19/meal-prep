@@ -247,3 +247,81 @@ create table if not exists public.reponses_ia (
 alter table public.reponses_ia enable row level security;      -- aucune règle : seules les fonctions y touchent
 -- La durée de chaque appel (secondes d'attente côté téléphone), pour la page « Suivi de conso ».
 alter table public.usage_claude add column if not exists duree_ms integer;
+
+-- ---------- Famille ouverte (Taha, 28/11/2026 : « on peut changer de profil facilement sur un téléphone, ça donne
+-- les doses de tous les membres dans un seul téléphone » ; choix : tout le monde ouvre le profil de tout le monde) ----------
+-- Chaque membre lit et modifie les fichiers des autres membres de sa famille (journée, doses, repas mangés, plats).
+-- Le suivi (poids, mesures, silhouette du miroir) reste privé : suivi.json et silhouette*.
+create or replace function public.de_ma_famille(p_user uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from membres_famille a join membres_famille b on b.famille_id = a.famille_id
+    where a.user_id = auth.uid() and a.statut = 'membre' and b.user_id = p_user and b.statut = 'membre')
+$$;
+create or replace function public.dossier_de_ma_famille(p_dossier text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from membres_famille a join membres_famille b on b.famille_id = a.famille_id
+    where a.user_id = auth.uid() and a.statut = 'membre' and b.user_id::text = p_dossier and b.statut = 'membre')
+$$;
+revoke all on function public.de_ma_famille(uuid), public.dossier_de_ma_famille(text) from public, anon;
+grant execute on function public.de_ma_famille(uuid), public.dossier_de_ma_famille(text) to authenticated;
+
+drop policy if exists "fichiers de la famille ouverts" on public.fichiers;
+create policy "fichiers de la famille ouverts" on public.fichiers for all to authenticated
+  using (public.de_ma_famille(user_id) and nom <> 'suivi.json' and nom not like 'silhouette%')
+  with check (public.de_ma_famille(user_id) and nom <> 'suivi.json' and nom not like 'silhouette%');
+drop policy if exists "journal ecrit pour la famille" on public.journal;
+create policy "journal ecrit pour la famille" on public.journal for insert to authenticated with check (public.de_ma_famille(user_id));
+drop policy if exists "photos de la famille ecrites" on storage.objects;
+create policy "photos de la famille ecrites" on storage.objects for insert to authenticated
+  with check (bucket_id = 'photos' and public.dossier_de_ma_famille((storage.foldername(name))[1]));
+drop policy if exists "photos de la famille changees" on storage.objects;
+create policy "photos de la famille changees" on storage.objects for update to authenticated
+  using (bucket_id = 'photos' and public.dossier_de_ma_famille((storage.foldername(name))[1]));
+drop policy if exists "photos de la famille retirees" on storage.objects;
+create policy "photos de la famille retirees" on storage.objects for delete to authenticated
+  using (bucket_id = 'photos' and public.dossier_de_ma_famille((storage.foldername(name))[1]));
+drop policy if exists "photos de la famille listees" on storage.objects;
+create policy "photos de la famille listees" on storage.objects for select to authenticated
+  using (bucket_id = 'photos' and public.dossier_de_ma_famille((storage.foldername(name))[1]));
+
+-- Un membre sans téléphone (enfant…), créé par un membre de la famille : un compte sans mot de passe connu.
+alter table public.profils add column if not exists sans_telephone boolean not null default false;
+
+create or replace function public.famille_etat() returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare m record; f record;
+begin
+  select * into m from membres_famille where user_id = auth.uid();
+  if not found then return jsonb_build_object('famille', null); end if;
+  select * into f from familles where id = m.famille_id;
+  return jsonb_build_object('statut', m.statut, 'famille', jsonb_build_object('id', f.id, 'nom', f.nom,
+      'code', case when m.statut = 'membre' then f.code end, 'createur', f.createur = auth.uid(),
+      'createur_id', case when m.statut = 'membre' then f.createur end,
+      'createur_ident', (select identifiant from profils where id = f.createur)),
+    'membres', case when m.statut = 'membre' then (select coalesce(jsonb_agg(jsonb_build_object('id', mf.user_id,
+        'identifiant', p.identifiant, 'statut', mf.statut, 'createur', mf.user_id = f.createur, 'moi', mf.user_id = auth.uid(),
+        'sans_telephone', p.sans_telephone)
+        order by mf.statut desc, mf.demande_le), '[]') from membres_famille mf join profils p on p.id = mf.user_id
+        where mf.famille_id = f.id and (mf.statut = 'membre' or f.createur = auth.uid())) end);
+end $$;
+
+-- ---------- Notifications sur le téléphone (Taha, 28/11/2026 : « le responsable ne reçoit jamais la notif ») ----------
+-- Abonnements Web Push de chaque appareil, et ce qui a été envoyé (pour borner les envois). Fonctions seulement.
+create table if not exists public.abonnements_push (
+  endpoint text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  p256dh text not null,
+  auth text not null,
+  appareil text,
+  cree timestamptz not null default now()
+);
+alter table public.abonnements_push enable row level security;
+create table if not exists public.notifications (
+  id bigint generated always as identity primary key,
+  de uuid references auth.users(id) on delete set null,
+  pour uuid references auth.users(id) on delete cascade,
+  type text not null,
+  titre text not null,
+  envoyees integer not null default 0,
+  quand timestamptz not null default now()
+);
+alter table public.notifications enable row level security;
