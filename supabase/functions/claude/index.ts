@@ -289,6 +289,44 @@ Deno.serve(async (req) => {
     if (!user) return json({ erreur: "Reconnecte-toi." }, 401);
     const corps = await req.json();
 
+    // ---------- Reprise après une coupure (Taha, 28/11/2026 : « Pas de réseau » à chaque fois) ----------
+    // Le téléphone renvoie la MÊME demande (même numéro) quand la connexion a coupé pendant le calcul (appli mise de
+    // côté, écran verrouillé, réseau qui saute). La réponse gardée repart sans refaire ni repayer l'appel ; si le
+    // premier calcul tourne encore, on attend sa fin. Le calcul va toujours jusqu'au bout, même téléphone parti.
+    const demande = typeof corps.demande === "string" && /^[\w-]{8,64}$/.test(corps.demande) ? corps.demande : "";
+    if (demande && REPRISE.includes(corps.action)) {
+      const { error } = await admin.from("reponses_ia").insert({ user_id: user.id, demande, action: corps.action });
+      if (error) {                                              // déjà reçue : sa réponse, dès qu'elle est prête
+        for (let t = 0; t < 100; t++) {
+          const { data: r } = await admin.from("reponses_ia").select("statut, http, reponse").eq("user_id", user.id).eq("demande", demande).maybeSingle();
+          if (!r) break;
+          if (r.statut === "fini") return json(r.reponse, r.http || 200);
+          await new Promise((ok) => setTimeout(ok, 500));
+        }
+        return json({ erreur: "L'IA calcule encore : réessaie dans un instant.", encore: true }, 409);
+      }
+      if (Math.random() < 0.1) admin.from("reponses_ia").delete().lt("quand", new Date(Date.now() - 7200e3).toISOString()).then(() => {}, () => {});
+      const travail = traiter(admin, user, corps);
+      const garder = async (rep: Response) => {
+        let reponse: unknown = null;
+        try { reponse = JSON.parse(await rep.clone().text()); } catch { reponse = { erreur: "Réponse illisible." }; }
+        await admin.from("reponses_ia").update({ statut: "fini", http: rep.status, reponse }).eq("user_id", user.id).eq("demande", demande);
+      };
+      const oublier = () => admin.from("reponses_ia").delete().eq("user_id", user.id).eq("demande", demande);
+      const fin = travail.then(garder, oublier).then(() => {}, () => {});
+      (globalThis as any).EdgeRuntime?.waitUntil?.(fin);
+      return await travail;
+    }
+    return await traiter(admin, user, corps);
+  } catch (e) {
+    return json({ erreur: (e as Error).message || String(e) }, 500);
+  }
+});
+
+const REPRISE = ["messages", "image", "recette_lien"];
+
+async function traiter(admin: any, user: any, corps: any): Promise<Response> {
+  {
     if (corps.action === "image") {                     // l'IA d'images de Taha, pour la famille ; pas pour les comptes d'essai
       const { data: moi } = await admin.from("profils").select("identifiant").eq("id", user.id).maybeSingle();
       if (!moi || moi.identifiant.startsWith("zz-")) return json({ erreur: "Pas d'images pour ce compte.", sans_cle: true }, 400);
@@ -333,8 +371,9 @@ Deno.serve(async (req) => {
 
     if (corps.action === "image") {
       try {
+        const t0 = Date.now();
         const r = await imagePlat(corps);
-        await noter(admin, appel, { modele: r.modele, cle: "gemini", tokens_entree: r.usage.promptTokenCount ?? null,
+        await noter(admin, appel, { modele: r.modele, cle: "gemini", duree_ms: Date.now() - t0, tokens_entree: r.usage.promptTokenCount ?? null,
                                     tokens_sortie: r.usage.candidatesTokenCount ?? null });
         return json({ base64: r.base64, type: r.type });
       }
@@ -380,14 +419,16 @@ Deno.serve(async (req) => {
       // Opus était le modèle par défaut jusqu'au 20/11/2026 : les comptes branchés avec lui passent à Sonnet.
       const modele = (k.modele && k.modele !== "claude-opus-5-5" ? k.modele : null) || MODELE;
       const demande: any = {                                  // la consigne vient d'ici, jamais de la page
-        model: modele, max_tokens: Math.min(4000, Math.max(256, Number(corps.max_tokens) || 4000)),
+        // 8 000 au plus (28/11/2026) : à 4 000, une grosse recette était coupée net (« répondu à côté »).
+        model: modele, max_tokens: Math.min(8000, Math.max(256, Number(corps.max_tokens) || 4000)),
         system: consigne(tache), messages: [{ role: "user", content: blocs }],
       };
       try {
         const c = client(k as Connexion);
+        const t0 = Date.now();
         const r: any = await c.messages.create(demande);
         const u = r.usage || {};
-        await noter(admin, appel, { modele: r.model || modele, cle: propre ? "perso" : "partagee",
+        await noter(admin, appel, { modele: r.model || modele, cle: propre ? "perso" : "partagee", duree_ms: Date.now() - t0,
           tokens_entree: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0),
           tokens_sortie: u.output_tokens ?? null });
         if (r.stop_reason === "refusal") return json({ erreur: "Claude a refusé de répondre à cette demande." }, 400);
@@ -403,7 +444,5 @@ Deno.serve(async (req) => {
       }
     }
     return json({ erreur: "Action inconnue." }, 400);
-  } catch (e) {
-    return json({ erreur: (e as Error).message || String(e) }, 500);
   }
-});
+}

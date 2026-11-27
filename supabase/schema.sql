@@ -230,3 +230,20 @@ revoke all on function public.famille_creer(text, text, text), public.famille_re
   public.famille_quitter(), public.famille_etat() from public, anon;
 grant execute on function public.famille_creer(text, text, text), public.famille_rejoindre(text), public.famille_repondre(uuid, boolean),
   public.famille_quitter(), public.famille_etat(), public.ma_famille() to authenticated;
+
+-- ---------- Reprise d'un appel à l'IA après une coupure (Taha, 28/11/2026 : « Pas de réseau » à chaque fois) ----------
+-- Le téléphone renvoie la même demande (même numéro) quand la connexion a coupé pendant le calcul : la fonction
+-- « claude » rend la réponse gardée ici au lieu de refaire (et repayer) l'appel. Lignes effacées au bout de 2 heures.
+create table if not exists public.reponses_ia (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  demande text not null,
+  action text not null,
+  statut text not null default 'encours',
+  http integer,
+  reponse jsonb,
+  quand timestamptz not null default now(),
+  primary key (user_id, demande)
+);
+alter table public.reponses_ia enable row level security;      -- aucune règle : seules les fonctions y touchent
+-- La durée de chaque appel (secondes d'attente côté téléphone), pour la page « Suivi de conso ».
+alter table public.usage_claude add column if not exists duree_ms integer;

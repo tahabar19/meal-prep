@@ -225,6 +225,32 @@ function confirmer({ titre, texte, oui, non = "Annuler" }) {
 // Mode famille (Taha, 23/11/2026) : un plat changé, ajouté ou retiré vaut pour soi seul, ou pour toute la famille
 // (chacun à ses quantités). Rien à demander hors famille. → {} ou { famille: { date, moments } } à joindre à la requête.
 const enFamille = () => typeof M !== "undefined" && !!M.famille;
+// Quelqu'un demande à entrer dans la famille (Taha, 28/11/2026 : le créateur ne le voyait jamais) : une alerte en haut
+// du jour avec Accepter / Refuser, un point sur Profil, et « N demandes » sur la ligne Ma famille.
+const demandesFamille = () => {
+  const f = typeof M !== "undefined" && M.familleEtat;
+  return f && f.statut === "membre" && f.famille && f.famille.createur ? (f.membres || []).filter(m => m.statut === "attente") : [];
+};
+function alerteFamille() {
+  const a = demandesFamille();
+  if (!a.length) return "";
+  return `<div class="fam-alerte" role="status">${icone("users")}<span class="fam-alerte-txt">${a.length === 1
+    ? `<b>${esc(a[0].identifiant)}</b> veut rejoindre ta famille` : `<b>${a.length} personnes</b> veulent rejoindre ta famille`}</span>
+    ${a.length === 1 ? `<span class="fam-alerte-choix"><button type="button" class="bouton sobre" data-fam-alerte="${a[0].id}" data-oui="0">Refuser</button>
+      <button type="button" class="bouton" data-fam-alerte="${a[0].id}" data-oui="1">Accepter</button></span>` : `<a class="bouton" href="#/famille">Voir</a>`}</div>`;
+}
+document.addEventListener("click", ev => {
+  const b = ev.target.closest && ev.target.closest("[data-fam-alerte]");
+  if (!b) return;
+  b.disabled = true;
+  famille("famille_repondre", { p_user: b.dataset.famAlerte, p_accepter: b.dataset.oui === "1" }, b.dataset.oui === "1" ? "Accepté dans la famille." : "Demande refusée.");
+});
+// Le statut de la famille a changé ailleurs (demande reçue, acceptée…) : l'écran suit, sauf pendant une saisie.
+function familleChange() {
+  const d = $("dialogue");
+  if ((d && d.open) || document.body.classList.contains("clavier") || !E) return;
+  rendre();
+}
 const dateFamille = (k, n) => { const s = k === (E.mois ? E.mois.rang : 0) ? E.semaine : planDe(k);
   return s && s.debut ? new Date(new Date(s.debut + "T12:00").getTime() + n * 864e5).toISOString().slice(0, 10) : ""; };
 async function pourQui(date, moments) {
@@ -345,8 +371,9 @@ function rendreNavigation(actif) {
   budget.hidden = !(E && enSuivi() && BUDGET_POUR.includes(String((typeof M !== "undefined" && M.ident) || E.utilisateur.id || "").toLowerCase()));
   budget.innerHTML = icone("wallet");
   if (actif === "budget") budget.setAttribute("aria-current", "page"); else budget.removeAttribute("aria-current");
-  profil.innerHTML = `${icone("user-circle")}<span>Profil</span>`;
-  profil.setAttribute("aria-label", E ? `Profil de ${E.profil.nom}` : "Profil");
+  const nDemandes = demandesFamille().length;
+  profil.innerHTML = `${icone("user-circle")}<span>Profil</span>${nDemandes ? '<i class="point-alerte" aria-hidden="true"></i>' : ""}`;
+  profil.setAttribute("aria-label", (E ? `Profil de ${E.profil.nom}` : "Profil") + (nDemandes ? ` (${nDemandes} demande${nDemandes > 1 ? "s" : ""} pour ta famille)` : ""));
   if (actif === "profil") profil.setAttribute("aria-current", "page"); else profil.removeAttribute("aria-current");
   $("navHaut").innerHTML = E ? onglets.map(o => lien(o, false)).join("") : "";
 }
@@ -2511,7 +2538,7 @@ function vueProfilFlemmard() {
       ${i.taille_cm ? l("Taille", `${i.taille_cm} cm`) : ""}${i.poids_kg ? l("Poids", `${nombre(i.poids_kg, 1).replace(",0", "")} kg`) : ""}</ul></section>
   <ul class="menu" style="margin-top:16px">
     ${lien("#/reglages", "sliders-horizontal", "Réglages", "")}
-    ${typeof sb !== "undefined" ? lien("#/famille", "users", "Ma famille", enFamille() ? esc(M.famille.famille.nom) : (M.familleEtat && M.familleEtat.statut === "attente") ? "Demande en attente" : "Stock et plats en commun") : ""}
+    ${typeof sb !== "undefined" ? lien("#/famille", "users", "Ma famille", demandesFamille().length ? `${demandesFamille().length} demande${demandesFamille().length > 1 ? "s" : ""} pour entrer` : enFamille() ? esc(M.famille.famille.nom) : (M.familleEtat && M.familleEtat.statut === "attente") ? "Demande en attente" : "Stock et plats en commun") : ""}
     ${estAdminConso() ? lien("#/conso", "chart-bar", "Suivi de conso", "Ce que chaque compte consomme en IA") : ""}
     ${E.utilisateur.admin ? lien("#/profils", "users", "Profils", "") : ""}
   </ul>
@@ -3454,6 +3481,7 @@ function vueJourSuivi(params) {
       <a href="#/semaine"${dec ? "" : ' aria-current="true"'}>Aujourd'hui</a>
       <a href="#/semaine?d=1"${demain ? ' aria-current="true"' : ""}>Demain</a></nav>
     ${dec === 1 ? `<p class="petit discret" style="margin:-2px 0 12px">Provisoire : les quantités de demain se règlent demain matin, d'après ce que tu auras vraiment mangé aujourd'hui.</p>` : ""}
+    ${dec === 0 ? alerteFamille() : ""}
     ${jaugesDuJour(j, o, mangeJour)}
     <p class="reste-jour">${reste}</p>
     ${(E.a_finir || []).length && dec === 0 ? `<a class="rappel" href="#/stock">${icone("warning-circle")}<span>À finir : ${esc(E.a_finir.slice(0, 3).map(x => x.nom).join(", "))}${E.a_finir.length > 3 ? "…" : ""}</span>${icone("caret-right")}</a>` : ""}
@@ -3559,6 +3587,26 @@ async function photoReduite(fichier, max = 1600) {
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.85);
 }
+// L'IA travaille (Taha, 28/11/2026 : « c'est sur 2 lignes et c'est moche ») : une petite carte centrée, le titre sur
+// une ligne, ce qu'on a écrit sur une ligne, trois étapes qui s'allument l'une après l'autre, et Annuler.
+function attenteIA(d, { titre = "L'IA calcule", sujet = "", etapes = ["Aliments", "Grammes", "Macros"], annuler } = {}) {
+  d.innerHTML = `<div class="ia-att" role="status" aria-live="polite">
+    <div class="ia-orbe" aria-hidden="true"><i></i>${icone("sparkle")}</div>
+    <h2 id="dialogueTitre">${esc(titre)}<span class="ia-points" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></h2>
+    ${sujet ? `<p class="ia-sujet">${esc(sujet)}</p>` : ""}
+    <ol class="ia-etapes">${etapes.map((e, i) => `<li${i ? "" : ' class="en-cours"'}>${esc(e)}</li>`).join("")}</ol>
+    <p class="ia-lent" hidden>Encore un instant : garde l'appli ouverte.</p>
+    <button type="button" class="lien ia-annuler">Annuler</button></div>`;
+  if (!d.open) d.showModal();
+  const zone = d.querySelector(".ia-att"), lis = [...zone.querySelectorAll(".ia-etapes li")];
+  const avancer = k => lis.forEach((li, i) => { li.classList.toggle("fait", i < k); li.classList.toggle("en-cours", i === k); });
+  const minuteurs = [setTimeout(() => avancer(1), 2600), setTimeout(() => avancer(2), 7000),
+    setTimeout(() => { const l = zone.querySelector(".ia-lent"); if (l) l.hidden = false; }, 20000)];
+  const fin = () => minuteurs.forEach(clearTimeout);
+  zone.querySelector(".ia-annuler").addEventListener("click", () => { fin(); annuler ? annuler() : d.close("non"); });
+  return { fin };
+}
+
 function noterRepas({ date, entree = null, remplacer = null }) {
   // 1. décrire (texte, photo, chiffres) ; 2. vérifier ce que Claude a compris, corriger, enregistrer.
   // remplacer = { texte, place, k, operation(plat), titre(nom), retour(), main() } : le champ IA de « Remplacer un plat »
@@ -3652,16 +3700,19 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       if (!texte && !photoJointe) { $("eNr").textContent = "Écris ce que tu as mangé, ou ajoute une photo."; return; }
       const exact = !photoJointe && chercherPlats(texte).find(x => x.exact);
       if (exact) return ajouterPlatConnu(exact.r);              // le nom exact d'un de tes plats : pas besoin de Claude
-      const ok = d.querySelector("[type=submit]"), libelle = ok.innerHTML; ok.disabled = true; ok.innerHTML = `${icone("sparkle")}L'IA calcule…`;
-      $("eNr").textContent = "";
+      let annule = false;
+      const att = attenteIA(d, { sujet: texte || "Ta photo", annuler: () => { annule = true; saisie(); } });
+      const erreur = m => { if (annule) return; saisie(); $("eNr").textContent = m; };
       try {
         const r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ texte, photo: photoJointe, date, ...(date === E.journal_repas.aujourdhui ? { heure } : {}) }) });
         const rep = await r.json();
-        if (!r.ok) { $("eNr").textContent = rep.erreur || "Claude n'a pas pu calculer."; ok.disabled = false; ok.innerHTML = libelle; return; }
+        att.fin();
+        if (annule) return;
+        if (!r.ok) return erreur(rep.erreur || "Claude n'a pas pu calculer.");
         moment = rep.proposition.moment || moment;
         verifier(rep.proposition, false, true);
-      } catch (e) { $("eNr").textContent = "L'appli ne répond pas."; ok.disabled = false; ok.innerHTML = libelle; }
+      } catch (e) { att.fin(); erreur("L'appli ne répond pas."); }
     });
     if (!d.open) d.showModal();
     if (!TACTILE.matches) setTimeout(() => $("nrTexte") && $("nrTexte").focus(), 50);     // sur iPhone : jamais (clavier bloqué)
@@ -3750,15 +3801,25 @@ function noterRepas({ date, entree = null, remplacer = null }) {
     if ($("nrCorriger")) $("nrCorriger").addEventListener("click", async ev => {
       const correction = $("nrCorrection").value.trim();
       if (!correction) { $("eNr").textContent = "Écris ce que Claude doit changer."; $("nrCorrection").focus(); return; }
-      const b = ev.currentTarget, libelle = b.innerHTML;
-      b.disabled = true; b.innerHTML = `${icone("sparkle")}L'IA corrige…`; $("eNr").textContent = "";
+      // Pendant la correction : la carte d'attente ; en cas d'échec, retour à la liste telle qu'elle était.
+      const nomActuel = $("nrNom").value;
+      let annule = false;
+      const revenir = m => {
+        verifier({ ...p, items, nom: nomActuel }, aLaMain, parIA);
+        if ($("nrCorrection")) $("nrCorrection").value = correction;
+        if (m) $("eNr").textContent = m;
+      };
+      const att = attenteIA(d, { titre: "L'IA corrige", sujet: correction, etapes: ["Ta demande", "Grammes", "Macros"],
+        annuler: () => { annule = true; revenir(); } });
       try {
         const r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ texte, photo: photoJointe, moment, date, correction, precedent: items, ...(remplacer && remplacer.creer ? { creer: true } : {}) }) });
         const rep = await r.json();
-        if (!r.ok) { $("eNr").textContent = rep.erreur || "Claude n'a pas pu corriger."; b.disabled = false; b.innerHTML = libelle; return; }
+        att.fin();
+        if (annule) return;
+        if (!r.ok) return revenir(rep.erreur || "Claude n'a pas pu corriger.");
         verifier(rep.proposition, false, true);
-      } catch (e) { $("eNr").textContent = "L'appli ne répond pas."; b.disabled = false; b.innerHTML = libelle; }
+      } catch (e) { att.fin(); if (!annule) revenir("L'appli ne répond pas."); }
     });
     if ($("nrSuppr")) $("nrSuppr").addEventListener("click", async () => {
       if (await appel("/api/repas/oublier", { id: entree.id }) === true) { d.close("oui"); rendre(); dire("Repas supprimé."); } });
@@ -3807,19 +3868,20 @@ function noterRepas({ date, entree = null, remplacer = null }) {
   if (E.claude === false && remplacer.main) return remplacer.main();
   const site = remplacer.lien ? (/instagram/i.test(remplacer.lien) ? "Instagram" : /tiktok/i.test(remplacer.lien) ? "TikTok" : /youtu/i.test(remplacer.lien) ? "YouTube"
     : /facebook|fb\.watch/i.test(remplacer.lien) ? "Facebook" : (remplacer.lien.match(/^https?:\/\/(?:www\.)?([^/]+)/i) || [, "le site"])[1]) : "";
-  d.innerHTML = `<div class="feuille"><h2 id="dialogueTitre">${icone("sparkle")} ${remplacer.auto ? "La recette arrive dans tes plats…" : site ? "L'appli lit la recette…" : "L'IA calcule…"}</h2>
-    <p class="discret" role="status">${site ? `Sur ${esc(site)}, puis l'IA en fait un plat pour une portion, avec ses étapes. Quelques secondes.`
-      : `« ${esc(texte)} » : Claude cherche les aliments, les grammes et les macros.`}</p>
-    <p class="petit" style="margin-top:14px"><button type="button" class="lien" id="nrAnnulerIA">Annuler</button></p></div>`;
   let annule = false;
-  $("nrAnnulerIA").addEventListener("click", () => { annule = true; remplacer.retour(); });
+  const att = attenteIA(d, {
+    titre: remplacer.auto ? "La recette arrive" : site ? "L'appli lit la recette" : "L'IA calcule",
+    sujet: site ? `Sur ${site}` : texte,
+    etapes: site ? ["Recette", "Ingrédients", "Étapes"] : ["Aliments", "Grammes", "Macros"],
+    annuler: () => { annule = true; remplacer.retour(); } });
   (async () => {
     let rep, r;
     try {
       r = await fetch("/api/repas/analyser", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ texte, moment, date, ...(remplacer.creer ? { creer: true } : {}), ...(remplacer.lien || remplacer.description ? { lien: remplacer.lien || "", description: remplacer.description || "" } : {}) }) });
       rep = await r.json();
-    } catch (e) { if (!annule) { remplacer.retour(); dire("L'appli ne répond pas."); } return; }
+    } catch (e) { att.fin(); if (!annule) { remplacer.retour(); dire("L'appli ne répond pas."); } return; }
+    att.fin();
     if (annule) return;
     if (!r.ok) { remplacer.retour(); dire(rep.erreur || "Claude n'a pas pu calculer."); return; }
     if (remplacer.creer) moment = rep.proposition.moment || moment;      // depuis le catalogue : l'IA dit le repas
