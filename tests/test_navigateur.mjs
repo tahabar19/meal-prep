@@ -787,6 +787,22 @@ try {
   });
 
   // Taha, 28/11/2026 : les rappels (pesée, eau, dîner, silhouette) se cochent dans Réglages et vont dans la table « rappels »
+  // Taha, 28/11/2026 : la silhouette en courbes (une mesure au fil des relevés) et l'avant / après avec un curseur
+  await test('Silhouette : courbe d\'une mesure, avant / après au curseur', async () => {
+    await aller('#/suivi');
+    await B.js(`(() => { SILH.charge = true; SILH.donnees = { reference: { date: '2026-11-01', valeurs: { taille: 86, hanches: 98 }, face: { photo: 'zz/a.jpg' }, profil: { photo: 'zz/b.jpg' } },
+      releves: [{ date: '2026-11-08', valeurs: { taille: 85.4, hanches: 97.6 }, face: { photo: 'zz/c.jpg' }, profil: { photo: 'zz/d.jpg' }, qualite: 1 },
+                { date: '2026-11-15', valeurs: { taille: 84.9, hanches: 97.1 }, face: { photo: 'zz/e.jpg' }, profil: { photo: 'zz/f.jpg' }, qualite: 1 }] };
+      historiqueSilhouette(); return true; })()`);
+    vrai(await attendre(`!!document.querySelector('#gSilh svg path, #gSilh svg polyline')`, 5000) >= 0, 'pas de courbe du tour de taille');
+    await B.js(`document.querySelector('[data-silh-mesure=hanches]').click()`);
+    vrai(await attendre(`document.querySelector('[data-silh-mesure=hanches]').getAttribute('aria-pressed') === 'true' && !!document.querySelector('#gSilh svg path, #gSilh svg polyline')`, 5000) >= 0,
+      'la courbe ne passe pas aux hanches');
+    await B.js(`(() => { const c = document.querySelector('.silh-curseur'); c.value = 20; c.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+    vrai(await B.js(`document.getElementById('silhComparer').style.getPropertyValue('--x') === '20%'`), 'le curseur avant / après ne bouge pas');
+    await B.js(`(document.getElementById('dialogue').close(), SILH.charge = false, SILH.donnees = null, true)`);
+  });
+
   await test('Réglages : rappels cochés puis décochés', async () => {
     await aller('#/reglages');
     vrai(await attendre(`document.querySelectorAll('#rappelsChoix [data-rappel]').length === 4`, 15000) >= 0, 'pas de rubrique Rappels');

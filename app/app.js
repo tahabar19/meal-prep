@@ -4461,10 +4461,15 @@ async function envoyerPhotoSilh(blob, nom) {
   if (error) { console.warn("photo de silhouette", error.message); return null; }
   return chemin;
 }
+const URLS_SILH = new Map();                       // chemin -> {url, t} : une adresse signée sert 50 minutes
 async function urlPhotoSilh(chemin) {
   if (!chemin) return "";
+  const deja = URLS_SILH.get(chemin);
+  if (deja && Date.now() - deja.t < 50 * 6e4) return deja.url;
   const { data } = await sb.storage.from("silhouettes").createSignedUrl(chemin, 3600);
-  return (data && data.signedUrl) || "";
+  const url = (data && data.signedUrl) || "";
+  if (url) URLS_SILH.set(chemin, { url, t: Date.now() });
+  return url;
 }
 // Ce qu'une vue garde : sans la photo (envoyée à part), le contour et les repères pour guider la fois suivante.
 const vueGardee = (v, photo) => ({ points: v.points, contour: v.contour, reperes: v.reperes, image: v.image, mesures: v.mesures, photo });
@@ -4577,12 +4582,24 @@ async function montrerReleve(releve, vues) {
   d.querySelector("[value=ok]").addEventListener("click", () => d.close("oui"));
   if (!d.open) d.showModal();
 }
-function historiqueSilhouette() {
+// Historique (Taha, 28/11/2026 : « silhouette en courbes ») : la courbe d'une mesure au fil des semaines, puis la
+// photo de référence et la dernière, l'une sur l'autre, avec un curseur (avant à gauche, après à droite).
+function historiqueSilhouette(mesure = "taille", vue = "face") {
   const d = $("dialogue"), D = SILH.donnees, ref = D.reference, liste = (D.releves || []).slice().reverse();
+  const dernier = (D.releves || []).length ? D.releves[D.releves.length - 1] : null;
   const resume = r => NIVEAUX_SILH.filter(([k]) => r.valeurs[k] != null && ref.valeurs[k] != null && Math.abs(r.valeurs[k] - ref.valeurs[k]) >= 0.5)
     .slice(0, 3).map(([k, nom]) => `${nom} ${ecartCm(r.valeurs[k] - ref.valeurs[k])}`).join(" · ") || "rien ne bouge";
+  const nomMesure = (NIVEAUX_SILH.find(x => x[0] === mesure) || NIVEAUX_SILH[2])[1];
+  const points = [ref, ...(D.releves || [])].filter(r => r && r.valeurs && r.valeurs[mesure] != null).map(r => ({ x: r.date, y: r.valeurs[mesure] }));
   d.innerHTML = `<div class="feuille silh-histo">
     <h2 id="dialogueTitre">Silhouette : historique</h2>
+    <div class="gouts silh-choix" role="group" aria-label="Mesure">${NIVEAUX_SILH.map(([k, nom]) => `<button type="button" data-silh-mesure="${k}" aria-pressed="${k === mesure}">${nom}</button>`).join("")}</div>
+    <div id="gSilh" class="graph silh-graph"></div>
+    ${dernier && dernier[vue] && ref[vue] ? `<h3 class="silh-sous">Avant, après</h3>
+      <div class="gouts" role="group" aria-label="Vue">${[["face", "De face"], ["profil", "De profil"]].map(([v, nom]) => `<button type="button" data-silh-vue="${v}" aria-pressed="${v === vue}">${nom}</button>`).join("")}</div>
+      <div class="silh-comparer" id="silhComparer" style="--x:50%"><img class="silh-avant" alt="Ta référence"><img class="silh-apres" alt="Ton dernier relevé"><i aria-hidden="true"></i></div>
+      <input type="range" class="silh-curseur" min="0" max="100" value="50" aria-label="Glisser entre avant et après">
+      <p class="petit discret silh-dates"><span>${esc(dateCourte(ref.date))}</span><span>${esc(dateCourte(dernier.date))}</span></p>` : ""}
     <ul class="lignes">${liste.map(r => `<li><button type="button" class="silh-ligne" data-silh="releve" data-date="${r.date}"><b>${esc(dateCourte(r.date))}</b>
         <small class="discret">${esc(resume(r))}</small></button>
         <button type="button" class="effacer" data-silh="oublier" data-date="${r.date}" aria-label="Supprimer le relevé du ${esc(dateCourte(r.date))}">${icone("x")}</button></li>`).join("")}
@@ -4591,6 +4608,20 @@ function historiqueSilhouette() {
     <div class="actions pied"><button class="bouton second" type="button" value="ok">Fermer</button></div></div>`;
   d.querySelector("[value=ok]").addEventListener("click", () => d.close("oui"));
   if (!d.open) d.showModal();
+  if (typeof Graph !== "undefined") Graph.courbes($("gSilh"), { unite: "cm", decimales: 1, hauteur: 170, titre: nomMesure,
+    videTexte: "La courbe apparaît dès le premier relevé après ta référence.",
+    series: points.length >= 2 ? [{ nom: nomMesure, couleur: "var(--s1)", marques: true, points }] : [] });
+  d.querySelectorAll("[data-silh-mesure]").forEach(b => b.addEventListener("click", () => historiqueSilhouette(b.dataset.silhMesure, vue)));
+  d.querySelectorAll("[data-silh-vue]").forEach(b => b.addEventListener("click", () => historiqueSilhouette(mesure, b.dataset.silhVue)));
+  const zone = $("silhComparer");
+  if (zone) {
+    const curseur = d.querySelector(".silh-curseur");
+    curseur.addEventListener("input", () => zone.style.setProperty("--x", `${curseur.value}%`));
+    Promise.all([urlPhotoSilh(ref[vue].photo), urlPhotoSilh(dernier[vue].photo)]).then(([a, b]) => {
+      if (!d.contains(zone)) return;
+      zone.querySelector(".silh-avant").src = a; zone.querySelector(".silh-apres").src = b;
+    });
+  }
 }
 document.addEventListener("click", async ev => {
   const b = ev.target.closest && ev.target.closest("[data-silh]");
