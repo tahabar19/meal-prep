@@ -2313,4 +2313,10 @@ dialog.scan::backdrop{background:#000}
 .cf-nom{flex:1;min-width:0;display:grid}
 .cf-nom small{font-size:.78rem}
 .cf .bouton.large{margin-top:6px}
+/* 28/11/2026 : mode restaurant */
+.resto-reste{margin:0 0 12px}
+.resto-plat .resto-rang{flex:none;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;
+  background:rgba(200,240,75,.1);color:var(--accent);font-weight:700}
+.resto-plat .texte small{display:block;margin-top:2px}
+.resto-conseil{color:var(--accent-texte, var(--accent))}
 

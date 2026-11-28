@@ -610,6 +610,27 @@ try {
     await B.js(`(clearInterval(window.__scanMinuteur), Scanner.source = null, true)`);
   });
 
+  // Taha, 28/11/2026 : mode restaurant. La réponse de l'IA est simulée (le compte d'essai n'a pas de clé) : la carte en
+  // photo → « il te reste » et les plats proposés → en toucher un ouvre la vérification.
+  await test('Ajouter un repas : au restaurant, la carte en photo (réponse simulée)', async () => {
+    await aller('#/semaine');
+    await B.js(`(window.__claudeAvant = E.claude, E.claude = true, true)`);
+    await B.js(`document.querySelector('[data-action=noterRepas]').click()`);
+    vrai(await attendre(`!!document.getElementById('nrResto')`, 10000) >= 0, 'pas de bouton « Au restaurant »');
+    await B.js(`(() => { const avant = window.fetch; window.__fetchAvant = avant;
+      window.fetch = (u, o) => String(u).includes('/api/repas/restaurant') ? Promise.resolve(new Response(JSON.stringify({ restaurant: { reste: { kcal: 750, prot: 40 }, moment: 'dej',
+        plats: [{ nom: 'Pavé de saumon', kcal: 620, prot: 42, gluc: 30, lip: 30, pourquoi: 'Beaucoup de protéines.', conseil: 'Sauce à part.' },
+                { nom: 'Salade de poulet', kcal: 450, prot: 38, gluc: 20, lip: 20, pourquoi: 'Légère.', conseil: '' }] } }), { status: 200, headers: { 'Content-Type': 'application/json' } })) : avant(u, o);
+      const c = document.createElement('canvas'); c.width = 40; c.height = 40; c.getContext('2d').fillRect(0, 0, 20, 20);
+      return new Promise(ok => c.toBlob(b => { const dt = new DataTransfer(); dt.items.add(new File([b], 'carte.png', { type: 'image/png' }));
+        const i = document.getElementById('nrResto'); i.files = dt.files; i.dispatchEvent(new Event('change', { bubbles: true })); ok(true); }, 'image/png')); })()`);
+    vrai(await attendre(`document.querySelectorAll('#dialogue .resto-plat').length === 2`, 15000) >= 0, 'pas de plats proposés');
+    vrai(await B.js(`/750 kcal/.test(document.querySelector('.resto-reste').textContent)`), 'pas de « il te reste »');
+    await B.js(`document.querySelector('#dialogue .resto-plat').click()`);
+    vrai(await attendre(`!!document.getElementById('nrItems') && /620/.test(document.getElementById('nrTotal').textContent)`, 10000) >= 0, "le plat choisi ne s'ouvre pas à vérifier");
+    await B.js(`(window.fetch = window.__fetchAvant, E.claude = window.__claudeAvant, document.getElementById('dialogue').close(), true)`);
+  });
+
   await test('Historique : « Manger aujourd\'hui » sur les plats', async () => {
     await aller('#/historique');
     vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'pas d\'historique');
