@@ -341,3 +341,31 @@ create policy "silhouettes changees par soi" on storage.objects for update to au
 drop policy if exists "silhouettes retirees par soi" on storage.objects;
 create policy "silhouettes retirees par soi" on storage.objects for delete to authenticated
   using (bucket_id = 'silhouettes' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ------------------------------------------------------------------ rappels (28/11/2026)
+-- Chacun coche ses rappels (Réglages → Rappels) ; la base appelle la fonction notifier chaque heure (pg_cron + pg_net),
+-- avec le jeton du coffre (vault : « rappels_jeton », le même que le secret RAPPELS_JETON de la fonction ; copie locale
+-- ~/.config/meal-prep/rappels-jeton). Créer le jeton du coffre à la main : select vault.create_secret('<jeton>', 'rappels_jeton');
+create extension if not exists pg_cron;
+create extension if not exists pg_net with schema extensions;
+create table if not exists public.rappels (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  types text[] not null default '{}',
+  fuseau text not null default 'Europe/Paris',
+  maj timestamptz not null default now()
+);
+alter table public.rappels enable row level security;
+drop policy if exists "mes rappels" on public.rappels;
+create policy "mes rappels" on public.rappels for all to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id and types <@ array['pesee','eau','diner','silhouette']::text[]
+              and cardinality(types) <= 4 and length(fuseau) between 3 and 60);
+select cron.schedule('rappels-meal-prep', '2 * * * *', $cron$
+  select net.http_post(
+    url := 'https://ycvmwdipuxbkcuwdhqds.supabase.co/functions/v1/notifier',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+      'x-rappels', (select decrypted_secret from vault.decrypted_secrets where name = 'rappels_jeton')),
+    body := '{"action":"rappels"}'::jsonb,
+    timeout_milliseconds := 60000);
+$cron$);
+

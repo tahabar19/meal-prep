@@ -770,6 +770,18 @@ try {
     vrai(await B.js(`E.suivi.some(x => x.poids === 78.1)`), 'la mesure n\'est pas dans les données');
   });
 
+  // Taha, 28/11/2026 : les rappels (pesée, eau, dîner, silhouette) se cochent dans Réglages et vont dans la table « rappels »
+  await test('Réglages : rappels cochés puis décochés', async () => {
+    await aller('#/reglages');
+    vrai(await attendre(`document.querySelectorAll('#rappelsChoix [data-rappel]').length === 4`, 15000) >= 0, 'pas de rubrique Rappels');
+    await B.js(`(() => { const s = document.getElementById('tRappels').closest('section'); s.querySelector('[data-rappel=pesee]').click(); return true; })()`);
+    vrai(await attendre(`sb.from('rappels').select('types, fuseau').eq('user_id', M.moi.uid).maybeSingle().then(r => !!r.data && r.data.types.includes('pesee') && r.data.fuseau.length > 2)`, 15000) >= 0,
+      "la pesée n'est pas enregistrée");
+    await B.js(`document.querySelector('#rappelsChoix [data-rappel=pesee]').click()`);
+    vrai(await attendre(`sb.from('rappels').select('types').eq('user_id', M.moi.uid).maybeSingle().then(r => !!r.data && !r.data.types.length)`, 15000) >= 0, "décocher ne l'enlève pas");
+    await B.js(`sb.from('rappels').delete().eq('user_id', M.moi.uid).then(() => true)`);
+  });
+
   await test('Réglages : blocs présents', async () => {
     // Taha, 22/11/2026 (soir) : dans Profil, juste « Réglages » ; la page en lignes repliables, avec un résumé
     await aller('#/profil');

@@ -73,10 +73,88 @@ function quand(iso: string): string {
   return isNaN(d.getTime()) ? "" : "le " + new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(d);
 }
 
+// ---- Les rappels (Taha, 28/11/2026) : pg_cron appelle la fonction chaque heure (en-tête x-rappels = secret
+// RAPPELS_JETON). Un rappel part à son heure, dans le fuseau de la personne, seulement s'il sert encore (pas pesé
+// aujourd'hui, eau pas cochée, dîner pas coché, pas de silhouette ce lundi), une fois par jour au plus.
+const RAPPELS: Record<string, { heure: number; lundi?: boolean; titre: string; texte: string; url: string }> = {
+  pesee: { heure: 8, titre: "Pèse-toi ce matin", texte: "À jeun, après les toilettes : c'est la mesure la plus juste.", url: "#/suivi" },
+  eau: { heure: 16, titre: "Pense à boire", texte: "Ton eau du jour n'est pas encore cochée.", url: "#/semaine" },
+  diner: { heure: 21, titre: "Note ton dîner", texte: "Coche ce que tu as mangé ce soir : demain se règle dessus.", url: "#/semaine" },
+  silhouette: { heure: 9, lundi: true, titre: "Ta silhouette du lundi", texte: "Une minute devant le miroir : on compare avec la semaine dernière.", url: "#/suivi" },
+};
+function ici(fuseau: string, d = new Date()) {
+  let parts;
+  try { parts = new Intl.DateTimeFormat("en-CA", { timeZone: fuseau, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23", weekday: "short" }).formatToParts(d); }
+  catch { parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23", weekday: "short" }).formatToParts(d); }
+  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, heure: Number(p.hour) % 24, lundi: p.weekday === "Mon" };
+}
+function utile(type: string, l: { date: string }, lire: (nom: string) => any): boolean {
+  if (type === "pesee") return !((lire("suivi.json") || {}).mesures || []).some((m: any) => m && m.date === l.date && m.poids);
+  if (type === "eau") return !((lire("eau.json") || {}).jours || {})[l.date];
+  if (type === "silhouette") return !((lire("silhouette.json") || {}).releves || []).some((r: any) => r && r.date === l.date);
+  if (type === "diner") {
+    const s = lire("semaine.json");
+    if (!s || !s.debut || !Array.isArray(s.jours)) return false;
+    const n = Math.round((Date.parse(l.date + "T12:00:00Z") - Date.parse(s.debut + "T12:00:00Z")) / 864e5);
+    if (!(n >= 0 && n <= 6) || !s.jours[n]) return false;
+    const din = s.jours[n].din;
+    if (din && din !== "rien") return !(s.prepares || {})[`${n}|${din}`];
+    return !((lire("journal_repas.json") || {}).entrees || []).some((e: any) => e && e.date === l.date && e.moment === "din");
+  }
+  return false;
+}
+async function envoyerRappels(admin: any, vapid: any, corps: any) {
+  const essai = corps && corps.essai ? corps.essai : null;        // {user, ici: {date, heure, lundi}} : rien n'est envoyé
+  let q = admin.from("rappels").select("user_id, types, fuseau");
+  if (essai) q = q.eq("user_id", String(essai.user || ""));
+  const { data: lignes } = await q;
+  const dus: any[] = [];
+  for (const l of lignes || []) {
+    const t = essai && essai.ici ? { ...ici(l.fuseau || "Europe/Paris"), ...essai.ici } : ici(l.fuseau || "Europe/Paris");
+    for (const type of l.types || []) {
+      const r = RAPPELS[type];
+      if (r && t.heure === r.heure && (!r.lundi || t.lundi)) dus.push({ user: l.user_id, type, ici: t });
+    }
+  }
+  if (!dus.length) return { ok: true, rappels: [] };
+  const users = [...new Set(dus.map((x) => x.user))];
+  const { data: deja } = essai ? { data: [] } : await admin.from("notifications").select("pour, type").in("pour", users)
+    .like("type", "rappel-%").gte("quand", new Date(Date.now() - 20 * 3600e3).toISOString());
+  const { data: fichiers } = await admin.from("fichiers").select("user_id, nom, contenu").in("user_id", users)
+    .in("nom", ["suivi.json", "eau.json", "semaine.json", "journal_repas.json", "silhouette.json"]);
+  const lire = (u: string, nom: string) => { try { return JSON.parse((fichiers || []).find((f: any) => f.user_id === u && f.nom === nom)?.contenu || "null"); } catch { return null; } };
+  const a_envoyer = dus.filter((x) => !(deja || []).some((d: any) => d.pour === x.user && d.type === "rappel-" + x.type) && utile(x.type, x.ici, (n) => lire(x.user, n)));
+  if (essai) return { ok: true, rappels: a_envoyer.map((x) => x.type) };
+  let envoyees = 0;
+  for (const x of a_envoyer) {
+    const r = RAPPELS[x.type];
+    const { data: abos } = await admin.from("abonnements_push").select("endpoint, p256dh, auth").eq("user_id", x.user);
+    let n = 0;
+    await Promise.all((abos || []).map(async (a: any) => {
+      try {
+        const st = await pousser(a, { titre: r.titre, corps: r.texte, url: r.url, tag: "rappel-" + x.type }, vapid);
+        if (st === 404 || st === 410) await admin.from("abonnements_push").delete().eq("endpoint", a.endpoint);
+        else if (st >= 200 && st < 300) n++;
+      } catch (e) { console.warn("rappel", (e as Error).message); }
+    }));
+    envoyees += n;
+    await admin.from("notifications").insert({ de: null, pour: x.user, type: "rappel-" + x.type, titre: r.titre, envoyees: n });
+  }
+  return { ok: true, rappels: a_envoyer.length, envoyees };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   try {
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const jeton = Deno.env.get("RAPPELS_JETON") || "";
+    if (jeton.length >= 32 && req.headers.get("x-rappels") === jeton) {        // pg_cron, chaque heure
+      let v: any = null;
+      try { v = JSON.parse(Deno.env.get("VAPID") || "null"); } catch { v = null; }
+      if (!v) return json({ erreur: "VAPID absent." }, 503);
+      return json(await envoyerRappels(admin, v, await req.json().catch(() => ({}))));
+    }
     const jwt = (req.headers.get("Authorization") || "").replace("Bearer ", "");
     const { data: u } = await admin.auth.getUser(jwt);
     const user = u?.user;
