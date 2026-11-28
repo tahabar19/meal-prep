@@ -96,6 +96,13 @@ try {
     vrai(await B.js(`/faible/i.test(document.getElementById('pMdpForce').textContent)`), 'la jauge ne dit pas « faible »');
     await B.js(`(() => { const i = document.getElementById('pMdp'); i.value = 'Lune-Verte-Kiwi-48'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
     vrai(await B.js(`/solide/i.test(document.getElementById('pMdpForce').textContent)`), 'la jauge ne dit pas « solide »');
+    // 28/11/2026 : sexe, activité et objectif ne sont plus choisis d'office ; envoyer sans eux le dit clairement
+    vrai(await B.js(`['sexe', 'activite', 'objectif'].every(id => document.getElementById(id).value === '')`), 'un choix est encore fait d\'office');
+    await B.js(`(() => { const f = document.getElementById('fProfil'), v = (id, x) => { const e = document.getElementById(id); e.value = x; };
+      v('pCode', 'x'); v('pNom', 'Zz'); v('pFamille', 'Essai'); v('pIdent', 'zz-jamais'); v('pEmail', 'zz@exemple.fr');
+      f.requestSubmit(); })()`);
+    vrai(await attendre(`/Choisis ton sexe/.test(document.getElementById('eProfil').textContent) && document.activeElement.id === 'sexe'`, 5000) >= 0,
+      `pas de « Choisis ton sexe » : ${await B.js(`document.getElementById('eProfil').textContent`)}`);
     await B.js(`document.querySelector('[data-action=versConnexion]').click()`);
   });
 
@@ -628,6 +635,16 @@ try {
     vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'mois ne s\'affiche pas');
   });
 
+  // Taha, 28/11/2026 : la carte d'accueil d'un nouveau compte (une fois) ; « Compris » l'efface pour de bon.
+  await test('Jour : carte d\'accueil d\'un nouveau compte, puis « Compris »', async () => {
+    await aller('#/semaine');
+    vrai(await B.js(`!document.querySelector('.accueil-carte')`), "la carte d'accueil s'affiche pour un ancien compte");
+    await B.js(`(E.reglages.accueil = true, rendre(), true)`); await att(400);
+    vrai(await attendre(`!!document.querySelector('.accueil-carte [data-action=accueilVu]')`, 5000) >= 0, "pas de carte d'accueil");
+    await B.js(`document.querySelector('.accueil-carte [data-action=accueilVu]').click()`);
+    vrai(await attendre(`!document.querySelector('.accueil-carte') && !E.reglages.accueil`, 15000) >= 0, '« Compris » ne la retire pas');
+  });
+
   // Taha, 22/11/2026 : le catalogue en liste, comme « Remplacer par un autre plat ».
   await test('Catalogue : liste, recherche, fiche', async () => {
     await aller('#/catalogue');
@@ -809,10 +826,15 @@ try {
       await B.js(`rendre(), true`); await att(500);
       await B.js(`(document.querySelector('.grille-plats a.repas[data-moment="din"]') || document.querySelector('.grille-plats a.repas[data-moment="dej"]')).click()`); await att(1200);
       vrai(await B.js(`(() => { const b = [...document.querySelectorAll('.carte-fond button')].find(x => /Retirer ce repas/.test(x.textContent)); if (!b) return false; b.click(); return true; })()`), 'pas de « Retirer ce repas »');
-      vrai(await attendre(`document.getElementById('dialogue').open && !!document.querySelector('#dialogue [type=submit]')`, 15000) >= 0, "pas d'aperçu");
-      await B.js(`document.querySelector('#dialogue [type=submit]').click()`);
-      vrai(await attendre(`[...document.querySelectorAll('#dialogue button')].some(x => /Toute la famille/.test(x.textContent))`, 15000) >= 0, 'pas de « Pour qui ? »');
-      await B.js(`[...document.querySelectorAll('#dialogue button')].find(x => /Toute la famille/.test(x.textContent)).click()`);
+      // 28/11/2026 : « Seulement moi » et « Toute la famille » sont dans l'aperçu lui-même (plus de seconde fenêtre)
+      vrai(await attendre(`document.getElementById('dialogue').open && !!document.querySelector('#dialogue [type=submit][data-qui=tous]')`, 15000) >= 0,
+        "pas de « Toute la famille » dans l'aperçu");
+      vrai(await B.js(`!document.querySelector('#dialogue [type=submit][value=oui]') && document.querySelector('#dialogue [type=submit]').dataset.qui === 'moi'`),
+        "« Confirmer » reste, ou Entrée ne vaut pas « Seulement moi »");
+      await B.js(`document.querySelector('#dialogue [data-qui=tous]').click()`);
+      await att(800);
+      vrai(await B.js(`!document.getElementById('dialogue').open || !/Pour qui/.test(document.getElementById('dialogue').textContent.replace('Pour qui ? Chacun garde ses quantités.', ''))`),
+        'une seconde fenêtre « Pour qui ? » est encore ouverte');
       vrai(await attendre(`sb.from('operations_famille').select('id').then(r => (r.data || []).length > 0)`, 20000) >= 0, "« Toute la famille » n'est pas partagé");
       const ident = 'zz-m' + String(Date.now()).slice(-6);
       await B.js(`ajouterMembreSansTelephone({ prenom: 'Lina', nom_famille: 'Essai', date_naissance: '2008-05-14', sexe: 'femme', taille_cm: '158',

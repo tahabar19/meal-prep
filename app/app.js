@@ -247,6 +247,16 @@ const demandesFamille = () => {
   const f = typeof M !== "undefined" && M.familleEtat;
   return f && f.statut === "membre" && f.famille && f.famille.createur ? (f.membres || []).filter(m => m.statut === "attente") : [];
 };
+// Premier jour d'un nouveau compte (Taha, 28/11/2026) : une carte, une seule fois, pour savoir quoi toucher.
+// « accueil » est posé par la création du profil (web.creer_profil) ; « Compris » l'efface (/api/reglages).
+function carteAccueil() {
+  if (!E.reglages || !E.reglages.accueil || autreProfil()) return "";
+  return `<div class="accueil-carte" role="status"><p class="accueil-titre">${icone("couverts")}<b>Bienvenue${E.profil && E.profil.nom ? ` ${esc(E.profil.nom)}` : ""} !</b></p>
+    <ul><li>Touche un plat pour le voir, le changer ou le cocher quand tu l'as mangé.</li>
+      <li>La case + ajoute ce que tu as mangé en plus.</li>
+      <li>Suivi : ton poids et tes mesures.</li></ul>
+    <button type="button" class="bouton" data-action="accueilVu">Compris</button></div>`;
+}
 function alerteFamille() {
   const a = demandesFamille();
   if (!a.length) return "";
@@ -363,11 +373,13 @@ function vueDoses(date) {
 }
 const dateFamille = (k, n) => { const s = k === (E.mois ? E.mois.rang : 0) ? E.semaine : planDe(k);
   return s && s.debut ? new Date(new Date(s.debut + "T12:00").getTime() + n * 864e5).toISOString().slice(0, 10) : ""; };
-async function pourQui(date, moments) {
-  if (!enFamille() || !date) return {};
-  const tous = await confirmer({ titre: "Pour qui ?", oui: "Toute la famille", non: "Seulement moi",
-    texte: "Ce changement vaut pour toi seulement, ou pour toute la famille ? Chacun garde ses quantités." });
-  return tous ? { famille: { date, moments: [...new Set(moments)] } } : {};
+// « Pour qui ? » dans la même fenêtre (Taha, 28/11/2026) : en famille, « Seulement moi » et « Toute la famille »
+// remplacent le bouton qui valide, au lieu d'une seconde fenêtre. Le premier (touche Entrée) reste « Seulement moi ».
+const quiIci = date => enFamille() && !!date;
+const QUI_AIDE = `<p class="petit discret ap-qui">Pour qui ? Chacun garde ses quantités.</p>`;
+const boutonsQui = () => `<button class="bouton second" type="submit" data-qui="moi">Seulement moi</button><button class="bouton" type="submit" data-qui="tous">Toute la famille</button>`;
+function quiChoisi(bouton, date, moments) {
+  return quiIci(date) && bouton && bouton.dataset && bouton.dataset.qui === "tous" ? { famille: { date, moments: [...new Set(moments)] } } : {};
 }
 function momentsTouches(op) {
   const m = String(op.moment || "");
@@ -1215,6 +1227,7 @@ async function apercuChangement(k, operation, titre, retour) {
       : `<p class="ap-note">Calories et protéines ne changent pas.</p>`;
   };
   const macrosChoisi = f => `<b>${nombre(Math.round(choisi.kcal * tChoisi * f))}</b> kcal · <b>${nombre(Math.round(choisi.prot * tChoisi * f))} g</b> prot.`;
+  const dateQui = ["changer", "ajouter", "retirer"].includes(operation.type) && enFamille() ? dateFamille(k, operation.jour) : "";
   d.innerHTML = `<form class="feuille ap" method="dialog" novalidate>
     <div class="ap-tete">${choisi ? photo(choisi, 120, "carre") : ""}<div><p class="ap-sur">${esc(planDe(k).jours[operation.jour].jour)}</p>
       <h2 id="dialogueTitre" tabindex="-1" autofocus>${esc(titre)}</h2></div></div>
@@ -1247,8 +1260,9 @@ async function apercuChangement(k, operation, titre, retour) {
     ${a.confirmation_requise ? `<div class="options" style="margin-top:18px"><label class="option"><input type="checkbox" id="auCourant" required>
       <span><b>Je suis au courant</b><small>J'ai vu l'écart de calories et de protéines${a.manque.length ? ", et j'achète moi-même ce qui manque" : ""}.</small></span></label></div>
       <small id="eCourant" class="erreur" role="alert" style="display:block;margin-top:8px;color:var(--accent-texte)"></small>` : ""}
-    <div class="actions pied"><button class="bouton second" type="button" value="non">${retour ? "Retour" : "Annuler"}</button>
-      <button class="bouton" type="submit" value="oui">${operation.type === "reequilibrer" ? "Appliquer" : "Confirmer"}</button></div></form>`;
+    ${dateQui ? QUI_AIDE : ""}
+    <div class="actions pied"${dateQui ? ` style="flex-wrap:wrap"` : ""}><button class="bouton second" type="button" value="non">${retour ? "Retour" : "Annuler"}</button>
+      ${dateQui ? boutonsQui() : `<button class="bouton" type="submit" value="oui">${operation.type === "reequilibrer" ? "Appliquer" : "Confirmer"}</button>`}</div></form>`;
   d.querySelector("[value=non]").addEventListener("click", () => retour ? retour() : d.close("non"));
   d.querySelectorAll("[data-ap-fois]").forEach(b => b.addEventListener("click", () => {
     fois = Math.min(5, Math.max(0.5, fois + Number(b.dataset.apFois)));
@@ -1278,7 +1292,7 @@ async function apercuChangement(k, operation, titre, retour) {
     if (a.confirmation_requise && !$("auCourant").checked) { $("eCourant").textContent = "Coche la case pour confirmer que tu as vu les écarts."; return $("auCourant").focus(); }
     const supplements = [...d.querySelectorAll("[name=supplement]:checked")].map(i => i.value);
     d.close("oui");
-    const qui = ["changer", "ajouter", "retirer"].includes(operation.type) ? await pourQui(dateFamille(k, operation.jour), momentsTouches(operation)) : {};
+    const qui = quiChoisi(ev.submitter || d.querySelector("[type=submit]"), dateQui, momentsTouches(operation));
     const fini = agir("/api/semaine/modifier", { operation, semaine: k, confirme: true, supplements, ...qui }, choisi && fois !== 1 ? "" : "Changement enregistré.");
     if (choisi && fois !== 1) fini.then(ok => {
       // Puis la quantité choisie, sur le plat tel qu'il est maintenant au menu (une copie « (2) » si le plat y était déjà).
@@ -2778,18 +2792,18 @@ function blocNotifications(texte) {
 const isoPlusAns = n => { const d = new Date(); d.setFullYear(d.getFullYear() + n); return d.toISOString().slice(0, 10); };
 function formulaireMembre() {
   const d = $("dialogue"), i = E.profil.identite || {};
-  const choix = (id, options, v) => `<select id="${id}">${options.map(([k, t]) => `<option value="${k}"${k === v ? " selected" : ""}>${t}</option>`).join("")}</select>`;
+  const choix = (id, options) => `<select id="${id}"><option value="" selected disabled>Choisis…</option>${options.map(([k, t]) => `<option value="${k}">${t}</option>`).join("")}</select>`;
   d.innerHTML = `<form class="feuille formulaire" novalidate id="fMembre">
     <h2 id="dialogueTitre">Un membre sans téléphone</h2>
     <p class="petit discret">Un enfant, un parent… Son profil s'ouvre depuis le téléphone des autres membres ; il reçoit les menus de la famille, à ses quantités.</p>
     <div class="champs2"><div class="champ"><label for="mbPrenom">Prénom</label><input id="mbPrenom" maxlength="40" autocomplete="off"></div>
       <div class="champ"><label for="mbNom">Nom</label><input id="mbNom" maxlength="60" autocomplete="off" value="${esc(i.nom_famille || "")}"></div></div>
     <div class="champs2"><div class="champ"><label for="mbNaissance">Date de naissance</label><input id="mbNaissance" type="date" min="${isoPlusAns(-95)}" max="${isoPlusAns(-15)}"></div>
-      <div class="champ"><label for="mbSexe">Sexe</label>${choix("mbSexe", [["femme", "Femme"], ["homme", "Homme"]], "femme")}</div></div>
+      <div class="champ"><label for="mbSexe">Sexe</label>${choix("mbSexe", [["femme", "Femme"], ["homme", "Homme"]])}</div></div>
     <div class="champs2"><div class="champ"><label for="mbTaille">Taille, en cm</label><input id="mbTaille" inputmode="numeric" maxlength="3"></div>
       <div class="champ"><label for="mbPoids">Poids, en kg</label><input id="mbPoids" inputmode="decimal" maxlength="5"></div></div>
-    <div class="champs2"><div class="champ"><label for="mbActivite">Activité</label>${choix("mbActivite", [["sedentaire", "Sédentaire"], ["leger", "Un peu actif"], ["modere", "Actif"], ["actif", "Très actif"], ["intense", "Sport intense"]], "leger")}</div>
-      <div class="champ"><label for="mbObjectif">Objectif</label>${choix("mbObjectif", [["perte", "Perdre du poids"], ["maintien", "Garder son poids"], ["prise", "Prendre du muscle"]], "maintien")}</div></div>
+    <div class="champs2"><div class="champ"><label for="mbActivite">Activité</label>${choix("mbActivite", [["sedentaire", "Sédentaire"], ["leger", "Un peu actif"], ["modere", "Actif"], ["actif", "Très actif"], ["intense", "Sport intense"]])}</div>
+      <div class="champ"><label for="mbObjectif">Objectif</label>${choix("mbObjectif", [["perte", "Perdre du poids"], ["maintien", "Garder son poids"], ["prise", "Prendre du muscle"]])}</div></div>
     <div class="champ"><label for="mbIdent">Identifiant</label><input id="mbIdent" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false">
       <small>Sert seulement à le reconnaître : il ne se connecte pas.</small></div>
     <small id="eMb" class="erreur" role="alert" style="display:block;color:var(--critique)"></small>
@@ -2806,6 +2820,7 @@ function formulaireMembre() {
     if (!v("mbPrenom") || !v("mbNom")) return erreur("Prénom et nom, s'il te plaît.");
     if (!v("mbNaissance")) return erreur("Sa date de naissance, pour ses besoins en calories.");
     if (!(Number(v("mbTaille")) > 50) || !(Number(v("mbPoids").replace(",", ".")) > 15)) return erreur("Sa taille (cm) et son poids (kg).");
+    if (!v("mbSexe") || !v("mbActivite") || !v("mbObjectif")) return erreur("Son sexe, son activité et son objectif : choisis-les.");
     const b = d.querySelector("[type=submit]");
     b.disabled = true; b.textContent = "Création…"; erreur("");
     try {
@@ -3045,7 +3060,8 @@ document.addEventListener("change", ev => {
 function formulaireProfil(avecCode) {
   const champ = (id, libelle, corps, aide = "") => `<div class="champ"><label for="${id}">${libelle}</label>${corps}${aide ? `<small>${aide}</small>` : ""}</div>`;
   const nombreChamp = (id, min, max, pas, exemple) => `<input id="${id}" name="${id}" type="number" inputmode="decimal" min="${min}" max="${max}" step="${pas}" autocomplete="off" placeholder="${exemple}…" required>`;
-  const choix = (id, options) => `<select id="${id}" name="${id}">${options.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select>`;
+  // rien de choisi d'office (Taha, 28/11/2026) : un homme pressé restait « Femme, Sédentaire, Perdre du poids »
+  const choix = (id, options) => `<select id="${id}" name="${id}" required><option value="" selected disabled>Choisis…</option>${options.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select>`;
   const coche = (id, titre, aide, defaut) => `<label class="option"><input type="checkbox" id="${id}" name="${id}"${defaut ? " checked" : ""}><span><b>${titre}</b><small>${aide}</small></span></label>`;
   const rubrique = t => avecCode ? `<p class="auth-rubrique">${t}</p>` : "";
   return `<form class="formulaire" id="fProfil" novalidate>
@@ -3709,6 +3725,7 @@ function vueJourSuivi(params) {
     ${choixProfils()}
     ${dec === 1 ? `<p class="petit discret" style="margin:-2px 0 12px">Provisoire : les quantités de demain se règlent demain matin, d'après ce que tu auras vraiment mangé aujourd'hui.</p>` : ""}
     ${dec === 0 ? alerteFamille() : ""}
+    ${dec === 0 ? carteAccueil() : ""}
     ${jaugesDuJour(j, o, mangeJour)}
     <p class="reste-jour">${reste}</p>
     ${(E.a_finir || []).length && dec === 0 ? `<a class="rappel" href="#/stock">${icone("warning-circle")}<span>À finir : ${esc(E.a_finir.slice(0, 3).map(x => x.nom).join(", "))}${E.a_finir.length > 3 ? "…" : ""}</span>${icone("caret-right")}</a>` : ""}
@@ -4012,9 +4029,13 @@ function noterRepas({ date, entree = null, remplacer = null }) {
         <input id="nrPhotoPlat" type="file" accept="image/*" hidden>
         ${photoPlat ? `<button type="button" class="lien" id="nrSansPhotoPlat">Retirer la photo</button>` : `<small class="discret">Facultatif : sans photo, l'appli en trouve une.</small>`}</div>` : ""}
       <small id="eNr" class="erreur" role="alert" style="display:block;margin-top:8px;color:var(--critique)"></small>
-      ${entree && semainePourDate(date) ? `<p style="margin:10px 0 0"><button type="button" class="bouton second" id="nrAuMenu" style="width:100%">${icone("cooking-pot")}Mettre dans le menu du jour</button></p>` : ""}
-      <div class="actions pied">${entree ? `<button class="bouton second" type="button" id="nrSuppr">Supprimer</button>` : `<button class="bouton second" type="button" id="nrRetour">Retour</button>`}
-        <button class="bouton" type="submit">${remplacer ? (remplacer.creer ? "Créer le plat" : "Continuer") : !entree && semainePourDate(date) ? "Ajouter au menu" : "Enregistrer"}</button></div></form>`;
+      ${entree && semainePourDate(date) ? (quiIci(date) ? `<div class="nr-au-menu"><p class="petit discret">${icone("cooking-pot")}Mettre dans le menu du jour</p>
+        <div class="actions"><button type="button" class="bouton second" id="nrAuMenu" data-qui="moi">Seulement moi</button><button type="button" class="bouton second" id="nrAuMenuTous" data-qui="tous">Toute la famille</button></div></div>`
+        : `<p style="margin:10px 0 0"><button type="button" class="bouton second" id="nrAuMenu" style="width:100%">${icone("cooking-pot")}Mettre dans le menu du jour</button></p>`) : ""}
+      ${!remplacer && !entree && semainePourDate(date) && quiIci(date) ? QUI_AIDE : ""}
+      <div class="actions pied"${!remplacer && !entree && semainePourDate(date) && quiIci(date) ? ` style="flex-wrap:wrap"` : ""}>${entree ? `<button class="bouton second" type="button" id="nrSuppr">Supprimer</button>` : `<button class="bouton second" type="button" id="nrRetour">Retour</button>`}
+        ${!remplacer && !entree && semainePourDate(date) && quiIci(date) ? boutonsQui()
+          : `<button class="bouton" type="submit">${remplacer ? (remplacer.creer ? "Créer le plat" : "Continuer") : !entree && semainePourDate(date) ? "Ajouter au menu" : "Enregistrer"}</button>`}</div></form>`;
     brancherPuces();
     rendreListe();
     $("nrAjout").addEventListener("click", () => { items.push({ nom: "Aliment", g: null, pour100: null, kcal: 0, prot: 0, gluc: 0, lip: 0, fib: 0, source: "donné par toi" }); rendreListe(); });
@@ -4072,16 +4093,17 @@ function noterRepas({ date, entree = null, remplacer = null }) {
         if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
         return;
       }
-      const qui = await pourQui(date, ["col", moment || "dej"]);
+      const qui = quiChoisi(bouton, date, ["col", moment || "dej"]);
       const rep = await appel("/api/repas/au_menu", { id: entree ? entree.id : "", date, moment, nom, items, ...(photoPlat ? { photo: photoPlat } : {}), ...qui });
       bouton.disabled = false;
       if (rep === true) { d.close("oui"); rendre(); dire(E.au_menu && E.au_menu.note ? "Repas noté." : `Ajouté au menu : « ${(recette(E.au_menu.plat) || { nom }).nom} »${E.au_menu.existant ? ", un plat qui existait déjà, à tes quantités" : ""}.`); }
       else if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
     };
     if ($("nrAuMenu")) $("nrAuMenu").addEventListener("click", ev => auMenu(ev.currentTarget));
+    if ($("nrAuMenuTous")) $("nrAuMenuTous").addEventListener("click", ev => auMenu(ev.currentTarget));
     d.querySelector("form").addEventListener("submit", async ev => {
       ev.preventDefault(); ev.stopPropagation();
-      if (!entree) return auMenu(d.querySelector("[type=submit]"));
+      if (!entree) return auMenu(ev.submitter || d.querySelector("[type=submit]"));
       const rep = await appel("/api/repas/noter", { id: entree.id, date, moment, nom: $("nrNom").value.trim(), items });
       if (rep === true) { d.close("oui"); rendre(); dire("Repas noté."); }
       else if (rep && rep.erreur) $("eNr").textContent = rep.erreur;
@@ -4939,6 +4961,7 @@ function rendre() {
 
 /* ------------------------------------------------------------ actions */
 const ACTIONS = {
+  accueilVu: () => agir("/api/reglages", { accueil: false }, ""),
   composer: () => E.mois ? ACTIONS.suivante() : demanderComposition(false),
   recomposer: () => demanderComposition(true),
   ajouterSemaine: () => agir("/api/semaine/generer", { modes: E.semaine.modes || [], semaines: (E.mois ? E.mois.semaines.length : 1) + 1, ajouter: true },
@@ -5249,6 +5272,9 @@ document.addEventListener("submit", async ev => {
     const f = new FormData(ev.target), corps = Object.fromEntries(f.entries());
     if ($("pEmail") && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(String(corps.email || "").trim())) { $("eProfil").textContent = "Email : écris une adresse valide."; return $("pEmail").focus(); }
     if ($("pEmail") && !mdpValide(String(corps.mot_de_passe || ""))) { $("eProfil").textContent = "Mot de passe : " + REGLE_MDP; return $("pMdp").focus(); }
+    for (const [id, m] of [["sexe", "Choisis ton sexe : il change tes besoins en calories."], ["activite", "Choisis ton niveau d'activité."],
+                           ["objectif", "Choisis ton objectif : perdre, garder ou prendre du muscle."]])
+      if ($(id) && !$(id).value) { $("eProfil").textContent = m; return $(id).focus(); }
     for (const cle of ["boucher", "fodmap"]) corps[cle] = f.has(cle);
     corps.regime = lireRegime(ev.target);
     for (const cle of ["reg", "allergie", "autres"]) delete corps[cle];
