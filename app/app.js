@@ -756,14 +756,29 @@ const P_MOMENTS = j => [j.pdj, j.dej, j.din, ...(j.collations || [])].filter(x =
 function platDuJour(s, n, id, moment = "") {
   const r = recette(id), j = s.jours[moment === "dej" && s.jours[n].dej_reste && n > 0 ? n - 1 : n];
   const q = (j.ajustes || {})[id];
-  if (!q) return r;
-  // Comme planification.avec_quantites : 0 retire un ingredient, {q, u, a} en ajoute un qui n'y etait pas.
+  return q ? avecAjustes(r, q, (j.ajustes_chiffres || {})[id]) : r;
+}
+// La recette avec les quantités réglées un jour (q = jour.ajustes[id], d'une portion), comme planification.avec_quantites :
+// 0 retire un ingredient, {q, u, a} en ajoute un qui n'y etait pas. `changements` : « sans miel », « avec kaki ».
+function avecAjustes(r, q, chiffres) {
   const noms = new Set(r.ing.map(i => i.n)), sans = [];
   const ing = r.ing.flatMap(i => i.u === "qs" || typeof q[i.n] !== "number" ? [i] : q[i.n] <= 0 ? (sans.push(i.n), []) : [{ ...i, q: q[i.n] }]);
   const plus = Object.entries(q).filter(([n, v]) => !noms.has(n) && v && typeof v === "object" && v.q > 0).map(([n, v]) => ({ n, q: v.q, u: v.u, a: v.a }));
   const dit = [sans.length ? `sans ${sans.map(x => x.toLowerCase()).join(", ")}` : "", plus.length ? `avec ${plus.map(x => x.n.toLowerCase()).join(", ")}` : ""].filter(Boolean);
-  return { ...r, ...((j.ajustes_chiffres || {})[id] || {}), ajusteeCeJour: true, ing: [...ing, ...plus],
+  return { ...r, ...(chiffres || {}), ajusteeCeJour: true, ing: [...ing, ...plus], changements: dit,
            etapes: dit.length ? [`Tes changements : ${dit.join(" ; ")}. Cuis-les comme ce qu'ils remplacent.`, ...(r.etapes || [])] : r.etapes };
+}
+// Un plat d'un jour passé, tel que le moteur l'envoie dans l'historique (journal_des_jours) : ses chiffres, la taille de
+// l'assiette et les quantités réglées ce jour-là (ajustes), pour revoir ce qu'il y avait vraiment dans l'assiette.
+function repasDuJournal(date, id, moment = "") {
+  const j = ((E.journal_repas || {}).jours || []).find(x => x.date === date), tous = j ? j.repas || [] : [];
+  return tous.find(x => x.id === id && x.moment === moment) || tous.find(x => x.id === id) || null;
+}
+// La recette d'un plat de l'historique : celle de ce jour-là, et le facteur qui donne les quantités de l'assiette
+// (la taille d'alors ; sans quantités réglées, d'après les calories notées, comme avant).
+function recetteDuJournal(r, x) {
+  const rv = x && x.ajustes ? avecAjustes(r, x.ajustes) : r;
+  return { r: rv, facteur: x && x.ajustes ? x.taille || 1 : x && rv.kcal ? x.kcal / rv.kcal : 1 };
 }
 // Un compte rendu en PDF, fabrique par le site : « semaine » (menu), « courses », « cuisine ».
 const boutonPdf = () => "";
@@ -2181,10 +2196,15 @@ function ficheRapide(id, ctx, depuis, vu = null) {
   const libre = ctx && (enSuivi() || !mange) && !(!enSuivi() && ctx.moment === "dej" && j.dej_reste);
   const reg = ctx && reglable(s, ctx.k, ctx.n, id, ctx.moment);
   // Les ingrédients de l'assiette : le plat ce jour-là (quantités réglées comprises) × la taille de l'assiette.
-  // Depuis l'historique : la taille se déduit des calories notées ce jour-là.
-  const iciVu = vu && vu.date ? semainePourDate(vu.date) : null;
-  const rIng = ctx ? r : iciVu ? platDuJour(iciVu.s, iciVu.n, id, vu.moment || "") : r0;
-  const tIng = ctx ? t : vu && rIng.kcal ? vu.kcal / rIng.kcal : 1;
+  // Depuis l'historique : la version de ce jour-là, même d'une semaine finie (Taha, 28/11/2026 : « je trouve pas kaki…
+  // j'ai jamais mis du miel ») ; sans quantités réglées, la taille se déduit des calories notées ce jour-là.
+  const xVu = vu && vu.date ? repasDuJournal(vu.date, id, vu.moment || "") : null;
+  const iciVu = vu && vu.date && !xVu ? semainePourDate(vu.date) : null;
+  const dj = xVu ? recetteDuJournal(r0, xVu) : null;
+  const rIng = ctx ? r : dj ? dj.r : iciVu ? platDuJour(iciVu.s, iciVu.n, id, vu.moment || "") : r0;
+  const tIng = ctx ? t : dj ? dj.facteur : vu && rIng.kcal ? vu.kcal / rIng.kcal : 1;
+  const placeVu = vu ? ((vu.moment || "").startsWith("col") ? (xVu && xVu.au_repas) || "col" : vu.moment || "") : "";
+  const ceJour = vu && vu.date ? `?date=${vu.date}&moment=${encodeURIComponent(vu.moment || "")}` : "";
   fermerCarte(true);
   const fond = document.createElement("div");
   fond.className = "carte-fond";
@@ -2203,15 +2223,16 @@ function ficheRapide(id, ctx, depuis, vu = null) {
       </div>
       <p class="petit discret cp-info">${[vu ? "Ce que tu as mangé ce jour-là" : ctx ? (t !== 1 ? `Assiette à ${nombre(Math.round(t * 100))} % de la recette` : "Recette telle quelle") : "Une portion",
         r0.temps ? `${r0.temps} min` : "", r.ajusteeCeJour ? "ajustée ce jour" : ""].filter(Boolean).join(" · ")}</p>
+      ${vu && (rIng.changements || []).length ? `<p class="petit cp-ce-jour">Ce jour-là : ${esc(rIng.changements.join(" ; "))}.</p>` : ""}
       ${(rIng.ing || []).length && !(ctx && enSuivi()) ? `<details class="cp-ingredients"${vu ? " open" : ""}><summary>Ingrédients${icone("caret-right")}</summary>
         <div class="cp-ing-liste">${listeIngredients(rIng, tIng)}</div></details>` : ""}
       ${ctx && enSuivi() ? `<div class="cp-mange">${courante && ctx.n <= rangDuJour(s)
           ? `<button class="bouton${mange ? " second" : ""}" data-action="manger" data-jour="${ctx.n}" data-plat="${id}" data-annuler="${mange ? 1 : 0}">${icone("check")}${mange ? "Pas encore mangé" : "J'ai mangé"}</button>` : ""}
         <a class="bouton sobre" href="${courante ? `#/cuisine/${id}?jour=${ctx.n}&moment=${ctx.moment}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Voir la recette</a></div>`
       : enSuivi() ? `${vu && vu.date && vu.date < E.journal_repas.aujourdhui && semainePourDate(E.journal_repas.aujourdhui)
-          ? `<button type="button" class="bouton cp-cuisiner" data-action="mangerAujourdhui" data-plat="${id}" data-moment="${esc(vu.moment || "")}">${icone("check")}Manger aujourd'hui</button>` : ""}
-        <a class="bouton sobre cp-cuisiner" href="#/cuisine/${id}">${icone("cooking-pot")}Voir la recette</a>`
-      : `<a class="bouton cp-cuisiner" href="${courante && ctx ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}`}">${icone("cooking-pot")}Cuisiner</a>`}
+          ? `<button type="button" class="bouton cp-cuisiner" data-action="mangerAujourdhui" data-plat="${id}" data-moment="${esc(placeVu)}" data-date="${vu.date}" data-vu="${esc(vu.moment || "")}">${icone("check")}Manger aujourd'hui</button>` : ""}
+        <a class="bouton sobre cp-cuisiner" href="#/cuisine/${id}${ceJour}">${icone("cooking-pot")}Voir la recette</a>`
+      : `<a class="bouton cp-cuisiner" href="${courante && ctx ? `#/cuisine/${id}?jour=${ctx.n}` : `#/cuisine/${id}${ceJour}`}">${icone("cooking-pot")}Cuisiner</a>`}
       ${ctx && (libre || reg) ? `<div class="cp-choix">
         ${libre ? `<button type="button" data-action="changer" data-semaine="${ctx.k}" data-jour="${ctx.n}" data-moment="${ctx.moment}">${icone("swap")}
           <span><b>Remplacer par un autre plat</b><small>Du catalogue ou un des tiens</small></span>${icone("caret-right")}</button>` : ""}
@@ -2316,8 +2337,10 @@ function fermerCarte(tout_de_suite = false) {
 }
 document.addEventListener("keydown", ev => { if (ev.key === "Escape" && fermerCarte.etat) fermerCarte(); });
 window.addEventListener("hashchange", () => fermerCarte(true));
-function vuePlat({ arg }) {
+function vuePlat({ arg, params }) {
   const r = recette(arg), s = E.semaine;
+  // Ouverte depuis l'historique (?date=&moment=) : « Voir la recette » montre la version de ce jour-là.
+  const ceJour = params && params.has("date") ? `?date=${encodeURIComponent(params.get("date"))}&moment=${encodeURIComponent(params.get("moment") || "")}` : "";
   if (!r) return vueIntrouvable();
   const choix = s && s.choix[arg];
   const f = r.filtres || { regimes: [], atouts: [] };
@@ -2346,7 +2369,7 @@ function vuePlat({ arg }) {
       ${barresVitamines(r.vitamines, false)}</details></section>
     ${estRepas(r) ? `<section aria-labelledby="tAvis"><h2 id="tAvis" style="margin-bottom:12px">Ton avis</h2>${boutonsGout(r)}</section>` : ""}
     <div class="actions">
-      <a class="bouton" href="#/cuisine/${r.id}">Voir la recette</a>
+      <a class="bouton" href="#/cuisine/${r.id}${ceJour}">Voir la recette</a>
       ${estRepas(r) ? `<button class="bouton second" data-action="ajuster" data-plat="${r.id}">${icone("sliders-horizontal")}Ajuster ou changer les ingrédients</button>` : ""}
       ${choix && estRepas(r) && !entame ? `<button class="bouton second" data-action="ecarter" data-plat="${r.id}">Écarter ce plat</button>` : ""}
       ${r.cache ? `<button class="bouton second" data-action="garderPlat" data-plat="${r.id}">${icone("plus")}Ajouter à mes plats</button>` : ""}
@@ -2645,9 +2668,15 @@ function vueRecette({ arg, params }) {
   let r = recette(arg);
   const s = E.semaine;
   if (!r) return vueIntrouvable();
+  // Depuis l'historique (?date=&moment=) : l'assiette de ce jour-là, quantités réglées et taille comprises (Taha,
+  // 28/11/2026 : « je trouve pas kaki quand je clique sur Voir la recette… j'ai jamais mis du miel »).
+  const vu = params.has("date") ? repasDuJournal(params.get("date"), arg, params.get("moment") || "") : null;
+  const dj = vu ? recetteDuJournal(r, vu) : null;
+  if (dj) r = dj.r;
+  const repasVu = vu ? ((vu.moment || "").startsWith("col") ? vu.au_repas || "col" : vu.moment) : "";
   // La seance demandee (?jour=), sinon la prochaine fois ou ce plat se cuisine.
-  let n = params.has("jour") ? jourDemande(params) : -1, seance = null;
-  if (s) {
+  let n = params.has("date") ? -1 : params.has("jour") ? jourDemande(params) : -1, seance = null;
+  if (s && !params.has("date")) {
     if (n < 0) n = [...s.jours.keys()].find(i => s.jours[i].cuisine.some(c => c.id === arg && !fait(s, i, arg))) ?? -1;
     seance = n >= 0 ? s.jours[n].cuisine.find(c => c.id === arg) : null;
   }
@@ -2659,7 +2688,7 @@ function vueRecette({ arg, params }) {
   const portions = seance ? seance.portions : 1, ok = seance && fait(s, n, arg);
   const k = E.mois ? E.mois.rang : 0;
   const goute = s && Object.keys(s.prepares || {}).some(k => k.endsWith("|" + arg));
-  const combien = seance ? pourCombien(seance, s.jours[n]) : "pour 1 repas", facteur = seance || auJour ? tailleDe(s.jours[n], arg) : 1;
+  const combien = seance ? pourCombien(seance, s.jours[n]) : "pour 1 repas", facteur = dj ? dj.facteur : seance || auJour ? tailleDe(s.jours[n], arg) : 1;
   // Taha, 22/11/2026 : « dans Modifier les ingrédients des portions, dans Cuisine d'autres » → en mode flemmard, les
   // quantités d'UNE assiette (comme Modifier) ; ce qui se cuisine pour plusieurs repas, à part, sur demande.
   const listeRecette = mult => `<ul class="ingredients">${r.ing.map(i => `<li><span>${i.u === "qs" ? esc(i.n) : `<button type="button" class="lien" data-action="ingredient" data-nom="${esc(i.n)}"
@@ -2674,17 +2703,19 @@ function vueRecette({ arg, params }) {
   if (enSuivi()) apresRendu.push(() => { const a = document.querySelector("a.retour[data-precedent]");
     if (a && adressePrecedente) a.addEventListener("click", ev => { ev.preventDefault(); RETOUR_ARRIERE = true; history.back(); }); });
   return `${enSuivi() ? `<a class="retour" href="#/semaine" data-precedent>${icone("caret-left")}Retour</a>`
+    : vu ? `<a class="retour" href="#/historique">${icone("caret-left")}Historique</a>`
     : `<a class="retour" href="#/cuisine${n >= 0 ? `?jour=${n}` : ""}">${icone("caret-left")}Cuisine</a>`}
   <article class="fiche fiche-compacte">
     <div class="fc-tete">${photo(r, 240, "carre", r.nom)}
       <div><h1 tabindex="-1">${esc(r.nom)}</h1>
-        <p class="discret chiffres">${[`${nombre(r.kcal * facteur)} kcal`, `${nombre(r.prot * facteur)} g prot.`, r.temps ? `${r.temps} min` : "",
+        <p class="discret chiffres">${[`${nombre(vu ? vu.kcal : r.kcal * facteur)} kcal`, `${nombre(vu ? vu.prot : r.prot * facteur)} g prot.`, r.temps ? `${r.temps} min` : "",
           (seance || auJour) && facteur !== 1 ? `${nombre(facteur * 100)} %` : ""].filter(Boolean).join(" · ")}</p>
         ${goute && estRepas(r) ? `<div class="etoiles fc-note" role="group" aria-label="Ta note, de 1 à 5 : elle décide si ce plat revient" title="Ta note : elle décide si ce plat revient">${[1, 2, 3, 4, 5].map(i => `<button type="button" data-action="noter" data-plat="${r.id}" data-note="${i}"
           class="${r.note && i <= Math.round(r.note) ? "pleine" : ""}" aria-label="${i > 1 ? `${i} étoiles` : `${i} étoile`} sur 5">${icone(r.note && i <= Math.round(r.note) ? "star-fill" : "star")}</button>`).join("")}</div>` : ""}
-        ${enSuivi() ? "" : `<p class="discret petit">${seance ? `${s.jours[n].jour}, ` : ""}${combien}${seance && seance.pour_demain ? " : ce soir et demain midi" : ""}.</p>`}</div></div>
+        ${vu ? `<p class="discret petit fc-vu">Ce que tu as mangé <span>${esc(dateLongueCourte(params.get("date")))}</span>, <span>${repasVu === "col" ? "en collation" : `au ${nomMoment(repasVu)}`}</span>.</p>`
+          : enSuivi() ? "" : `<p class="discret petit">${seance ? `${s.jours[n].jour}, ` : ""}${combien}${seance && seance.pour_demain ? " : ce soir et demain midi" : ""}.</p>`}</div></div>
     <section class="fc-bloc" aria-labelledby="tIng"><h2 id="tIng">Ingrédients</h2>
-      ${listeRecette(enSuivi() ? facteur : portions)}
+      ${listeRecette(enSuivi() || vu ? facteur : portions)}
       ${enSuivi() && seance && seance.repas > 1 ? `<p class="petit discret fc-double">Tu cuisines pour ${seance.repas} repas${seance.pour_demain ? " (ce soir et demain midi)" : ""} : ci-dessus, UNE assiette.
         <button type="button" class="lien" data-ing-tout>Voir les quantités à cuisiner pour les ${seance.repas}</button></p>
         <div hidden data-ing-total>${listeRecette(portions)}</div>` : ""}
@@ -3624,7 +3655,7 @@ function marquerStock(racine) {
   if (!E || !(E.stock || []).length || !E.stock_manque) return;
   racine.querySelectorAll('a.repas[href^="#/plat/"]:not([data-stock-vu]), a.rp-plat[href^="#/plat/"]:not([data-stock-vu]), .rp-plat[data-plat]:not([data-stock-vu])').forEach(a => {
     a.dataset.stockVu = "1";
-    const id = a.dataset.plat || decodeURIComponent((a.getAttribute("href") || "").slice(7));
+    const id = a.dataset.plat || decodeURIComponent((a.getAttribute("href") || "").slice(7).split("?")[0]);
     if (!recette(id) || !estRepas(recette(id))) return;
     const m = E.stock_manque[id] || [], carte = a.closest(".exo, li") || a;
     // Ni dans « Faisable avec ton stock » (déjà dit), ni sur ce qui est déjà mangé (Taha, 22/11/2026).
@@ -4101,22 +4132,28 @@ function platDHistorique(x, date) {
   const r = recette(x.id), place = x.moment.startsWith("col") ? (x.au_repas || "col") : x.moment;
   const quand = (MOMENTS_REPAS.find(([m]) => m === place) || [, "Collation"])[1];
   const texte = `<div class="exo-texte"><div class="quand">${quand}</div><h3>${esc(x.nom)}</h3>
-    <div class="chiffres">${nombre(x.kcal)} kcal, ${nombre(x.prot)} g de protéines</div></div>`;
+    <div class="chiffres">${nombre(x.kcal)} kcal, ${nombre(x.prot)} g de protéines${x.ajustes ? " · quantités ajustées ce jour" : ""}</div></div>`;
   if (!r) return `<div class="exo repas-ligne"><div class="repas">${photo({}, 480)}${texte}</div></div>`;     // plat supprimé depuis
-  return `<div class="exo repas-ligne"><a class="repas" href="#/plat/${x.id}" data-date="${date}" data-moment-vu="${esc(x.moment)}" data-kcal="${x.kcal}" data-prot="${x.prot}" data-gluc="${x.gluc || 0}"
+  // ?date=&moment= : sur ordinateur, la fiche du plat garde le jour pour « Voir la recette » (la version de ce jour-là).
+  return `<div class="exo repas-ligne"><a class="repas" href="#/plat/${x.id}?date=${date}&moment=${encodeURIComponent(x.moment)}" data-date="${date}" data-moment-vu="${esc(x.moment)}" data-kcal="${x.kcal}" data-prot="${x.prot}" data-gluc="${x.gluc || 0}"
     data-lip="${x.lip || 0}" data-quand="${esc(`${quand} · ${dateLongueCourte(date)}`)}">${photo(r, 480)}${texte}</a>
-    ${date < E.journal_repas.aujourdhui && semainePourDate(E.journal_repas.aujourdhui) ? `<button type="button" class="histo-manger" data-action="mangerAujourdhui" data-plat="${x.id}" data-moment="${esc(place)}">Manger aujourd'hui</button>` : ""}</div>`;
+    ${date < E.journal_repas.aujourdhui && semainePourDate(E.journal_repas.aujourdhui) ? `<button type="button" class="histo-manger" data-action="mangerAujourdhui" data-plat="${x.id}" data-moment="${esc(place)}" data-date="${date}" data-vu="${esc(x.moment)}">Manger aujourd'hui</button>` : ""}</div>`;
 }
 // « Manger aujourd'hui » sur un plat de l'historique (Taha, 21/11/2026) : au même repas aujourd'hui s'il n'est pas
 // encore mangé (le plat prévu est remplacé), sinon en plus ; l'aperçu montre ce que ça change avant d'enregistrer.
-function mangerAujourdhui(id, moment) {
+function mangerAujourdhui(id, moment, date = "", momentVu = "") {
   const ici = semainePourDate(E.journal_repas.aujourdhui), r = recette(id);
   if (!ici || !r) return dire("Pas de menu aujourd'hui.");
   // Taha, 22/11/2026 : « ça a remplacé un repas » → le plat s'AJOUTE à la journée (au même repas), rien n'est retiré ;
   // seulement un repas vide (« rien ») est rempli.
   const jp = ici.s.jours[ici.n], place = ["pdj", "dej", "din"].includes(moment) ? moment : null;
   const vide = place && !(place === "dej" && jp.dej_reste) && jp[place] === "rien";
-  const op = vide ? { type: "changer", jour: ici.n, moment: place, plat: id } : { type: "ajouter", jour: ici.n, plat: id, ...(place ? { moment: place } : {}) };
+  // L'assiette de ce jour-là, pas la recette de base : ses quantités réglées et sa taille (Taha, 28/11/2026 : le bol
+  // au kaki, sans miel).
+  const x = date ? repasDuJournal(date, id, momentVu) : null;
+  const pareil = x && x.ajustes ? { quantites: x.ajustes, taille: x.taille || 1 } : {};
+  const op = vide ? { type: "changer", jour: ici.n, moment: place, plat: id, ...pareil }
+    : { type: "ajouter", jour: ici.n, plat: id, ...(place ? { moment: place } : {}), ...pareil };
   apercuChangement(ici.k, op, `Ajouter « ${r.nom} » aujourd'hui ?`);
 }
 const calVitamines = { ouvert: false, mois: "", date: "" };      // le calendrier des Vitamines, ouvert ou non
@@ -5562,7 +5599,7 @@ const ACTIONS = {
     } catch (e) { dire("L'appli ne répond pas."); }
   },
   ingredient: b => demanderIngredient({ nom: b.dataset.nom }),
-  mangerAujourdhui: b => mangerAujourdhui(b.dataset.plat, b.dataset.moment),
+  mangerAujourdhui: b => mangerAujourdhui(b.dataset.plat, b.dataset.moment, b.dataset.date || "", b.dataset.vu || ""),
   noter: b => agir("/api/note", { plat: b.dataset.plat, note: Number(b.dataset.note) }, "Note enregistrée."),
   quantite: b => {
     const r = recette(b.dataset.plat), fois = Number(b.dataset.fois), facteur = fois / (Number(b.dataset.avant) || 1), quantites = {};
@@ -5654,7 +5691,7 @@ document.addEventListener("click", ev => {
     ev.preventDefault();
     const d = plat.dataset;
     const vu = d.kcal != null ? { kcal: +d.kcal, prot: +d.prot, gluc: +d.gluc, lip: +d.lip, quand: d.quand, date: d.date, moment: d.momentVu } : null;    // historique
-    return ficheRapide(decodeURIComponent(plat.getAttribute("href").slice(7)),
+    return ficheRapide(decodeURIComponent(plat.getAttribute("href").slice(7).split("?")[0]),
       d.jour != null ? { k: Number(d.semaine), n: Number(d.jour), moment: d.moment } : null, plat.closest(".exo") || plat, vu);
   }
   const b = ev.target.closest("[data-action]");

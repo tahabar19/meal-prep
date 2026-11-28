@@ -649,6 +649,51 @@ try {
     await B.js(`document.getElementById('dialogue').close()`);                // rien n'est enregistré
   });
 
+  await test('Historique : la recette de CE jour-là (quantités réglées), pas celle de base', async () => {
+    // Taha, 28/11/2026 : « je trouve pas kaki quand je clique sur Voir la recette… j'ai jamais mis du miel ». Un plat d'un
+    // jour passé, réglé ce jour-là (un ingrédient retiré, du kaki ajouté, assiette à 110 %), posé dans l'historique.
+    await aller('#/historique');
+    vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'pas d\'historique');
+    const p = await B.js(`(() => {
+      const J = E.journal_repas; window.__journalAvant = JSON.parse(JSON.stringify(J));
+      const r = E.recettes.find(x => (x.ing || []).filter(i => i.u !== "qs").length >= 2 && x.kcal > 0 && !x.tel_quel);
+      const a = r.ing.filter(i => i.u !== "qs"), d = new Date(J.aujourdhui + "T12:00"); d.setDate(d.getDate() - 3);
+      const date = d.toISOString().slice(0, 10), ajustes = { [a[0].n]: 0, Kaki: { q: 90, u: "g", a: 1 } };
+      let j = J.jours.find(x => x.date === date);
+      if (!j) { j = { date, source: "menu prévu", entrees: [], repas: [], kcal: 432, prot: 20, gluc: 50, lip: 10, fib: 5, reste: {} }; J.jours.push(j); J.jours.sort((x, y) => y.date.localeCompare(x.date)); }
+      j.repas = [{ moment: "pdj", id: r.id, nom: r.nom, au_repas: "", kcal: 432, prot: 20, gluc: 50, lip: 10, taille: 1.1, ajustes }, ...(j.repas || []).filter(x => x.moment !== "pdj")];
+      rendre(); return { id: r.id, date, sans: a[0].n, garde: a[1].n, q: a[1].q };
+    })()`);
+    await att(300);
+    // la tuile de ce jour : « quantités ajustées ce jour », puis sa carte
+    const ouvert = await B.js(`(() => { const a = [...document.querySelectorAll('.jour-histo a.repas')].find(a => a.dataset.date === ${JSON.stringify(p.date)} && a.dataset.momentVu === 'pdj');
+      if (!a) return 'pas de tuile'; a.closest('details').open = true;
+      if (!/ajustées ce jour/.test(a.textContent)) return 'pas de « quantités ajustées ce jour »'; a.click(); return ''; })()`);
+    vrai(!ouvert, ouvert);
+    vrai(await attendre(`!!document.querySelector('.carte-plat .cp-ing-liste')`, 5000) >= 0, 'la carte ne s\'ouvre pas');
+    const carte = await B.js(`(() => { const c = document.querySelector('.carte-plat'), l = [...c.querySelectorAll('.cp-ing-liste li')].map(li => [...li.children].map(s => s.textContent.trim()).join(' ').replace(/\\s+/g, ' '));
+      return { l, ceJour: (c.querySelector('.cp-ce-jour') || {}).textContent || '', lien: (c.querySelector('a.cp-cuisiner') || {}).getAttribute?.('href') || '' }; })()`);
+    vrai(carte.l.some(x => /^Kaki 99 g$/.test(x)), `pas « Kaki 99 g » dans la carte : ${carte.l.join(' | ')}`);
+    vrai(!carte.l.some(x => x.startsWith(p.sans + ' ')), `${p.sans} (retiré ce jour-là) est dans la carte`);
+    vrai(new RegExp('sans ' + p.sans.toLowerCase()).test(carte.ceJour) && /avec kaki/.test(carte.ceJour), `pas de « Ce jour-là : sans… avec kaki » : ${carte.ceJour}`);
+    vrai(carte.lien === '#/cuisine/' + p.id + '?date=' + p.date + '&moment=pdj', `« Voir la recette » ne garde pas le jour : ${carte.lien}`);
+    // « Manger aujourd'hui » : la même assiette (quantités et taille de ce jour-là), vue dans l'aperçu
+    const op = await B.js(`(() => { const b = document.querySelector('.carte-plat [data-action=mangerAujourdhui]'); if (!b) return null;
+      const avant = apercuChangement; let vu = null; apercuChangement = (k, o) => { vu = o; }; b.click(); apercuChangement = avant; return vu; })()`);
+    if (op) vrai(op.taille === 1.1 && op.quantites && op.quantites.Kaki && op.quantites.Kaki.q === 90 && op.quantites[p.sans] === 0, `« Manger aujourd'hui » ne reprend pas l'assiette : ${JSON.stringify(op)}`);
+    else console.log('        (pas de menu aujourd\'hui : « Manger aujourd\'hui » absent)');
+    // « Voir la recette » : les ingrédients de ce jour-là, à la taille de l'assiette, et les calories notées
+    await fermerCarte(); await aller(carte.lien);
+    vrai(await attendre(`!!document.querySelector('.fiche .ingredients')`, 5000) >= 0, 'la recette ne s\'ouvre pas');
+    const page = await B.js(`(() => ({ l: [...document.querySelectorAll('.fiche .ingredients li')].map(li => [...li.children].map(s => s.textContent.trim()).join(' ').replace(/\\s+/g, ' ')),
+      tete: document.querySelector('.fiche .fc-tete').textContent.replace(/\\s+/g, ' '), etapes: document.querySelector('.fiche .etapes').textContent }))()`);
+    vrai(page.l.some(x => /^Kaki 99 g$/.test(x)) && !page.l.some(x => x.startsWith(p.sans + ' ')), `la recette n'est pas celle de ce jour-là : ${page.l.join(' | ')}`);
+    vrai(/432 kcal/.test(page.tete) && /Ce que tu as mangé/.test(page.tete), `en-tête : ${page.tete}`);
+    vrai(/Tes changements/.test(page.etapes), 'les étapes ne disent pas les changements');
+    await B.photo('historique-recette-du-jour');
+    await B.js(`(E.journal_repas = window.__journalAvant, true)`);
+  });
+
   await test('Eau : le bouton se coche et tient après rechargement', async () => {
     await aller('#/semaine');
     vrai(await attendre(`document.getElementById('eauCheck')`, 10000) >= 0, 'pas de bouton d\'eau');
