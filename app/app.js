@@ -3999,19 +3999,22 @@ function vueJourSuivi(params) {
   const reste = r.kcal > 0 ? `Il te reste <b>${nombre(r.kcal)} kcal</b>${r.prot > 0 ? ` et <b>${nombre(r.prot)} g de protéines</b>` : ", protéines atteintes"}.`
     : `Objectif de calories atteint${r.kcal < -100 ? ` (+${nombre(-r.kcal)} kcal)` : ""}${r.prot > 0 ? `, il manque ${nombre(r.prot)} g de protéines` : ""}.`;
   const jp = ici ? ici.s.jours[ici.n] : null;
-  // Après demain, « Pour finir la journée » se calcule à la demande (0,2 s par jour), une fois par état.
-  E.ideesLoin = E.ideesLoin || {};
-  if (dec >= 2 && !(date in E.ideesLoin)) {
-    E.ideesLoin[date] = null;
-    const etat = E;
+  // « Pour finir la journée » se calcule à la demande, pour chaque jour (28/11/2026 : dans /api/etat, c'était 45 % du
+  // calcul de chaque action) ; gardé tant que la journée ne change pas (mêmes totaux, mêmes notes, même objectif).
+  const jourJ = (J.jours || []).find(x => x.date === date);
+  const cleIdees = JSON.stringify([typeof M !== "undefined" && M ? M.uid : "", jourJ ? [jourJ.kcal, jourJ.prot, (jourJ.entrees || []).length, (jourJ.repas || []).length] : null, o.kcal, o.prot]);
+  if (!IDEES_JOUR[date] || IDEES_JOUR[date].cle !== cleIdees) {
+    IDEES_JOUR[date] = { cle: cleIdees, idees: null };
+    const ici_ = location.hash;
     fetch(`/api/repas/idees?date=${date}`).then(r => r.ok ? r.json() : null).then(rep => {
-      if (!rep || etat !== E || !rep.idees) return;
-      E.ideesLoin[date] = rep.idees;
-      if (route().vue === "semaine" && location.hash.includes(`d=${dec}`)) rendre();
+      const c = IDEES_JOUR[date];
+      if (!rep || !c || c.cle !== cleIdees || !rep.idees) return;
+      c.idees = rep.idees;
+      if (location.hash === ici_ && route().vue === "semaine" && !document.querySelector("#dialogue[open]")) rendre();
     }).catch(() => {});
   }
   const autres = IDEES_AUTRES[date] && IDEES_AUTRES[date].etat === E ? IDEES_AUTRES[date] : null;
-  const idees = autres ? autres.idees : dec >= 2 ? E.ideesLoin[date] : (J.idees || {})[date];
+  const idees = autres ? autres.idees : IDEES_JOUR[date].idees;
   // « Ajouter un repas » : une case de la grille en pointillés, un + au centre, comme un repas retiré (Taha, 22/11/2026).
   const tuileAjout = `<button type="button" class="exo ajout-tuile" data-action="noterRepas" data-date="${date}" aria-label="Ajouter un repas : un de tes plats, une description, une photo ou un ticket"><span class="at-rond">${icone("plus")}</span><b>Ajouter un repas</b><small>Plat, photo ou ticket</small></button>`;
   apresRendu.push(() => document.querySelectorAll("[data-idee]").forEach(b => b.addEventListener("click", () => {
@@ -4072,12 +4075,13 @@ function vueJourSuivi(params) {
 }
 // « 3 autres idées » (Taha, 27/11/2026) : de nouvelles propositions, sans celles déjà vues ; au bout, on repart du début.
 const IDEES_AUTRES = {};
+const IDEES_JOUR = {};                                     // date -> {cle, idees} : « Pour finir la journée », à la demande
 document.addEventListener("click", async ev => {
   const b = ev.target.closest && ev.target.closest("[data-idees-autres]");
   if (!b) return;
   const date = b.dataset.ideesAutres, J = E.journal_repas, etat = E;
   const avant = IDEES_AUTRES[date] && IDEES_AUTRES[date].etat === E ? IDEES_AUTRES[date] : null;
-  const montrees = avant ? avant.idees : ((E.ideesLoin || {})[date] || (J.idees || {})[date]);
+  const montrees = avant ? avant.idees : (IDEES_JOUR[date] || {}).idees;
   const vus = [...new Set([...(avant ? avant.vus : []), ...((montrees && montrees.plats) || []).map(x => x.id)])];
   b.disabled = true; b.classList.add("tourne");
   let rep = null;
