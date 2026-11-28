@@ -930,6 +930,19 @@ try {
       vrai(await attendre(`document.querySelectorAll('.dose-membre').length === 2 && document.querySelectorAll('.dose-plat').length > 0`, 60000) >= 0,
         'pas de doses pour toute la famille');
       await B.photo('famille-tous');
+      // 28/11/2026 : les courses de toute la famille, sur 3 jours, puis « Mettre sur ma liste »
+      vrai(await B.js(`!!document.querySelector('[data-action=coursesFamille]')`), 'pas de « Les courses de la famille »');
+      await B.js(`document.querySelector('[data-action=coursesFamille]').click()`);
+      vrai(await attendre(`!!document.querySelector('#cfCorps [data-cf=liste]') || /Rien à acheter/.test((document.getElementById('cfCorps') || {}).textContent || '')`, 90000) >= 0,
+        `les courses de la famille ne se calculent pas : ${await B.js(`(document.getElementById('cfCorps') || {}).textContent || ''`)}`);
+      if (await B.js(`!!document.querySelector('#cfCorps [data-cf=liste]')`)) {
+        const n = await B.js(`document.querySelectorAll('#cfCorps [data-cf-ligne]:checked').length`);
+        await B.js(`document.querySelector('#cfCorps [data-cf=liste]').click()`);
+        vrai(await attendre(`(E.liste_courses || []).filter(x => x.raison === 'famille, 3 jours').length >= Math.min(${n}, 100)`, 20000) >= 0,
+          "les produits ne vont pas sur la liste");
+        vrai(await B.js(`location.hash.startsWith('#/stock')`), "l'appli ne montre pas la liste");
+        await aller('#/semaine');
+      } else console.log('        (rien à acheter : le stock commun couvre tout)');
       await B.js(`(VUE_TOUS = false, true)`);
       // « Pour qui ? » → « Toute la famille » : le changement part aux autres (27/11/2026 : le choix était ignoré, la
       // fermeture de l'aperçu répondait « Seulement moi » à sa place).
