@@ -79,13 +79,12 @@ function prechauffer(version) {
   if (prechauffage) return prechauffage;
   prechauffage = (async () => {
     let t0 = performance.now();
+    // le code et le catalogue se téléchargent pendant que Python démarre (28/11/2026), pas après
+    const codeP = fetch("py.json?v=" + version).then((r) => r.json()), catP = fetch("catalogue.json?v=" + version).then((r) => r.json());
+    codeP.catch(() => {}); catP.catch(() => {});
     py = await loadPyodide();
     marque("pyodide", t0); t0 = performance.now();
-    const [, code, cat] = await Promise.all([
-      py.loadPackage(["pyyaml"]),
-      fetch("py.json?v=" + version).then((r) => r.json()),
-      fetch("catalogue.json?v=" + version).then((r) => r.json()),
-    ]);
+    const [, code, cat] = await Promise.all([py.loadPackage(["pyyaml"]), codeP, catP]);
     marque("paquets+fichiers", t0); t0 = performance.now();
     for (const [nom, texte] of Object.entries(code)) ecrire("/py/" + nom, texte);
     ecrire("/py/repas/site/recettes.json", cat["recettes.json"]);
