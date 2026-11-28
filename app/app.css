@@ -235,7 +235,7 @@ details[open] summary .ic{transform:rotate(90deg)}
 .champ label{font-size:.8rem;font-weight:500;color:var(--texte)}
 .champ small{font-size:.8rem;color:var(--discret)}
 .champ .erreur{color:var(--critique)}
-input[type=text],input[type=number],input[type=password],input[type=search],input[type=date],select{width:100%;min-height:48px;padding:0 14px;
+input[type=text],input[type=number],input[type=password],input[type=search],input[type=date],input:not([type]),select{width:100%;min-height:48px;padding:0 14px;
   border:1px solid var(--filet);border-radius:var(--r-ctl);background-color:var(--surface-fort);color:var(--encre)}
 input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 input::placeholder{color:var(--discret);opacity:1}
@@ -1405,8 +1405,10 @@ html:has(.carte-fond.ouvert){background:#060706}
 .objectif-reglages .champ{margin:0;display:grid;gap:5px;min-width:0}
 .objectif-reglages .champ small{display:none}
 .objectif-reglages .champ:has(#rPhase){grid-column:1 / -1}
-/* Stock : Photo et Ticket, puis la barre « ce que tu as acheté » (Taha, 22/11/2026) */
-.stock-ajout{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:10px}
+/* Stock : Photo, Ticket et Scanner sur une ligne (Taha, 28/11/2026), puis la barre « ce que tu as acheté » */
+.stock-ajout{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:10px}
+/* Catalogue : Créer mon plat et Scanner un produit sur une ligne, en tuiles comme le Stock (Taha, 28/11/2026) */
+.cat-ajout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:-6px 0 14px}
 .stock-taper{margin:0 0 4px}
 .stock-taper-ok{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:36px;height:36px;display:grid;place-items:center;border:0;border-radius:50%;background:var(--accent);color:var(--canvas);cursor:pointer}
 .stock-taper-ok .ic{width:18px;height:18px}
@@ -2223,8 +2225,8 @@ body.miroir-ouvert{overflow:hidden}
 .silh-ligne b{color:var(--encre);font-weight:600;font-size:.9rem}
 .silh-ligne small{font-size:.75rem}
 .silh-conseils{margin-top:4px}
-.silh-ruban{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
-.silh-ruban .champ{margin:0}
+.silh-ruban{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px}
+.silh-ruban .champ{margin:0;min-width:0}
 .silh-ruban .champ small{margin-top:2px;font-size:.72rem}
 
 /* 28/11/2026 : carte d'accueil d'un nouveau compte (une fois), « Pour qui ? » dans la même fenêtre */
