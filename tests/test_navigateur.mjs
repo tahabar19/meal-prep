@@ -661,8 +661,8 @@ try {
       const date = d.toISOString().slice(0, 10), ajustes = { [a[0].n]: 0, Kaki: { q: 90, u: "g", a: 1 } };
       let j = J.jours.find(x => x.date === date);
       if (!j) { j = { date, source: "menu prévu", entrees: [], repas: [], kcal: 432, prot: 20, gluc: 50, lip: 10, fib: 5, reste: {} }; J.jours.push(j); J.jours.sort((x, y) => y.date.localeCompare(x.date)); }
-      j.repas = [{ moment: "pdj", id: r.id, nom: r.nom, au_repas: "", kcal: 432, prot: 20, gluc: 50, lip: 10, taille: 1.1, ajustes }, ...(j.repas || []).filter(x => x.moment !== "pdj")];
-      rendre(); return { id: r.id, date, sans: a[0].n, garde: a[1].n, q: a[1].q };
+      j.repas = [{ moment: "pdj", id: r.id, nom: "Plat du jour au kaki", au_repas: "", kcal: 432, prot: 20, gluc: 50, lip: 10, taille: 1.1, ajustes }, ...(j.repas || []).filter(x => x.moment !== "pdj")];
+      rendre(); return { id: r.id, nom: r.nom, date, sans: a[0].n, garde: a[1].n, q: a[1].q };
     })()`);
     await att(300);
     // la tuile de ce jour : « quantités ajustées ce jour », puis sa carte
@@ -672,7 +672,9 @@ try {
     vrai(!ouvert, ouvert);
     vrai(await attendre(`!!document.querySelector('.carte-plat .cp-ing-liste')`, 5000) >= 0, 'la carte ne s\'ouvre pas');
     const carte = await B.js(`(() => { const c = document.querySelector('.carte-plat'), l = [...c.querySelectorAll('.cp-ing-liste li')].map(li => [...li.children].map(s => s.textContent.trim()).join(' ').replace(/\\s+/g, ' '));
-      return { l, ceJour: (c.querySelector('.cp-ce-jour') || {}).textContent || '', lien: (c.querySelector('a.cp-cuisiner') || {}).getAttribute?.('href') || '' }; })()`);
+      return { l, ceJour: (c.querySelector('.cp-ce-jour') || {}).textContent || '', lien: (c.querySelector('a.cp-cuisiner') || {}).getAttribute?.('href') || '',
+        titre: c.querySelector('#cpTitre').textContent, dapres: (c.querySelector('.cp-d-apres') || {}).textContent || '' }; })()`);
+    vrai(carte.titre === 'Plat du jour au kaki' && carte.dapres.includes(p.nom), `la carte n'a pas le nom de ce jour-là : « ${carte.titre} » / ${carte.dapres}`);
     vrai(carte.l.some(x => /^Kaki 99 g$/.test(x)), `pas « Kaki 99 g » dans la carte : ${carte.l.join(' | ')}`);
     vrai(!carte.l.some(x => x.startsWith(p.sans + ' ')), `${p.sans} (retiré ce jour-là) est dans la carte`);
     vrai(new RegExp('sans ' + p.sans.toLowerCase()).test(carte.ceJour) && /avec kaki/.test(carte.ceJour), `pas de « Ce jour-là : sans… avec kaki » : ${carte.ceJour}`);
@@ -686,7 +688,9 @@ try {
     await fermerCarte(); await aller(carte.lien);
     vrai(await attendre(`!!document.querySelector('.fiche .ingredients')`, 5000) >= 0, 'la recette ne s\'ouvre pas');
     const page = await B.js(`(() => ({ l: [...document.querySelectorAll('.fiche .ingredients li')].map(li => [...li.children].map(s => s.textContent.trim()).join(' ').replace(/\\s+/g, ' ')),
-      tete: document.querySelector('.fiche .fc-tete').textContent.replace(/\\s+/g, ' '), etapes: document.querySelector('.fiche .etapes').textContent }))()`);
+      tete: document.querySelector('.fiche .fc-tete').textContent.replace(/\\s+/g, ' '), etapes: document.querySelector('.fiche .etapes').textContent,
+      titre: document.querySelector('.fiche h1').textContent, dapres: (document.querySelector('.fiche .fc-d-apres') || {}).textContent || '' }))()`);
+    vrai(page.titre === 'Plat du jour au kaki' && page.dapres.includes(p.nom), `la recette n'a pas le nom de ce jour-là : « ${page.titre} » / ${page.dapres}`);
     vrai(page.l.some(x => /^Kaki 99 g$/.test(x)) && !page.l.some(x => x.startsWith(p.sans + ' ')), `la recette n'est pas celle de ce jour-là : ${page.l.join(' | ')}`);
     vrai(/432 kcal/.test(page.tete) && /Ce que tu as mangé/.test(page.tete), `en-tête : ${page.tete}`);
     vrai(/Tes changements/.test(page.etapes), 'les étapes ne disent pas les changements');
