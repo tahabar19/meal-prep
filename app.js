@@ -1019,6 +1019,10 @@ function demanderChangement(k, n, moment) {
         <span class="rp-macros chiffres"><span><strong>${nombre(Math.round(kc(r)))}</strong> kcal</span><span><strong>${nombre(Math.round(pr(r)))} g</strong> prot.</span>${
           sansRepas || !dp ? "" : `<span class="rp-ecart${dp > 0 ? " plus" : ""}">${dp > 0 ? "+" : "−"}${nombre(Math.abs(dp))} g</span>`}</span></span>
       ${(E.stock_couvre || {})[r.id] >= 0.8 ? `<span class="rp-stock" title="Faisable avec ton stock">${icone("package")}</span>` : tient ? `<span class="rp-tient" title="Ta journée tient l'objectif">${icone("check")}</span>` : ""}</button></li>`; };
+  const carteAliment = a => { const it = itemAliment(a);
+    return `<li><button type="button" class="rp-plat aliment-seul" data-aliment="${esc(a.nom)}"><div class="photo vide carre aliment-pastille">${icone("orange")}</div>
+      <span class="rp-texte"><b>${esc(a.nom)}</b><span class="rp-macros chiffres"><span>${qteAliment(a)}</span><span><strong>${nombre(Math.round(it.kcal))}</strong> kcal</span><span><strong>${nombre(Math.round(it.prot))} g</strong> prot.</span></span>
+        <small class="discret">Un aliment seul</small></span></button></li>`; };
   const tete = () => {                  // tout de suite, à chaque lettre : le bouton IA et la croix
     if (!$("rpListe")) return;           // la fenêtre a changé entre-temps
     const texte = R.cherche.trim();
@@ -1034,7 +1038,10 @@ function demanderChangement(k, n, moment) {
     tete();
     $("rpCompte").textContent = texte ? (liste.length ? `${liste.length > 1 ? `${liste.length} plats trouvés` : `${liste.length} plat trouvé`}` : "Aucun plat de ta base")
       : `${liste.length} ${cat === "petitdej" ? "petits-déjeuners" : cat === "plat" ? "plats" : "collations"}`;
-    $("rpListe").innerHTML = liste.slice(0, R.nb).map(carte).join("")
+    // Un aliment seul aussi (28/11/2026) : en tête si c'est son nom exact, sinon après les plats.
+    const als = texte ? alimentsTrouves(texte, new Set(liste.slice(0, 40).map(r => sansAcc(r.nom))), maj) : [];
+    const exacts = als.filter(a => nomExact(a, motsRech(texte))), autres = als.filter(a => !exacts.includes(a));
+    $("rpListe").innerHTML = (exacts.map(carteAliment).join("") + liste.slice(0, R.nb).map(carte).join("") + autres.map(carteAliment).join(""))
       || `<li class="rp-vide">${texte ? "Rien à ce nom : crée-le avec l'IA juste au-dessus." : "Aucun plat."}</li>`;
     $("rpSuite").innerHTML = liste.length > R.nb ? `<button type="button" class="bouton second rp-voir-plus" data-voir-plus>Voir ${Math.min(20, liste.length - R.nb)} de plus</button>` : "";
   };
@@ -1079,6 +1086,13 @@ function demanderChangement(k, n, moment) {
     const x = b.dataset;
     if ("fermer" in x) return d.close("non");
     if ("ia" in x) return creerAvecIA();
+    if (x.aliment) {                     // un aliment seul : sa ligne à vérifier, puis l'aperçu (28/11/2026)
+      const a = (ALIMENTS.liste || []).find(y => y.nom === x.aliment);
+      if (!a) return;
+      sortir();
+      return noterRepas({ date: dateDuPlan(s, n), remplacer: { texte: a.nom, aliment: a, place: moment.startsWith("col") ? "col" : moment, retour,
+        avant: { kcal: avantK, prot: avantP }, k, operation, titre: nom => `${sansRepas ? "Mettre" : "Remplacer par"} « ${nom} » ?` } });
+    }
     if (x.plat) { sortir(); return apercuChangement(k, operation(x.plat), `${sansRepas ? "Mettre" : "Remplacer par"} « ${recette(x.plat).nom} » ?`, retour); }
     if ("voirPlus" in x) { R.nb += 20; return maj(); }
     if ("effacer" in x) { R.cherche = ""; $("chPlat").value = ""; R.nb = 20; maj(); if (!TACTILE.matches) $("chPlat").focus(); }
@@ -1195,7 +1209,7 @@ async function apercuChangement(k, operation, titre, retour) {
       : operation.type === "reequilibrer" && a.atteint ? `<p class="dujour" style="margin-top:0"><strong>Déjà dans l'objectif.</strong> Les grammes de ce plat restent comme ils sont.</p>` : "";
   // Choisir un plat : ses ingrédients et sa quantité, réglables avant de valider ; les chiffres de la journée
   // suivent tout de suite (Taha, 21/11/2026). Pas pour un plat dont Jarvis règle lui-même les grammes.
-  const choisi = ["changer", "ajouter"].includes(operation.type) && !operation.regler_plat && recette(operation.plat)
+  const choisi = ["changer", "ajouter"].includes(operation.type) && !operation.regler_plat && !operation.quantites && recette(operation.plat)
     && (recette(operation.plat).ing || []).length ? recette(operation.plat) : null;
   const tChoisi = choisi ? tailleDe(planDe(k).jours[operation.jour], choisi.id) : 1;
   let fois = 1;
@@ -1368,6 +1382,46 @@ const nomExact = (r, mots) => mots.length && motsDuPlat(r).nom.join(" ") === mot
 // Ce qu'on tape s'affiche tout de suite ; la liste suit dès qu'on lève le doigt (Taha, 27/11/2026 : « entre lettre et
 // lettre j'ai l'impression que je dois attendre »).
 const plusTard = (f, ms = 140) => { let t = 0; return (...a) => { clearTimeout(t); t = setTimeout(() => f(...a), ms); }; };
+// Tes aliments, à prendre seuls comme repas (Taha, 28/11/2026 : « skyr nature, pomme… mais seuls ») : la liste vient
+// du moteur (/api/aliments : unité, quantité habituelle, grammes d'une pièce, valeurs pour 100 g), une fois ; relue quand
+// on crée un aliment ou qu'on change de profil. `puis` redessine quand elle arrive.
+const ALIMENTS = { cle: "", liste: null, attente: null };
+function aliments(puis) {
+  const cle = `${typeof M !== "undefined" && M ? M.uid : ""}|${Object.keys(E.ingredients_perso || {}).length}`;
+  if (ALIMENTS.cle === cle && ALIMENTS.liste) return ALIMENTS.liste;
+  if (ALIMENTS.cle !== cle) Object.assign(ALIMENTS, { cle, liste: null, attente: null });
+  if (!ALIMENTS.attente) ALIMENTS.attente = fetch("/api/aliments").then(r => r.json())
+    .then(x => { if (ALIMENTS.cle === cle) ALIMENTS.liste = (x.aliments || []).map(a => ({ ...a, nom: a.n, ing: [] })); })
+    .catch(() => { ALIMENTS.attente = null; });
+  if (puis && ALIMENTS.attente) ALIMENTS.attente.then(() => { if (ALIMENTS.liste) puis(); });
+  return null;
+}
+// Les aliments qui répondent à ce qui est tapé (fautes pardonnées), sauf ceux dont le plat est déjà dans la liste.
+function alimentsTrouves(texte, sauf, puis, n = 3) {
+  const mots = motsRech(texte), l = mots.length ? aliments(puis) : null;
+  if (!l) return [];
+  return l.map(a => ({ a, s: scoreRecherche(a, mots, { part: mots.length === 1 ? 1 : 0.6 }) }))
+    .filter(x => x.s > 0 && !(sauf && sauf.has(sansAcc(x.a.nom))))
+    .sort((x, y) => y.s - x.s || x.a.nom.length - y.a.nom.length).slice(0, n).map(x => x.a);
+}
+const aLaPiece = a => !["g", "ml"].includes(a.u);
+// La ligne d'« Ajouter un repas » pour un aliment seul : la quantité tapée (« 200 g », « 2 »), sinon celle de tes
+// recettes, en grammes ; le moteur en fait le plat de l'aliment et la dose de ce jour-là (repas_au_menu).
+function itemAliment(a, lu) {
+  let g = Math.round(aLaPiece(a) ? (a.q >= 0.5 ? a.q : 1) * a.gp : (a.q >= 10 ? a.q : 100));
+  if (lu && lu.q > 0 && (lu.u === "g" || lu.u === "ml")) g = lu.q;
+  else if (lu && lu.q > 0 && (!lu.u || lu.u === "pièce") && aLaPiece(a)) g = Math.round(lu.q * a.gp);
+  const pour100 = { kcal: a.kcal, prot: a.prot, gluc: a.gluc, lip: a.lip, fib: a.fib };
+  return { nom: a.nom, aliment: a.nom, g, pour100, ...Object.fromEntries(Object.entries(pour100).map(([m, v]) => [m, Math.round(v * g) / 100])),
+           source: "tes aliments" };
+}
+const qteAliment = a => { const it = itemAliment(a); return quantite(aLaPiece(a) ? Math.round(it.g / a.gp * 2) / 2 : it.g, a.u); };
+function boutonAliment(a) {                         // dans « Ajouter un repas »
+  const it = itemAliment(a);
+  return `<button type="button" class="candidat aliment-seul" data-aliment="${esc(a.nom)}"><div class="photo vide carre aliment-pastille">${icone("orange")}</div>
+    <span class="texte"><b>${esc(a.nom)}</b><span class="chiffres aliment-chiffres"><span>${qteAliment(a)}</span><span>${nombre(Math.round(it.kcal))} kcal</span><span>${nombre(Math.round(it.prot))} g de protéines</span></span>
+    <small class="discret">Un aliment seul</small></span>${icone("caret-right")}</button>`;
+}
 function ingredientsConnus() {
   // Les ingredients du site et ceux crees par le profil, pour les listes de saisie.
   return [...new Set(E.recettes.filter(r => !r.perso).flatMap(r => r.ing.filter(i => i.u !== "qs").map(i => i.n))
@@ -3884,11 +3938,18 @@ function noterRepas({ date, entree = null, remplacer = null }) {
     const trouves = mots.length ? chercherPlats(texte).slice(0, 6).map(x => x.r) : tous.filter(r => r.perso && !r.cache).slice(0, 6);
     const zone = $("nrPlats");
     if (!zone) return;
-    zone.innerHTML = trouves.length ? `<p class="petit discret" style="margin:2px 0 6px">${mots.length ? "Un de ces plats ?" : "Tes plats"}</p>
+    const als = mots.length ? alimentsTrouves(texte, new Set(trouves.map(r => sansAcc(r.nom))), proposerPlats) : [];
+    zone.innerHTML = (trouves.length ? `<p class="petit discret" style="margin:2px 0 6px">${mots.length ? "Un de ces plats ?" : "Tes plats"}</p>
       <ul class="candidats">${trouves.map(r => `<li><button type="button" class="candidat" data-plat-connu="${r.id}">${photo(r, 160, "carre")}
         <span class="texte"><b>${esc(r.nom)}</b><span class="chiffres">${nombre(r.kcal)} kcal, ${nombre(r.prot)} g de protéines</span>
-        <small class="discret ing-courts">${esc(ingredientsCourts(r))}</small></span>${icone("caret-right")}</button></li>`).join("")}</ul>` : "";
+        <small class="discret ing-courts">${esc(ingredientsCourts(r))}</small></span>${icone("caret-right")}</button></li>`).join("")}</ul>` : "")
+      + (als.length ? `<p class="petit discret" style="margin:10px 0 6px">Ou un aliment seul</p>
+      <ul class="candidats">${als.map(a => `<li>${boutonAliment(a)}</li>`).join("")}</ul>` : "");
     zone.querySelectorAll("[data-plat-connu]").forEach(b => b.addEventListener("click", () => ajouterPlatConnu(recette(b.dataset.platConnu))));
+    zone.querySelectorAll("[data-aliment]").forEach(b => b.addEventListener("click", () => {
+      const a = (ALIMENTS.liste || []).find(x => x.nom === b.dataset.aliment);
+      if (a) verifier({ nom: a.nom, items: [itemAliment(a)], remarque: "" });
+    }));
   };
   // Un plat de ta base : son repas vient de son type ; un plat de midi ou du soir va au repas encore libre, sinon selon l'heure.
   const momentDuPlat = r => {
@@ -3931,6 +3992,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
     const proposerPlusTard = plusTard(proposerPlats);
     $("nrTexte").addEventListener("input", ev => { texte = ev.target.value; proposerPlusTard(); });
     proposerPlats();
+    aliments();                                      // pour « Ou un aliment seul » dès la première lettre
     $("nrPhoto").addEventListener("change", async ev => {
       const f = ev.target.files[0]; if (!f) return;
       try { photoJointe = await photoReduite(f); } catch (e) { $("eNr").textContent = "Photo illisible."; return; }
@@ -3945,6 +4007,10 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       if (!texte && !photoJointe) { $("eNr").textContent = "Écris ce que tu as mangé, ou ajoute une photo."; return; }
       const exact = !photoJointe && chercherPlats(texte).find(x => x.exact);
       if (exact) return ajouterPlatConnu(exact.r);              // le nom exact d'un de tes plats : pas besoin de Claude
+      // Le nom d'un de tes aliments, avec ou sans quantité (« skyr nature 200 g », « 2 pommes ») : pas besoin de Claude non plus.
+      const lu = !photoJointe && ALIMENTS.liste ? lireQuantite(texte) : null;
+      const al = lu && ALIMENTS.liste.find(a => nomExact(a, motsRech(lu.nom)));
+      if (al) return verifier({ nom: al.nom, items: [itemAliment(al, lu)], remarque: "" });
       let annule = false;
       const att = attenteIA(d, { sujet: texte || "Ta photo", annuler: () => { annule = true; saisie(); } });
       const erreur = m => { if (annule) return; saisie(); $("eNr").textContent = m; };
@@ -4113,6 +4179,8 @@ function noterRepas({ date, entree = null, remplacer = null }) {
   };
   if (entree) return verifier(entree);
   if (!remplacer) return saisie();
+  // Un aliment seul choisi dans « Remplacer » (28/11/2026) : sa ligne, à vérifier ; pas d'IA.
+  if (remplacer.aliment) return verifier({ nom: remplacer.aliment.nom, items: [itemAliment(remplacer.aliment)], remarque: "" });
   // Depuis « Remplacer un plat » : l'IA calcule ce qui a été écrit, sans repasser par la saisie.
   // Sans compte Claude branché : les ingrédients à la main, comme « Mon propre plat ».
   if (E.claude === false && remplacer.main) return remplacer.main();

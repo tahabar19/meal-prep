@@ -2242,4 +2242,9 @@ body.miroir-ouvert{overflow:hidden}
 .nr-au-menu > p .ic{width:16px;height:16px}
 .nr-au-menu .actions{display:flex;gap:8px}
 .nr-au-menu .actions .bouton{flex:1}
+/* 28/11/2026 : un aliment seul comme repas (Ajouter un repas, Remplacer) */
+.aliment-pastille{background:rgba(200,240,75,.06);color:var(--accent)}
+.aliment-pastille .ic{width:20px;height:20px}
+.aliment-chiffres > span + span::before{content:" · "}
+.aliment-seul small.discret{display:block}
 
