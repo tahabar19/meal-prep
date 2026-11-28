@@ -51,7 +51,10 @@ const aller = async hash => { await B.js(`location.hash = ${JSON.stringify(hash)
 const debordement = () => B.js(`document.documentElement.scrollWidth - window.innerWidth`);
 const fermerCarte = () => B.js(`typeof fermerCarte === 'function' && fermerCarte(true)`);
 
+// MP_SEUL=« motif » : seulement les essais dont le nom y répond (plus la connexion), pour aller vite pendant un travail.
+const SEUL = process.env.MP_SEUL ? new RegExp(process.env.MP_SEUL, 'i') : null;
 async function test(nom, f) {
+  if (SEUL && !SEUL.test(nom) && nom !== 'Connexion et écran Jour') return;
   const t0 = Date.now(), avant = B.erreurs.length;
   try {
     await f();
@@ -564,6 +567,47 @@ try {
       "le skyr n'est pas au menu");
     vrai(await B.js(`E.semaine.jours.some(j => j.ajustes && j.ajustes['perso-skyr-nature'] && j.ajustes['perso-skyr-nature']['Skyr nature'] === 175)`),
       "la dose du jour n'est pas 175 g");
+  });
+
+  // Taha, 28/11/2026 : scanner un code-barres. Une vraie image de code EAN-13 (Nutella, 3017620422003) dessinée sur une
+  // toile remplace la caméra ; le lecteur (ZXing, chargé depuis jsDelivr, clé d'intégrité vérifiée) doit la lire,
+  // Open Food Facts donne le produit, il entre au stock.
+  await test('Stock : scanner un code-barres, le produit entre au stock', async () => {
+    await aller('#/stock');
+    vrai(await attendre(`!!document.querySelector('[data-action=scannerStock]')`, 10000) >= 0, 'pas de bouton « Scanner » dans le stock');
+    await B.js(`chargerScanner().then(() => {
+      const L = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+      const R = L.map(c => c.replace(/./g, b => b === '0' ? '1' : '0')), G = R.map(c => c.split('').reverse().join(''));
+      const PAR = ['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'];
+      const d = '3017620422003'.split('').map(Number); let bits = '101';
+      for (let i = 1; i <= 6; i++) bits += (PAR[d[0]][i - 1] === 'L' ? L : G)[d[i]];
+      bits += '01010'; for (let i = 7; i <= 12; i++) bits += R[d[i]]; bits += '101';
+      const c = document.createElement('canvas'); c.width = 1280; c.height = 720; const x = c.getContext('2d');
+      const dessiner = () => { x.fillStyle = '#fff'; x.fillRect(0, 0, 1280, 720); x.fillStyle = '#000';
+        for (let i = 0; i < bits.length; i++) if (bits[i] === '1') x.fillRect(307 + i * 7, 220, 7, 280); };
+      dessiner(); window.__scanMinuteur = setInterval(dessiner, 100);
+      Scanner.source = async () => c.captureStream(15);
+      return true; })`);
+    const avant = await B.js(`JSON.stringify((E.stock || []).map(l => [l.nom, l.quantite]))`);
+    await B.js(`document.querySelector('[data-action=scannerStock]').click()`);
+    vrai(await attendre(`!!document.querySelector('dialog.scan[open]')`, 10000) >= 0, "l'écran du scanner ne s'ouvre pas");
+    vrai(await attendre(`!document.querySelector('dialog.scan') && !!document.querySelector('#dialogue .scan-res')`, 60000) >= 0,
+      `le code n'est pas lu : ${await B.js(`(document.querySelector('.scan-aide') || {}).textContent || ''`)}`);
+    vrai(await attendre(`!!document.querySelector('#dialogue form.scan-res') && !/Je cherche/.test(document.getElementById('dialogueTitre').textContent)`, 40000) >= 0, 'pas de réponse pour le produit');
+    if (await B.js(`!document.querySelector('#dialogue .scan-res [type=submit]')`)) {
+      console.log(`        (Open Food Facts ne répond pas : ${await B.js(`document.querySelector('#dialogue .scan-res').textContent.replace(/\\s+/g, ' ').slice(0, 160)`)})`);
+      return B.js(`(clearInterval(window.__scanMinuteur), document.getElementById('dialogue').close(), true)`);
+    }
+    vrai(await B.js(`/Nutella/i.test(document.getElementById('dialogueTitre').textContent)`), `pas « Nutella » : ${await B.js(`document.getElementById('dialogueTitre').textContent`)}`);
+    vrai(await B.js(`Number(document.getElementById('scanQ').value) === 400 || document.getElementById('scanU').textContent.startsWith('pièce')`), 'le pot de 400 g ne se propose pas');
+    const nom = await B.js(`(document.querySelector('[name=scanAl]:checked') || {}).value || ''`);
+    await B.js(`document.querySelector('#dialogue .scan-res [type=submit]').click()`);
+    vrai(await attendre(`!document.getElementById('dialogue').open`, 40000) >= 0, `pas ajouté : ${await B.js(`(document.getElementById('eScan') || {}).textContent || ''`)}`);
+    const apres = await B.js(`JSON.stringify((E.stock || []).map(l => [l.nom, l.quantite]))`);
+    vrai(apres !== avant && (nom ? apres.includes(JSON.stringify(nom)) : /Nutella/.test(apres)), `le stock ne bouge pas (${nom || 'nouvel aliment'})`);
+    // la fois d'après, le code est reconnu tout de suite (codes_barres.json)
+    vrai(await B.js(`fetch('/api/produit?code=3017620422003').then(r => r.json()).then(r => !!r.aliment)`), "le code n'est pas gardé");
+    await B.js(`(clearInterval(window.__scanMinuteur), Scanner.source = null, true)`);
   });
 
   await test('Historique : « Manger aujourd\'hui » sur les plats', async () => {

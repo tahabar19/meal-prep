@@ -118,6 +118,7 @@ def page():
     (APP / "app.css").write_text(css.replace('url("/fonts/', 'url("fonts/'), encoding="utf-8")
     shutil.copy(SITE / "graphiques.js", APP / "graphiques.js")
     shutil.copy(SITE / "miroir.js", APP / "miroir.js")           # la silhouette au miroir, chargée à la demande (27/11/2026)
+    shutil.copy(SITE / "scan.js", APP / "scan.js")               # le scanner de codes-barres, chargé à la demande (28/11/2026)
     for nom in ("icone.svg", "icone-192.png", "icone-512.png", "apple-touch-icon.png"):
         shutil.copy(SITE / nom, APP / nom)
     shutil.copytree(SITE / "fonts", APP / "fonts", dirs_exist_ok=True)

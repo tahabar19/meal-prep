@@ -1324,6 +1324,123 @@ async function apercuChangement(k, operation, titre, retour) {
   d.scrollTop = 0;
 }
 
+/* ------------------------------------------------------------ scanner un produit */
+// Un produit emballé par son code-barres (Taha, 28/11/2026 : « c'est génial ») : Open Food Facts donne son nom et ses
+// valeurs ; il devient un de tes aliments (ou reprend celui que tu as déjà), puis va au stock (`stock`), dans ce que tu
+// manges (`repas` : `suite(aliment, quantité)` ouvre la vérification) ou dans tes plats, tel quel (`plat`).
+function chargerScanner() {
+  if (typeof Scanner !== "undefined") return Promise.resolve();
+  if (!chargerScanner.p) chargerScanner.p = new Promise((ok, ko) => {
+    const s = document.createElement("script");
+    s.src = "scan.js"; s.onload = ok;
+    s.onerror = () => { chargerScanner.p = null; ko(new Error("Scanner indisponible : vérifie ta connexion.")); };
+    document.head.appendChild(s);
+  });
+  return chargerScanner.p;
+}
+const TITRES_SCAN = { stock: "Scanner pour le stock", repas: "Scanner ce que tu manges", plat: "Scanner un plat tout prêt" };
+async function scannerProduit(pour, o = {}) {
+  const d = $("dialogue"), revenir = () => o.retour ? o.retour() : d.open && d.close("non");
+  let code;
+  try { await chargerScanner(); code = await Scanner.lire({ titre: TITRES_SCAN[pour] }); }
+  catch (e) { dire(e.message || "Scanner indisponible."); return revenir(); }
+  if (!code) return revenir();
+  d.innerHTML = `<div class="feuille scan-res"><p class="rp-sur">Code ${esc(code)}</p><h2 id="dialogueTitre">Je cherche le produit…</h2></div>`;
+  if (!d.open) d.showModal();
+  let r;
+  try {
+    const x = await fetch(`/api/produit?code=${encodeURIComponent(code)}`);
+    r = await x.json();
+    if (!x.ok) r = { code, erreur: r.erreur || "Code illisible." };
+  } catch (e) { r = { code, erreur: "Open Food Facts ne répond pas : réessaie dans un instant." }; }
+  carteProduit(pour, r, o);
+}
+function carteProduit(pour, r, o) {
+  const d = $("dialogue"), p = r.produit, lie = r.aliment || null, proches = r.proches || [];
+  let choix = lie ? lie.n : r.sur && proches[0] ? proches[0].n : "";          // "" : un nouvel aliment
+  let cat = "plat";
+  const alDe = n => lie && lie.n === n ? lie : proches.find(a => a.n === n) || null;
+  const piece = () => { const a = alDe(choix); return !!a && aLaPiece(a); };
+  const unite = () => { const a = alDe(choix); return a ? a.u : (p ? p.unite : "g"); };
+  const qDefaut = () => {
+    const a = alDe(choix);
+    if (a && aLaPiece(a)) return pour === "stock" && p && p.quantite && a.gp > 1 ? Math.max(1, Math.round(p.quantite / a.gp)) : 1;
+    if (pour === "stock") return p && p.quantite ? p.quantite : a && a.q >= 10 ? a.q : 100;
+    return p && p.portion_g ? p.portion_g : p && p.quantite && p.quantite <= 400 ? p.quantite : a && a.q >= 10 ? a.q : 100;
+  };
+  const valeurs = () => alDe(choix) || p || {};
+  const grammes = q => piece() ? q * (alDe(choix).gp || 1) : q;
+  const libelle = pour === "stock" ? "Ajouter au stock" : pour === "plat" ? "Ajouter à mes plats" : "Continuer";
+  const rien = r.inconnu || r.erreur || (!p && !lie);
+  d.innerHTML = `<form class="feuille formulaire scan-res" novalidate>
+    <p class="rp-sur">Code ${esc(r.code || "")}</p>
+    <div class="scan-tete">${p && p.image ? `<img class="scan-image" src="${esc(p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}
+      <h2 id="dialogueTitre">${p ? esc(p.nom) : lie ? esc(lie.n) : "Produit inconnu"}</h2></div>
+    ${p ? `<p class="scan-valeurs chiffres"><span>Pour 100 ${p.unite === "ml" ? "ml" : "g"}</span><span>${nombre(Math.round(p.kcal))} kcal</span><span>${virgule(p.prot)} g de protéines</span><span>${virgule(p.gluc)} g de glucides</span><span>${virgule(p.lip)} g de lipides</span></p>` : ""}
+    ${r.inconnu ? `<p class="petit">Open Food Facts ne connaît pas ce code. Décris le produit à l'IA, ou crée-le comme nouvel ingrédient.</p>` : ""}
+    ${r.erreur ? `<p class="petit" style="color:var(--critique)">${esc(r.erreur)}</p>` : ""}
+    ${p && !lie ? `<fieldset class="scan-choix"><legend class="petit discret">C'est…</legend>
+      ${proches.map(a => `<label class="option"><input type="radio" name="scanAl" value="${esc(a.n)}"${choix === a.n ? " checked" : ""}>
+        <span><b>Ton aliment « ${esc(a.n)} »</b><small>${nombre(Math.round(a.kcal))} kcal · ${virgule(a.prot)} g de protéines pour 100 g</small></span></label>`).join("")}
+      <label class="option"><input type="radio" name="scanAl" value=""${choix === "" ? " checked" : ""}>
+        <span><b>Un nouvel aliment</b><small>Avec les valeurs de l'étiquette</small></span></label></fieldset>` : ""}
+    ${lie ? `<p class="petit discret">C'est ton aliment « ${esc(lie.n)} ».</p>` : ""}
+    ${rien ? "" : `<div class="champ"><label for="scanQ">${pour === "stock" ? "Combien en ajouter" : pour === "plat" ? "Une portion" : "Ce que tu en manges"}</label>
+      <div class="scan-q"><input id="scanQ" type="number" inputmode="decimal" min="0" step="any" value="${qDefaut()}"><span id="scanU"></span></div>
+      ${pour === "stock" ? "" : `<small class="chiffres" id="scanMacros"></small>`}</div>
+      ${pour === "plat" ? `<div class="gouts scan-cat" role="group" aria-label="Pour quel repas">${[["petitdej", "Matin"], ["plat", "Midi ou soir"], ["collation", "Collation"]]
+        .map(([c, nom]) => `<button type="button" data-scan-cat="${c}" aria-pressed="${c === cat}">${nom}</button>`).join("")}</div>` : ""}`}
+    <small id="eScan" class="erreur" role="alert" style="display:block;margin-top:8px;color:var(--critique)"></small>
+    <div class="actions pied"><button type="button" class="bouton second" data-scan-retour>Retour</button>
+      ${rien ? `<button type="button" class="bouton" data-scan-encore>${icone("barcode")}Scanner encore</button>` : `<button class="bouton" type="submit">${libelle}</button>`}</div></form>`;
+  const f = d.querySelector("form");
+  const majQ = () => {
+    if (!$("scanQ")) return;
+    $("scanU").textContent = piece() ? (Number($("scanQ").value) > 1 ? "pièces" : "pièce") : unite();
+    if (!$("scanMacros")) return;
+    const v = valeurs(), g = grammes(Number(String($("scanQ").value).replace(",", ".")) || 0);
+    $("scanMacros").textContent = g > 0 ? `${nombre(Math.round(v.kcal * g / 100))} kcal · ${nombre(Math.round(v.prot * g / 10) / 10)} g de protéines` : "";
+  };
+  majQ();
+  if ($("scanQ")) $("scanQ").addEventListener("input", majQ);
+  f.querySelectorAll("[name=scanAl]").forEach(i => i.addEventListener("change", () => { choix = i.value; $("scanQ").value = qDefaut(); majQ(); }));
+  f.querySelectorAll("[data-scan-cat]").forEach(b => b.addEventListener("click", () => {
+    cat = b.dataset.scanCat; f.querySelectorAll("[data-scan-cat]").forEach(x => x.setAttribute("aria-pressed", String(x === b))); }));
+  f.querySelector("[data-scan-retour]").addEventListener("click", () => o.retour ? o.retour() : d.close("non"));
+  if (f.querySelector("[data-scan-encore]")) f.querySelector("[data-scan-encore]").addEventListener("click", () => scannerProduit(pour, o));
+  f.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const q = Number(String($("scanQ").value).replace(",", "."));
+    if (!(q > 0) || q > (piece() ? 40 : 20000)) { $("eScan").textContent = "Une quantité, s'il te plaît."; return $("scanQ").focus(); }
+    const b = ev.submitter || f.querySelector("[type=submit]");
+    b.disabled = true; b.textContent = "Un instant…";
+    const echec = m => { b.disabled = false; b.textContent = libelle; $("eScan").textContent = m; };
+    let a = lie;
+    if (!a || p) {                          // le code est gardé : la fois d'après, le produit est reconnu tout de suite
+      const ok = await appel("/api/produit/choisir", { code: r.code, aliment: lie ? lie.n : choix });
+      if (ok !== true || !E.produit_choisi) return echec((ok && ok.erreur) || "Pas enregistré, réessaie.");
+      a = E.produit_choisi.aliment;
+    }
+    const al = { ...a, nom: a.n, ing: [] };
+    if (pour === "stock") {
+      const deja = ((E.stock || []).find(l => l.nom === a.n && l.unite === a.u) || {}).quantite || 0;
+      const ok = await appel("/api/stock", { nom: a.n, unite: a.u, quantite: Math.round((deja + q) * 10) / 10 });
+      if (ok !== true) return echec((ok && ok.erreur) || "Pas ajouté, réessaie.");
+      d.close("oui"); rendre();
+      return dire(`${a.n} : ${quantite(q, a.u)} de plus au stock.`);
+    }
+    if (pour === "plat") {
+      const ok = await appel("/api/produit/plat", { aliment: a.n, q, cat });
+      if (ok !== true || !E.au_menu) return echec((ok && ok.erreur) || "Pas créé, réessaie.");
+      d.close("oui"); rendre();
+      dire(E.au_menu.existant ? `Ce plat existe déjà : « ${recette(E.au_menu.plat).nom} ».` : `« ${recette(E.au_menu.plat).nom} » est dans tes plats.`);
+      return ficheRapide(E.au_menu.plat, null);
+    }
+    o.suite(al, aLaPiece(al) ? { q, u: "pièce" } : { q, u: al.u === "ml" ? "ml" : "g" });
+  });
+  if (!d.open) d.showModal();
+}
+
 /* ------------------------------------------------------------ mon propre plat */
 // Les plats retirés pour de bon par la personne (Taha, 22/11/2026) : plus au catalogue ni dans les choix.
 // Un plat noté un jour depuis « Ajouter un repas » reste hors de tes plats tant que tu ne l'y mets pas (Taha, 23/11/2026).
@@ -3302,7 +3419,8 @@ function vueCatalogue({ params }) {
     g.scrollLeft = FILTRES_DEFIL[k] || 0; g.addEventListener("scroll", () => { FILTRES_DEFIL[k] = g.scrollLeft; }, { passive: true }); }));
   return `<div class="titre"><h1 tabindex="-1">Catalogue</h1>
     <p>${repas.length} recettes. Dis ce que tu veux bien tester et ce que tu n'aimes pas : l'appli en tient compte quand il compose ta semaine. ${nb("tester")} à tester, ${nb("non")} que tu n'aimes pas.</p></div>
-  <p class="actions" style="margin:-6px 0 14px"><button class="bouton second" data-action="creerPlat" data-cat="${F.cats.size === 1 ? [...F.cats][0] : "plat"}">${icone("cooking-pot")}Créer mon propre plat</button></p>
+  <p class="actions" style="margin:-6px 0 14px"><button class="bouton second" data-action="creerPlat" data-cat="${F.cats.size === 1 ? [...F.cats][0] : "plat"}">${icone("cooking-pot")}Créer mon propre plat</button>
+    <button class="bouton second" data-action="scannerPlat">${icone("barcode")}Scanner un produit</button></p>
   <section class="filtres ft" aria-labelledby="tFiltres">
     <h2 id="tFiltres"><button type="button" class="filtres-bascule" data-action="filtreCat" data-cle="ouvert" data-valeur="" aria-expanded="${F.ouvert}">${icone("sliders-horizontal")}Filtres${actifs ? ` <span class="ft-nb">${actifs}</span>` : ""}${icone("caret-right")}</button>
       ${actifs ? `<button type="button" class="ft-raz" data-action="filtreCat" data-cle="raz" data-valeur="">Effacer</button>` : ""}</h2>
@@ -3456,6 +3574,7 @@ function vueStockMaison({ params } = {}) {
   const ajout = `<div class="stock-ajout">
       <label class="stock-bouton">${icone("image")}<span>Photo</span><small>frigo, placard</small><input type="file" accept="image/*" hidden data-stock-photo="photo"></label>
       <label class="stock-bouton">${icone("receipt")}<span>Ticket</span><small>de caisse</small><input type="file" accept="image/*" hidden data-stock-photo="ticket"></label>
+      <button type="button" class="stock-bouton" data-action="scannerStock">${icone("barcode")}<span>Scanner</span><small>un code-barres</small></button>
       </div>`;
   // La barre chercher / ajouter vient sous « Refaire mes repas avec mon stock » (Taha, 22/11/2026).
   const barreStock = `<form class="rp-recherche champ-ia stock-taper" id="fStockTaper" novalidate>${icone("sparkle")}
@@ -3981,6 +4100,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
       <div class="photo-ajout">
         <label class="bouton second" for="nrPhoto">${icone("image")}${photoJointe ? "Changer la photo" : "Ajouter une photo"}</label>
         <input id="nrPhoto" type="file" accept="image/*" hidden>
+        ${photoJointe ? "" : `<button type="button" class="bouton second" id="nrScan">${icone("barcode")}Scanner</button>`}
         ${photoJointe ? `<img src="${photoJointe}" alt="Photo jointe" class="apercu-photo"><button type="button" class="lien" id="nrSansPhoto">Retirer la photo</button>` : `<small class="discret">Pas de balance ? Photographie ton assiette : l'IA estime les quantités. Ou une étiquette, un ticket.</small>`}
       </div>
       <small id="eNr" class="erreur" role="alert" style="display:block;margin-top:10px;color:var(--critique)"></small>
@@ -3993,6 +4113,9 @@ function noterRepas({ date, entree = null, remplacer = null }) {
     $("nrTexte").addEventListener("input", ev => { texte = ev.target.value; proposerPlusTard(); });
     proposerPlats();
     aliments();                                      // pour « Ou un aliment seul » dès la première lettre
+    // Un produit emballé par son code-barres (28/11/2026) : sa ligne à vérifier, comme un aliment seul.
+    if ($("nrScan")) $("nrScan").addEventListener("click", () => scannerProduit("repas", { retour: saisie,
+      suite: (al, lu) => verifier({ nom: al.nom, items: [{ ...itemAliment(al, lu), source: "code-barres" }], remarque: "" }) }));
     $("nrPhoto").addEventListener("change", async ev => {
       const f = ev.target.files[0]; if (!f) return;
       try { photoJointe = await photoReduite(f); } catch (e) { $("eNr").textContent = "Photo illisible."; return; }
@@ -5030,6 +5153,8 @@ function rendre() {
 /* ------------------------------------------------------------ actions */
 const ACTIONS = {
   accueilVu: () => agir("/api/reglages", { accueil: false }, ""),
+  scannerStock: () => scannerProduit("stock"),
+  scannerPlat: () => scannerProduit("plat"),
   composer: () => E.mois ? ACTIONS.suivante() : demanderComposition(false),
   recomposer: () => demanderComposition(true),
   ajouterSemaine: () => agir("/api/semaine/generer", { modes: E.semaine.modes || [], semaines: (E.mois ? E.mois.semaines.length : 1) + 1, ajouter: true },
