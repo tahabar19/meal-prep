@@ -2285,4 +2285,9 @@ dialog.scan::backdrop{background:#000}
 .scan-cat{margin-top:10px}
 /* 28/11/2026 : Réglages → Rappels */
 .rappels-choix{margin-top:12px}
+/* 28/11/2026 : l'objectif qui s'ajuste chaque semaine */
+.objectif-semaine > p.petit{margin:0 0 10px}
+.objectif-semaine .ligne-boutons{display:flex;gap:8px;flex-wrap:wrap}
+.objectif-auto{margin:0 0 14px}
+.objectif-auto > p{margin:6px 0 0}
 

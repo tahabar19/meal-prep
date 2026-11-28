@@ -247,6 +247,47 @@ const demandesFamille = () => {
   const f = typeof M !== "undefined" && M.familleEtat;
   return f && f.statut === "membre" && f.famille && f.famille.createur ? (f.membres || []).filter(m => m.statut === "attente") : [];
 };
+// L'objectif qui s'ajuste chaque semaine (Taha, 28/11/2026) : la phrase de la décision, écrite ici (et donc traduite)
+// d'après son code et ses chiffres (moteur : decision_hebdo, reglages_site.json « ajustement_auto »).
+const signeKg = v => `${v > 0 ? "+" : v < 0 ? "−" : ""}${virgule(Math.abs(Math.round((v || 0) * 10) / 10))}`;
+function texteObjectifSemaine(a) {
+  const c = a.chiffres || {}, p = signeKg(c.pente), t = virgule(Math.abs(Math.round((c.taille || 0) * 10) / 10));
+  const d = `${(c.delta || 0) > 0 ? "+" : (c.delta || 0) < 0 ? "−" : ""}${nombre(Math.abs(c.delta || 0))}`;
+  return ({
+    debut: "Les 3 premières semaines, l'appli observe : au début, le poids bouge surtout avec l'eau.",
+    attente: "Ton objectif a changé il y a moins de 3 semaines : l'appli attend d'en voir l'effet.",
+    pesees: "Pèse-toi au moins 2 fois par semaine : sans ça, l'appli ne peut pas régler tes calories.",
+    journees: "Coche ce que tu manges au moins 10 jours sur 3 semaines : l'appli règle tes calories d'après ça.",
+    trop_mange: `Tu as mangé en moyenne ${nombre(c.ecart || 0)} kcal de plus que prévu par jour : l'appli ne baisse pas l'objectif, essaie d'abord de le tenir.`,
+    recompo: `Ton poids ne bouge pas (${p} kg par semaine) mais ton tour de taille a baissé de ${t} cm : tu perds du gras et tu prends du muscle. L'appli garde tes calories.`,
+    baisse: `Ton poids n'a presque pas bougé en 3 semaines (${p} kg par semaine) alors que tu as mangé comme prévu : 100 kcal de moins par jour.`,
+    trop_vite: `Tu perds plus de 1 % de ton poids par semaine (${p} kg par semaine) : 100 kcal de plus par jour, pour garder tes muscles.`,
+    prise_lente: `Ton poids ne monte pas (${p} kg par semaine) : 100 kcal de plus par jour pour prendre du muscle.`,
+    prise_rapide: `Tu prends plus de 0,5 % de ton poids par semaine (${p} kg par semaine) : 100 kcal de moins par jour, pour limiter le gras.`,
+    monte: `Ton poids monte (${p} kg par semaine) : 100 kcal de moins par jour pour le garder.`,
+    descend: `Ton poids baisse (${p} kg par semaine) : 100 kcal de plus par jour pour le garder.`,
+    bien: `Ça avance comme prévu (${p} kg par semaine) : l'appli garde tes calories.`,
+    borne: `L'appli a déjà ajusté tes calories de ${d} kcal par jour : au-delà, revois ton objectif dans Mes objectifs.`,
+    annule: "Annulé : tes calories restent comme avant cette semaine.",
+  })[a.code] || a.raison || "";
+}
+// La carte du lundi sur l'écran du jour (une fois ; « Annuler » si les calories ont bougé). Pas pour « debut » / « attente ».
+function carteObjectifSemaine() {
+  const a = E.reglages && E.reglages.ajustement_auto;
+  if (!a || a.lu || !a.code || autreProfil() || E.reglages.auto_objectif === false || ["debut", "attente", "annule"].includes(a.code)) return "";
+  const titre = a.pas < 0 ? "Objectif : 100 kcal de moins par jour" : a.pas > 0 ? "Objectif : 100 kcal de plus par jour" : "Ton objectif de la semaine";
+  return `<div class="accueil-carte objectif-semaine" role="status"><p class="accueil-titre">${icone("chart-line")}<b>${titre}</b></p>
+    <p class="petit">${texteObjectifSemaine(a)}</p>
+    <div class="ligne-boutons">${a.pas ? `<button type="button" class="bouton second" data-action="objectifAnnuler">Annuler</button>` : ""}<button type="button" class="bouton" data-action="objectifLu">Compris</button></div></div>`;
+}
+function blocObjectifAuto() {
+  if (!E.reglages || !enSuivi() || autreProfil()) return "";
+  const r = E.reglages, a = r.ajustement_auto || {}, actif = r.auto_objectif !== false;
+  return `<div class="objectif-auto"><label class="option"><input type="checkbox" data-action="objectifAuto"${actif ? " checked" : ""}>
+      <span><b>Ajuster mes calories chaque semaine</b><small>D'après la tendance de ton poids sur 3 semaines et ce que tu as mangé : 100 kcal à la fois, 300 au plus.</small></span></label>
+    ${actif && a.delta ? `<p class="petit">Ajustement en cours : <b>${a.delta > 0 ? "+" : "−"}${nombre(Math.abs(a.delta))} kcal par jour</b></p>` : ""}
+    ${actif && a.code ? `<p class="petit discret">${texteObjectifSemaine(a)}</p>` : ""}</div>`;
+}
 // Premier jour d'un nouveau compte (Taha, 28/11/2026) : une carte, une seule fois, pour savoir quoi toucher.
 // « accueil » est posé par la création du profil (web.creer_profil) ; « Compris » l'efface (/api/reglages).
 function carteAccueil() {
@@ -3930,6 +3971,7 @@ function vueJourSuivi(params) {
     ${dec === 1 ? `<p class="petit discret" style="margin:-2px 0 12px">Provisoire : les quantités de demain se règlent demain matin, d'après ce que tu auras vraiment mangé aujourd'hui.</p>` : ""}
     ${dec === 0 ? alerteFamille() : ""}
     ${dec === 0 ? carteAccueil() : ""}
+    ${dec === 0 ? carteObjectifSemaine() : ""}
     ${jaugesDuJour(j, o, mangeJour)}
     <p class="reste-jour">${reste}</p>
     ${(E.a_finir || []).length && dec === 0 ? `<a class="rappel" href="#/stock">${icone("warning-circle")}<span>À finir : ${esc(E.a_finir.slice(0, 3).map(x => x.nom).join(", "))}${E.a_finir.length > 3 ? "…" : ""}</span>${icone("caret-right")}</a>` : ""}
@@ -4753,6 +4795,7 @@ document.addEventListener("input", ev => { if (ev.target.closest(".periode")) ma
 function blocObjectifs(reglages = "", resume = "") {
   apresRendu.push(majPoidsVises);
   return `<section class="bloc" aria-labelledby="tPeriodes"${resume ? ` data-resume="${esc(resume)}"` : ""}><h2 id="tPeriodes">Mes objectifs</h2>
+    ${blocObjectifAuto()}
     ${reglages}
     <p class="doux petit sous-titre">${E.phases_perso ? "Tes périodes : l'appli prend celle du jour." : "Ton programme actuel, en périodes : change ce que tu veux, puis enregistre."} Les vitamines suivent tes calories.</p>
     <div id="periodes">${periodesActuelles().map(lignePeriode).join("")}</div>
@@ -5185,6 +5228,10 @@ function rendre() {
 /* ------------------------------------------------------------ actions */
 const ACTIONS = {
   accueilVu: () => agir("/api/reglages", { accueil: false }, ""),
+  objectifLu: () => agir("/api/objectif/auto", { lu: true }, ""),
+  objectifAnnuler: () => agir("/api/objectif/auto", { annuler: true }, "Annulé : tes calories restent comme avant."),
+  objectifAuto: b => agir("/api/objectif/auto", { actif: b.checked },
+    b.checked ? "Chaque lundi, l'appli regardera ton poids pour régler tes calories." : "Plus d'ajustement : tes calories reviennent à ton objectif."),
   scannerStock: () => scannerProduit("stock"),
   scannerPlat: () => scannerProduit("plat"),
   composer: () => E.mois ? ACTIONS.suivante() : demanderComposition(false),

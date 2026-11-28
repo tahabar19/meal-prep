@@ -711,6 +711,22 @@ try {
     vrai(await attendre(`!document.querySelector('.accueil-carte') && !E.reglages.accueil`, 15000) >= 0, '« Compris » ne la retire pas');
   });
 
+  // Taha, 28/11/2026 : l'objectif qui s'ajuste chaque semaine : la carte du lundi (phrase faite par la page, traduisible),
+  // « Compris » la range ; dans Réglages → Mes objectifs, l'interrupteur est là, actif par défaut.
+  await test('Objectif de la semaine : la carte, puis « Compris » ; l\'interrupteur dans Mes objectifs', async () => {
+    await aller('#/semaine');
+    await B.js(`(E.reglages.ajustement_auto = { code: 'baisse', pas: -100, lu: false, chiffres: { pente: 0.02, delta: -100 }, vue: 'x' }, rendre(), true)`);
+    await att(300);
+    const t = await B.js(`(document.querySelector('.objectif-semaine') || {}).textContent || ''`);
+    vrai(/100 kcal de moins/.test(t) && /\+0 kg par semaine/.test(t), `carte absente ou fausse : ${t.replace(/\s+/g, ' ').slice(0, 160)}`);
+    vrai(await B.js(`!!document.querySelector('.objectif-semaine [data-action=objectifAnnuler]')`), 'pas de « Annuler »');
+    await B.js(`document.querySelector('.objectif-semaine [data-action=objectifLu]').click()`);
+    vrai(await attendre(`!document.querySelector('.objectif-semaine') && E.reglages.ajustement_auto && E.reglages.ajustement_auto.lu === true`, 15000) >= 0, '« Compris » ne la range pas');
+    await aller('#/reglages');
+    vrai(await attendre(`!!document.querySelector('#tPeriodes') && !!document.querySelector('[data-action=objectifAuto]')`, 10000) >= 0, "pas d'interrupteur dans Mes objectifs");
+    vrai(await B.js(`document.querySelector('[data-action=objectifAuto]').checked`), "l'ajustement n'est pas actif par défaut");
+  });
+
   // Taha, 22/11/2026 : le catalogue en liste, comme « Remplacer par un autre plat ».
   await test('Catalogue : liste, recherche, fiche', async () => {
     await aller('#/catalogue');
