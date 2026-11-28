@@ -2283,4 +2283,6 @@ dialog.scan::backdrop{background:#000}
 .scan-q input{max-width:140px}
 .scan-q span{color:var(--discret)}
 .scan-cat{margin-top:10px}
+/* 28/11/2026 : Réglages → Rappels */
+.rappels-choix{margin-top:12px}
 

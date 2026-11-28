@@ -2941,14 +2941,15 @@ async function famille(action, args = {}, message = "") {
   return data;
 }
 // Les notifications sur ce téléphone (Taha, 27/11/2026) : un bouton pour les activer, rempli après le rendu.
-function blocNotifications(texte) {
+// Activer / couper les notifications sur ce téléphone : la même zone dans Ma famille et dans Réglages → Rappels.
+function zoneNotifications(id) {
   apresRendu.push(async function maj() {
-    const z = $("famNotif");
+    const z = $(id);
     if (!z || typeof notificationsActives !== "function") return;
     const actif = await notificationsActives();
-    z.innerHTML = actif ? `<span class="fam-notif-ok">${icone("check")}Actives sur ce téléphone</span><button type="button" class="lien" id="famNotifCouper">Couper</button>`
-      : `<button type="button" class="bouton second" id="famNotifOn">${icone("bell")}Activer sur ce téléphone</button>`;
-    const b = $("famNotifOn"), c = $("famNotifCouper");
+    z.innerHTML = actif ? `<span class="fam-notif-ok">${icone("check")}Actives sur ce téléphone</span><button type="button" class="lien" id="${id}Couper">Couper</button>`
+      : `<button type="button" class="bouton second" id="${id}On">${icone("bell")}Activer sur ce téléphone</button>`;
+    const b = $(id + "On"), c = $(id + "Couper");
     if (b) b.addEventListener("click", async () => {
       b.disabled = true;
       try { await activerNotifications(); dire("Notifications activées sur ce téléphone."); } catch (e) { dire(e.message || "Notifications impossibles."); }
@@ -2956,7 +2957,37 @@ function blocNotifications(texte) {
     });
     if (c) c.addEventListener("click", async () => { await couperNotifications(); dire("Notifications coupées."); maj(); });
   });
-  return `<section class="bloc fam-bloc"><h2>Notifications</h2><p class="petit discret">${texte}</p><div id="famNotif" class="fam-notif"></div></section>`;
+  return `<div id="${id}" class="fam-notif"></div>`;
+}
+function blocNotifications(texte) {
+  return `<section class="bloc fam-bloc"><h2>Notifications</h2><p class="petit discret">${texte}</p>${zoneNotifications("famNotif")}</section>`;
+}
+// Rappels sur le téléphone (Taha, 28/11/2026) : cochés ici (table « rappels », avec le fuseau du téléphone), envoyés en
+// ligne à leur heure par la fonction notifier (pg_cron, chaque heure), seulement s'ils servent encore.
+const RAPPELS = [["pesee", "Pèse-toi", "À 8 h, si tu ne t'es pas encore pesé aujourd'hui"], ["eau", "Bois de l'eau", "À 16 h, si ton eau n'est pas cochée"],
+                 ["diner", "Note ton dîner", "À 21 h, s'il n'est pas coché"], ["silhouette", "Ta silhouette au miroir", "Le lundi à 9 h"]];
+function blocRappels() {
+  if (typeof sb === "undefined" || typeof M === "undefined" || !M.moi || autreProfil()) return "";
+  apresRendu.push(async () => {
+    const z = $("rappelsChoix");
+    if (!z) return;
+    const { data } = await sb.from("rappels").select("types").eq("user_id", M.moi.uid).maybeSingle();
+    const types = new Set((data && data.types) || []);
+    z.innerHTML = RAPPELS.map(([t, titre, aide]) => `<label class="option"><input type="checkbox" data-rappel="${t}"${types.has(t) ? " checked" : ""}>
+      <span><b>${titre}</b><small>${aide}</small></span></label>`).join("");
+    z.querySelectorAll("[data-rappel]").forEach(i => i.addEventListener("change", async () => {
+      const choisis = [...z.querySelectorAll("[data-rappel]:checked")].map(x => x.dataset.rappel);
+      const fuseau = String(Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Paris").slice(0, 60);
+      const { error } = await sb.from("rappels").upsert({ user_id: M.moi.uid, types: choisis, fuseau, maj: new Date().toISOString() });
+      if (error) { i.checked = !i.checked; return dire("Pas enregistré, réessaie."); }
+      const actives = typeof notificationsActives === "function" && await notificationsActives();
+      dire(!choisis.length ? "Plus de rappels." : actives ? "Rappels enregistrés." : "Rappels enregistrés : active aussi les notifications sur ce téléphone.");
+    }));
+  });
+  return `<section class="bloc" aria-labelledby="tRappels" data-resume="Pesée, eau, dîner, silhouette"><h2 id="tRappels">Rappels</h2>
+    <p class="doux petit sous-titre">Une notification sur ton téléphone, seulement si c'est encore à faire.</p>
+    ${zoneNotifications("rapNotif")}
+    <div class="options rappels-choix" id="rappelsChoix"></div></section>`;
 }
 // Un membre sans téléphone (Taha, 27/11/2026) : son profil se crée ici, s'ouvre depuis le téléphone des autres.
 // Une date à N années d'aujourd'hui (bornes des dates de naissance : 15 à 95 ans).
@@ -4827,6 +4858,7 @@ function vueReglagesFlemmard() {
         if (m.erreur) throw 0; $("cEmail").value = m.email || ""; telRemplir($("cTel"), m.telephone); }
       catch (e) { f.hidden = true; }                   // sur le PC : pas de compte en ligne
     }); return ""; })()}
+  ${blocRappels()}
   ${autre ? "" : `<section class="bloc" aria-labelledby="tLangue" data-resume="${esc((LANGUES.find(x => x[0] === LANGUE) || LANGUES[0])[1])}"><h2 id="tLangue">Langue</h2>
     <p class="doux petit sous-titre">L'appli s'affiche dans cette langue. Au départ, celle de ton téléphone.</p>
     ${choixLangue()}</section>
