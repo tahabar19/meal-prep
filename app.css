@@ -2226,3 +2226,20 @@ body.miroir-ouvert{overflow:hidden}
 .silh-ruban{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
 .silh-ruban .champ{margin:0}
 .silh-ruban .champ small{margin-top:2px;font-size:.72rem}
+
+/* 28/11/2026 : carte d'accueil d'un nouveau compte (une fois), « Pour qui ? » dans la même fenêtre */
+.accueil-carte{margin:0 0 14px;padding:12px 14px;border:1px solid rgba(200,240,75,.22);border-radius:14px;background:var(--surface);
+  font-size:.85rem;color:var(--texte);line-height:1.4}
+.accueil-titre{display:flex;align-items:center;gap:8px;margin:0 0 6px;color:var(--encre)}
+.accueil-titre .ic{width:18px;height:18px;color:var(--accent);flex:none}
+.accueil-carte ul{margin:0 0 10px;padding-inline-start:18px}
+.accueil-carte li{margin:2px 0}
+.accueil-carte b{color:var(--encre);font-weight:600}
+.accueil-carte .bouton{min-height:34px;padding:0 16px;font-size:.85rem;border-radius:10px}
+.ap-qui{margin:14px 0 -4px}
+.nr-au-menu{margin:10px 0 0}
+.nr-au-menu > p{display:flex;align-items:center;gap:6px;margin:0 0 6px}
+.nr-au-menu > p .ic{width:16px;height:16px}
+.nr-au-menu .actions{display:flex;gap:8px}
+.nr-au-menu .actions .bouton{flex:1}
+

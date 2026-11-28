@@ -282,7 +282,8 @@ def creer_profil(champs: dict) -> None:
     regime = champs.pop("regime", None)                              # ce qu'il évite : lactose, gluten, allergies…
     mod_profil.creer({**champs, "identifiant": UTILISATEUR, "mot_de_passe": "x" * 8}, 0, serveur.reglage)
     mod_profil.choisir(UTILISATEUR)
-    serveur._ecrire_p("reglages_site.json", {"nb_semaines": 2})      # deux semaines d'un coup, comme les autres
+    # deux semaines d'un coup, comme les autres ; « accueil » : la carte de bienvenue du premier jour (28/11/2026)
+    serveur._ecrire_p("reglages_site.json", {"nb_semaines": 2, "accueil": True})
     if isinstance(regime, dict):
         serveur.regler_regime(regime)
     serveur.generer_mois(None, garder=False)
