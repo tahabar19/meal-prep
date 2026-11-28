@@ -251,14 +251,14 @@ def _image_generee(recette: dict) -> bytes | None:
         return None
 
 
-def _claude_avec_photo(demande: str, photo: bytes | None, timeout: int = 150) -> dict | None:
+def _claude_avec_photo(demande: str, photo: bytes | None, timeout: int = 150, tache: str = "repas") -> dict | None:
     # Sur le PC, Claude lisait ./photo.jpg avec l'outil Read ; ici la photo est jointe à la question.
     texte = demande.replace("lis le fichier ./photo.jpg (outil Read)", "elle est jointe à ce message")
     blocs = [{"type": "text", "text": texte}]
     if photo:
         type_ = "image/png" if photo[:8] == b"\x89PNG\r\n\x1a\n" else "image/jpeg"
         blocs.insert(0, {"type": "image", "media_type": type_, "data": base64.b64encode(photo).decode()})
-    return _claude(blocs, 6000, "repas")             # une erreur (pas de clé, hors sujet…) remonte jusqu'à la page
+    return _claude(blocs, 6000, tache)               # une erreur (pas de clé, hors sujet…) remonte jusqu'à la page
 
 
 # ------------------------------------------------------------------ créer son profil (en ligne)

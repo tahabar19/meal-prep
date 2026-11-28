@@ -1,6 +1,6 @@
 // Mon Meal Prep — service worker : l'interface et les photos du catalogue restent en cache (réseau d'abord pour
 // l'interface, pour avoir toujours la dernière version ; cache d'abord pour les photos, qui ne changent pas).
-const VERSION = "meal-prep-web-2026-11-28-085352";
+const VERSION = "meal-prep-web-2026-11-28-090418";
 const FICHIERS = ["./", "index.html", "app.css", "app.js", "web.js", "moteur.js", "config.js", "icones.js", "graphiques.js", "miroir.js", "scan.js",
                   "vendor/supabase.js", "manifest.webmanifest", "icone.svg", "apple-touch-icon.png"];
 

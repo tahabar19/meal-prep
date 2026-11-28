@@ -4230,6 +4230,24 @@ function noterRepas({ date, entree = null, remplacer = null }) {
     }
     verifier({ nom: r.nom, items: [{ nom: r.nom, g: null, pour100: null, kcal: r.kcal, prot: r.prot, gluc: r.gluc || 0, lip: r.lip || 0, fib: r.fib || 0, source: "tes plats" }], remarque: "" });
   };
+  const choixRestaurant = R => {
+    d.innerHTML = `<div class="feuille resto">
+      <h2 id="dialogueTitre">Au restaurant</h2>
+      <p class="petit resto-reste">Pour ce repas, il te reste <b class="chiffres">≈ ${nombre(R.reste.kcal)} kcal</b> et <b class="chiffres">${nombre(R.reste.prot)} g</b> de protéines.</p>
+      <ul class="candidats resto-plats">${R.plats.map((x, k) => `<li><button type="button" class="candidat resto-plat" data-resto="${k}">
+        <span class="resto-rang chiffres" aria-hidden="true">${k + 1}</span>
+        <span class="texte"><b>${esc(x.nom)}</b><span class="chiffres aliment-chiffres"><span>≈ ${nombre(x.kcal)} kcal</span><span>${nombre(x.prot)} g de protéines</span></span>
+          ${x.pourquoi ? `<small>${esc(x.pourquoi)}</small>` : ""}${x.conseil ? `<small class="resto-conseil">${esc(x.conseil)}</small>` : ""}</span>${icone("caret-right")}</button></li>`).join("")}</ul>
+      <p class="petit discret">Des estimations : les portions changent d'un restaurant à l'autre. Tu vérifies avant d'enregistrer.</p>
+      <div class="actions pied"><button class="bouton second" type="button" data-resto-retour>Retour</button></div></div>`;
+    d.querySelector("[data-resto-retour]").addEventListener("click", () => saisie());
+    d.querySelectorAll("[data-resto]").forEach(b => b.addEventListener("click", () => {
+      const x = R.plats[Number(b.dataset.resto)];
+      verifier({ nom: x.nom, remarque: x.conseil || "", items: [{ nom: x.nom, g: null, pour100: null, kcal: x.kcal, prot: x.prot, gluc: x.gluc || 0,
+        lip: x.lip || 0, fib: 0, source: "estimation au restaurant" }] });
+    }));
+    d.scrollTop = 0;
+  };
   const saisie = () => {
     d.innerHTML = `<form class="feuille formulaire" novalidate>
       <h2 id="dialogueTitre">${date === E.journal_repas.aujourdhui ? "Ajouter" : esc(dateLongueCourte(date).replace(/^./, c => c.toUpperCase()))}</h2>
@@ -4242,6 +4260,7 @@ function noterRepas({ date, entree = null, remplacer = null }) {
         <label class="bouton second" for="nrPhoto">${icone("image")}${photoJointe ? "Changer la photo" : "Ajouter une photo"}</label>
         <input id="nrPhoto" type="file" accept="image/*" hidden>
         ${photoJointe ? "" : `<button type="button" class="bouton second" id="nrScan">${icone("barcode")}Scanner</button>`}
+        ${photoJointe || E.claude === false ? "" : `<label class="bouton second" for="nrResto">${icone("couverts")}Au restaurant</label><input id="nrResto" type="file" accept="image/*" hidden>`}
         ${photoJointe ? `<img src="${photoJointe}" alt="Photo jointe" class="apercu-photo"><button type="button" class="lien" id="nrSansPhoto">Retirer la photo</button>` : `<small class="discret">Pas de balance ? Photographie ton assiette : l'IA estime les quantités. Ou une étiquette, un ticket.</small>`}
       </div>
       <small id="eNr" class="erreur" role="alert" style="display:block;margin-top:10px;color:var(--critique)"></small>
@@ -4254,6 +4273,26 @@ function noterRepas({ date, entree = null, remplacer = null }) {
     $("nrTexte").addEventListener("input", ev => { texte = ev.target.value; proposerPlusTard(); });
     proposerPlats();
     aliments();                                      // pour « Ou un aliment seul » dès la première lettre
+    // Mode restaurant (Taha, 28/11/2026) : la photo de la carte → les 3 plats qui collent le mieux à ce qu'il reste pour ce
+    // repas (moteur : conseils_restaurant, tâche « restaurant ») ; en toucher un ouvre la vérification, comme un repas décrit.
+    if ($("nrResto")) $("nrResto").addEventListener("change", async ev => {
+      const f = ev.target.files[0]; if (!f) return;
+      let photoCarte;
+      try { photoCarte = await photoReduite(f); } catch (e) { $("eNr").textContent = "Photo illisible."; return; }
+      const precision = $("nrTexte").value.trim();
+      let annule = false;
+      const att = attenteIA(d, { titre: "L'IA lit la carte", sujet: "Au restaurant", etapes: ["La carte", "Ce qu'il te reste", "Les 3 meilleurs"],
+        annuler: () => { annule = true; saisie(); } });
+      try {
+        const r = await fetch("/api/repas/restaurant", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ photo: photoCarte, moment, date, ...(precision ? { texte: precision } : {}) }) });
+        const rep = await r.json();
+        att.fin();
+        if (annule) return;
+        if (!r.ok) { saisie(); $("eNr").textContent = rep.erreur || "L'IA n'a pas pu lire la carte."; return; }
+        choixRestaurant(rep.restaurant);
+      } catch (e) { att.fin(); if (!annule) { saisie(); $("eNr").textContent = "L'appli ne répond pas."; } }
+    });
     // Un produit emballé par son code-barres (28/11/2026) : sa ligne à vérifier, comme un aliment seul.
     if ($("nrScan")) $("nrScan").addEventListener("click", () => scannerProduit("repas", { retour: saisie,
       suite: (al, lu) => verifier({ nom: al.nom, items: [{ ...itemAliment(al, lu), source: "code-barres" }], remarque: "" }) }));
