@@ -360,6 +360,72 @@ document.addEventListener("click", async ev => {
 
 // Les doses de toute la famille pour un jour : chaque plat, la part de chacun (en grammes), le total à cuisiner et le
 // détail des ingrédients. Calculées par le moteur de chaque membre, à ses quantités.
+/* ------------------------------------------------------------ les courses de la famille */
+// Taha, 28/11/2026 : depuis « Tous » (ou Courses, en famille), la liste pour TOUS les membres sur 3 ou 7 jours : ce qui
+// n'est pas encore mangé (doses de chacun, `dosesFamille`), quantités additionnées, moins le stock commun, rangée par
+// rayon ; « Mettre sur ma liste » l'envoie dans Ma liste (personnelle), pour cocher au magasin comme d'habitude.
+const CF = { jours: 3, jeton: null };
+const coursesFamillePossible = () => typeof dosesFamille === "function" && enFamille() && membresDeLaFamille().length > 1;
+const isoDans = n => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const aAcheter = (q, u) => u === "g" || u === "ml" ? Math.max(10, Math.ceil(q / 10) * 10) : u === "pièce" ? Math.max(1, Math.ceil(q - 0.1)) : Math.max(0.5, Math.ceil(q * 2) / 2);
+async function coursesFamille(jours = CF.jours) {
+  const d = $("dialogue"), jeton = CF.jeton = {};
+  CF.jours = jours;
+  d.innerHTML = `<div class="feuille rp cf">
+    <div class="rp-tete"><div><p class="rp-sur">Famille</p><h2 id="dialogueTitre">Les courses de la famille</h2></div>
+      <button type="button" class="rp-fermer" data-cf="fermer" aria-label="Fermer">${icone("x")}</button></div>
+    <div class="gouts cf-jours" role="group" aria-label="Pour combien de jours">${[3, 7].map(n =>
+      `<button type="button" data-cf-jours="${n}" aria-pressed="${n === jours}">${n} jours</button>`).join("")}</div>
+    <div id="cfCorps"><p class="petit discret" id="cfEtat" role="status">Je fais les comptes…</p></div></div>`;
+  d.querySelector("[data-cf=fermer]").addEventListener("click", () => d.close("non"));
+  d.querySelectorAll("[data-cf-jours]").forEach(b => b.addEventListener("click", () => coursesFamille(Number(b.dataset.cfJours))));
+  if (!d.open) d.showModal();
+  const besoins = new Map();
+  for (let k = 0; k < jours; k++) {
+    if (CF.jeton !== jeton || !d.open) return;
+    if ($("cfEtat")) $("cfEtat").textContent = `Je fais les comptes : jour ${k + 1} sur ${jours}…`;
+    let liste;
+    try { liste = await dosesFamille(isoDans(k)); } catch (e) { liste = []; }
+    for (const x of liste) for (const r of x.repas || []) {
+      if (r.mange || (r.reste && k === 0)) continue;       // déjà mangé ; la part d'hier soir est déjà cuisinée
+      for (const i of r.ing || []) {
+        const cle = i.n + "|" + i.u, b = besoins.get(cle) || { nom: i.n, unite: i.u, q: 0, qui: new Set() };
+        b.q += i.q; b.qui.add(nomMembre({ id: x.uid, identifiant: x.identifiant, moi: x.moi })); besoins.set(cle, b);
+      }
+    }
+  }
+  if (CF.jeton !== jeton || !d.open) return;
+  const stock = new Map((E.stock || []).map(l => [l.nom + "|" + l.unite, l.quantite]));
+  const rayonDe = {};
+  E.recettes.forEach(r => (r.ing || []).forEach(i => { if (i.a != null) rayonDe[i.n] = i.a; }));
+  Object.entries(E.ingredients_perso || {}).forEach(([n, v]) => { if (v && v.a != null && rayonDe[n] == null) rayonDe[n] = v.a; });
+  const lignes = [...besoins.values()].map(b => ({ ...b, stock: stock.get(b.nom + "|" + b.unite) || 0 }))
+    .map(b => ({ ...b, achat: b.q - b.stock > 0.05 ? aAcheter(b.q - b.stock, b.unite) : 0 })).filter(b => b.achat > 0);
+  const parRayon = new Map();
+  for (const l of lignes.sort((a, b) => a.nom.localeCompare(b.nom, "fr"))) {
+    const g = (E.rayons || [])[rayonDe[l.nom] ?? 2] || "Autres";
+    parRayon.set(g, [...(parRayon.get(g) || []), l]);
+  }
+  CF.lignes = lignes;
+  $("cfCorps").innerHTML = !lignes.length ? `<p class="dujour" style="margin-top:12px"><strong>Rien à acheter.</strong> Le stock commun couvre les ${jours} prochains jours de tout le monde.</p>`
+    : `<p class="petit discret cf-aide">Pour ${membresDeLaFamille().length} personnes, ce qui reste à manger, moins votre stock commun.</p>
+    ${[...parRayon.entries()].map(([g, xs]) => `<section class="cf-rayon"><h3>${esc(g)}<small>${xs.length}</small></h3><ul>${xs.map(l => {
+      const k = lignes.indexOf(l);
+      return `<li><label><input type="checkbox" data-cf-ligne="${k}" checked><span class="cf-nom">${esc(l.nom)}<small class="discret">${esc([...l.qui].slice(0, 3).join(", "))}${l.stock > 0 ? ` · ${quantite(l.stock, l.unite)} en stock` : ""}</small></span>
+        <b class="chiffres">${quantite(l.achat, l.unite)}</b></label></li>`; }).join("")}</ul></section>`).join("")}
+    <button type="button" class="bouton large" data-cf="liste">${icone("shopping-cart-simple")}Mettre sur ma liste</button>`;
+  const bouton = d.querySelector("[data-cf=liste]");
+  if (bouton) bouton.addEventListener("click", async () => {
+    const choisis = [...d.querySelectorAll("[data-cf-ligne]:checked")].map(i => CF.lignes[Number(i.dataset.cfLigne)]).slice(0, 100);
+    if (!choisis.length) return dire("Coche au moins un produit.");
+    bouton.disabled = true;
+    const ok = await appel("/api/liste_courses/lot", { items: choisis.map(l => ({ nom: l.nom, quantite: l.achat, unite: l.unite, raison: `famille, ${jours} jours` })) });
+    if (ok !== true) { bouton.disabled = false; return dire((ok && ok.erreur) || "Pas ajouté, réessaie."); }
+    d.close("oui");
+    location.hash = "#/stock?v=courses";
+    dire(choisis.length > 1 ? `${choisis.length} produits sur ta liste de courses.` : "1 produit sur ta liste de courses.");
+  });
+}
 const DOSES = {};                                          // date -> { etat, liste } ; refait quand l'état change
 function chargerDoses(date) {
   if (DOSES[date] && DOSES[date].etat === E) return;
@@ -410,7 +476,8 @@ function vueDoses(date) {
           }).join("")}</ul></details>` : ""}</div></article>`;
     }).join("")}</section>`;
   }).join("");
-  return `${tete}${blocs || `<p class="discret" style="margin-top:14px">Pas de menu ce jour-là.</p>`}`;
+  const courses = coursesFamillePossible() ? `<p class="doses-courses"><button type="button" class="bouton second" data-action="coursesFamille">${icone("shopping-cart-simple")}Les courses de la famille</button></p>` : "";
+  return `${tete}${courses}${blocs || `<p class="discret" style="margin-top:14px">Pas de menu ce jour-là.</p>`}`;
 }
 const dateFamille = (k, n) => { const s = k === (E.mois ? E.mois.rang : 0) ? E.semaine : planDe(k);
   return s && s.debut ? new Date(new Date(s.debut + "T12:00").getTime() + n * 864e5).toISOString().slice(0, 10) : ""; };
@@ -3749,6 +3816,7 @@ function vueCourses() {
       <span class="lc-nom"><b>${esc(x.nom)}</b>${x.raison ? `<small>${esc(x.raison)}</small>` : ""}</span><span class="lc-q chiffres">${quantite(x.quantite, x.unite)}</span></label>
       <button type="button" class="lc-x" data-action="lcRetirer" data-nom="${esc(x.nom)}" data-unite="${esc(x.unite)}" aria-label="Retirer ${esc(x.nom)} de la liste">${icone("x")}</button></li>`;
   const liste = `<section class="bloc liste-courses" aria-labelledby="tListe"><h2 id="tListe">Ma liste${l.length ? `<span>${l.length}</span>` : ""}</h2>
+    ${coursesFamillePossible() ? `<p class="lc-famille"><button type="button" class="bouton second" data-action="coursesFamille">${icone("users")}Les courses de toute la famille</button></p>` : ""}
     ${ajout}
     ${l.length ? `${[...groupes.entries()].sort(([a], [b]) => (a === "Autres") - (b === "Autres") || a.localeCompare(b, "fr")).map(([g, xs]) =>
         `<details class="lc-groupe" data-lc-rayon="${esc(g)}"${LC_FERMES.has(g) ? "" : " open"}><summary><span>${esc(g)}</span><small>${xs.length}</small>${icone("caret-right")}</summary>
@@ -5259,6 +5327,7 @@ function rendre() {
 /* ------------------------------------------------------------ actions */
 const ACTIONS = {
   accueilVu: () => agir("/api/reglages", { accueil: false }, ""),
+  coursesFamille: () => coursesFamille(),
   objectifLu: () => agir("/api/objectif/auto", { lu: true }, ""),
   objectifAnnuler: () => agir("/api/objectif/auto", { annuler: true }, "Annulé : tes calories restent comme avant."),
   objectifAuto: b => agir("/api/objectif/auto", { actif: b.checked },
