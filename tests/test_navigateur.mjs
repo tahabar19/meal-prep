@@ -334,7 +334,11 @@ try {
 
   await test('Modifier les ingrédients : poubelle et ↺', async () => {
     await aller('#/semaine');
-    const i = await B.js(`[...document.querySelectorAll('.grille-plats a.repas')].findIndex(a => /smoothie/i.test(a.textContent))`);
+    // un plat d'au moins 3 ingrédients (le smoothie s'il est là) : les plats du jour changent d'un jour à l'autre
+    const i = await B.js(`(() => { const l = [...document.querySelectorAll('.grille-plats a.repas')];
+      const ings = a => ((recette(decodeURIComponent(a.getAttribute('href').slice(7))) || {}).ing || []).filter(x => x.u !== 'qs').length;
+      const s = l.findIndex(a => /smoothie/i.test(a.textContent) && ings(a) >= 3);
+      return s >= 0 ? s : l.findIndex(a => ings(a) >= 3); })()`);
     await B.js(`document.querySelectorAll('.grille-plats a.repas')[${Math.max(i, 0)}].click()`);
     vrai(await attendre(`document.querySelector('.cp-choix [data-action=ajusterJour]')`, 10000) >= 0, 'pas de « Modifier les ingrédients »');
     await B.js(`document.querySelector('.cp-choix [data-action=ajusterJour]').click()`);
@@ -617,7 +621,9 @@ try {
 
   await test('Avancement : courbe et périodes', async () => {
     await aller('#/avancement?p=semaine');
-    vrai(await attendre(`document.querySelector('#gMange svg path, #gMange svg polyline')`, 10000) >= 0, 'pas de courbe');
+    // une courbe, ou (semaine sans journée finie : lundi, juste après minuit…) le message qui le dit (27/11/2026)
+    vrai(await attendre(`document.querySelector('#gMange svg path, #gMange svg polyline') || /Pas encore de journée finie/.test(document.querySelector('main').textContent)`, 10000) >= 0,
+      'ni courbe, ni « Pas encore de journée finie »');
     await aller('#/avancement?p=mois');
     vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'mois ne s\'affiche pas');
   });
@@ -763,8 +769,14 @@ try {
     const URL_SB = /url:\s*"([^"]+)/.exec(readFileSync(join(ICI, '../app/config.js'), 'utf8'))[1];
     const ANON = readFileSync(join(homedir(), '.config/meal-prep/anon-key'), 'utf8').trim();
     const MDP2 = readFileSync(join(homedir(), '.config/meal-prep/essai2-mdp'), 'utf8').trim();
-    const appelSb = async (chemin, corps, jeton) => (await fetch(URL_SB + chemin, { method: 'POST', body: JSON.stringify(corps),
-      headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (jeton || ANON) } })).json();
+    // trois essais : une coupure passagère du réseau ne doit pas faire échouer (ni laisser une famille d'essai)
+    const appelSb = async (chemin, corps, jeton) => {
+      for (let k = 1; ; k++) {
+        try { return await (await fetch(URL_SB + chemin, { method: 'POST', body: JSON.stringify(corps),
+          headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + (jeton || ANON) } })).json(); }
+        catch (e) { if (k >= 3) throw e; await att(1500 * k); }
+      }
+    };
     const jetonDe = async (qui, mdp) => (await appelSb('/functions/v1/compte', { action: 'connecter', qui, mot_de_passe: mdp })).access_token;
     const j1 = await jetonDe('zz-essai', MDP), j2 = await jetonDe('zz-essai2', MDP2);
     const rpc = (nom, args, j) => appelSb('/rest/v1/rpc/' + nom, args, j);
@@ -782,7 +794,8 @@ try {
       vrai(await attendre(`M.ident === 'zz-essai2' && E.profil.id === 'zz-essai2' && !document.getElementById('bandeauProfil').hidden`, 40000) >= 0,
         "le profil de zz-essai2 ne s'ouvre pas");
       await aller('#/suivi');
-      vrai(await B.js(`document.querySelector('main').textContent.includes('reste privé')`), "le suivi d'un autre membre n'est pas privé");
+      vrai(await attendre(`document.querySelector('main').textContent.includes('reste privé')`, 15000) >= 0,
+        "le suivi d'un autre membre n'est pas privé : " + await B.js(`(document.querySelector('main h1') || {}).textContent + ' / ' + (M.ident || '?') + ' / ' + location.hash`));
       await B.js(`document.querySelector('[data-moi]').click()`);
       vrai(await attendre(`M.uid === M.moi.uid && E.profil.id === 'zz-essai'`, 30000) >= 0, 'pas de retour à soi');
       await aller('#/semaine');
