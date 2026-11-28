@@ -544,6 +544,28 @@ try {
     await B.js(`document.getElementById('dialogue').close()`);
   });
 
+  // Taha, 28/11/2026 : « je veux pouvoir ajouter un ingrédient comme un repas, skyr nature, pomme… mais seul »
+  await test('Ajouter un repas : un aliment seul (skyr nature), sans IA', async () => {
+    await aller('#/semaine');
+    await B.js(`document.querySelector('[data-action=noterRepas]').click()`);
+    vrai(await attendre(`document.getElementById('nrTexte')`, 10000) >= 0, 'pas de saisie');
+    await B.js(`(() => { const t = document.getElementById('nrTexte'); t.value = 'skyr natur'; t.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+    vrai(await attendre(`!!document.querySelector('#nrPlats [data-aliment="Skyr nature"]')`, 15000) >= 0, 'pas de « Skyr nature » en aliment seul (une faute tapée)');
+    await B.js(`document.querySelector('#nrPlats [data-aliment="Skyr nature"]').click()`);
+    vrai(await attendre(`!!document.querySelector('#nrItems [data-champ=g]')`, 10000) >= 0, "pas d'écran de vérification");
+    await B.js(`(() => { const g = document.querySelector('#nrItems [data-champ=g]'); g.value = '175'; g.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    vrai(await attendre(`/^105\\b/.test(document.querySelector('#nrTotal b').textContent.trim())`, 5000) >= 0,
+      `175 g de skyr ne font pas 105 kcal : ${await B.js(`document.querySelector('#nrTotal b').textContent`)}`);
+    const avant = await B.js(`E.semaine.jours.map(j => [j.pdj, j.dej, j.din, ...(j.collations || [])]).flat().filter(i => i === 'perso-skyr-nature').length`);
+    await B.js(`document.querySelector('#dialogue [type=submit]').click()`);
+    vrai(await attendre(`!document.getElementById('dialogue').open || !!document.querySelector('#dialogue .ap')`, 20000) >= 0, "l'ajout ne se fait pas");
+    if (await B.js(`!!document.querySelector('#dialogue .ap')`)) await B.js(`document.querySelector('#dialogue [type=submit]').click()`);
+    vrai(await attendre(`E.semaine.jours.map(j => [j.pdj, j.dej, j.din, ...(j.collations || [])]).flat().filter(i => i === 'perso-skyr-nature').length > ${avant}`, 20000) >= 0,
+      "le skyr n'est pas au menu");
+    vrai(await B.js(`E.semaine.jours.some(j => j.ajustes && j.ajustes['perso-skyr-nature'] && j.ajustes['perso-skyr-nature']['Skyr nature'] === 175)`),
+      "la dose du jour n'est pas 175 g");
+  });
+
   await test('Historique : « Manger aujourd\'hui » sur les plats', async () => {
     await aller('#/historique');
     vrai(await attendre(`document.querySelector('main h1')`, 10000) >= 0, 'pas d\'historique');
