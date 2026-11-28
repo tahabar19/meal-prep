@@ -3594,8 +3594,8 @@ function vueCatalogue({ params }) {
     g.scrollLeft = FILTRES_DEFIL[k] || 0; g.addEventListener("scroll", () => { FILTRES_DEFIL[k] = g.scrollLeft; }, { passive: true }); }));
   return `<div class="titre"><h1 tabindex="-1">Catalogue</h1>
     <p>${repas.length} recettes. Dis ce que tu veux bien tester et ce que tu n'aimes pas : l'appli en tient compte quand il compose ta semaine. ${nb("tester")} à tester, ${nb("non")} que tu n'aimes pas.</p></div>
-  <p class="actions" style="margin:-6px 0 14px"><button class="bouton second" data-action="creerPlat" data-cat="${F.cats.size === 1 ? [...F.cats][0] : "plat"}">${icone("cooking-pot")}Créer mon propre plat</button>
-    <button class="bouton second" data-action="scannerPlat">${icone("barcode")}Scanner un produit</button></p>
+  <div class="cat-ajout"><button type="button" class="stock-bouton" data-action="creerPlat" data-cat="${F.cats.size === 1 ? [...F.cats][0] : "plat"}" aria-label="Créer mon plat">${icone("cooking-pot")}<span>Créer</span><small>mon plat</small></button>
+    <button type="button" class="stock-bouton" data-action="scannerPlat" aria-label="Scanner un produit">${icone("barcode")}<span>Scanner</span><small>un produit</small></button></div>
   <section class="filtres ft" aria-labelledby="tFiltres">
     <h2 id="tFiltres"><button type="button" class="filtres-bascule" data-action="filtreCat" data-cle="ouvert" data-valeur="" aria-expanded="${F.ouvert}">${icone("sliders-horizontal")}Filtres${actifs ? ` <span class="ft-nb">${actifs}</span>` : ""}${icone("caret-right")}</button>
       ${actifs ? `<button type="button" class="ft-raz" data-action="filtreCat" data-cle="raz" data-valeur="">Effacer</button>` : ""}</h2>
