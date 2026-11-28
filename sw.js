@@ -1,14 +1,14 @@
 // Mon Meal Prep — service worker : l'interface et les photos du catalogue restent en cache (réseau d'abord pour
 // l'interface, pour avoir toujours la dernière version ; cache d'abord pour les photos, qui ne changent pas).
-const VERSION = "meal-prep-web-2026-11-28-070255";
-const FICHIERS = ["./", "index.html", "app.css", "app.js", "web.js", "moteur.js", "config.js", "icones.js", "graphiques.js", "miroir.js",
+const VERSION = "meal-prep-web-2026-11-28-072443";
+const FICHIERS = ["./", "index.html", "app.css", "app.js", "web.js", "moteur.js", "config.js", "icones.js", "graphiques.js", "miroir.js", "scan.js",
                   "vendor/supabase.js", "manifest.webmanifest", "icone.svg", "apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FICHIERS)).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== VERSION && k !== "photos" && k !== "miroir").map((k) => caches.delete(k))))
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== VERSION && k !== "photos" && k !== "miroir" && k !== "scanner").map((k) => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 self.addEventListener("fetch", (e) => {
@@ -17,6 +17,12 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method === "GET" && (u.href.startsWith("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@")
       || u.href.startsWith("https://storage.googleapis.com/mediapipe-models/"))) {
     e.respondWith(caches.open("miroir").then((c) => c.match(e.request).then((r) => r || fetch(e.request).then((n) => { if (n.ok) c.put(e.request, n.clone()); return n; }))));
+    return;
+  }
+  // Le lecteur de codes-barres (28/11/2026) : ≈ 1 Mo (script + WebAssembly), chargé une fois, gardé ensuite.
+  if (e.request.method === "GET" && (u.href.startsWith("https://cdn.jsdelivr.net/npm/barcode-detector@")
+      || u.href.startsWith("https://cdn.jsdelivr.net/npm/zxing-wasm@"))) {
+    e.respondWith(caches.open("scanner").then((c) => c.match(e.request).then((r) => r || fetch(e.request).then((n) => { if (n.ok) c.put(e.request, n.clone()); return n; }))));
     return;
   }
   if (e.request.method !== "GET" || u.origin !== location.origin) return;
